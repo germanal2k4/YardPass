@@ -1,0 +1,477 @@
+openapi: 3.0.3
+info:
+  title: YardPass API
+  description: API для системы управления гостевых пропусков
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags:
+        - System
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /auth/login:
+    post:
+      summary: Вход в систему
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: guard1
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expires_in:
+                    type: integer
+                  token_type:
+                    type: string
+                    example: Bearer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      summary: Обновить access token
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Токены обновлены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  expires_in:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/me:
+    get:
+      summary: Информация о текущем пользователе
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                  role:
+                    type: string
+                    enum: [guard, admin]
+
+  /api/v1/passes:
+    post:
+      summary: Создать пропуск
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePassRequest'
+      responses:
+        '201':
+          description: Пропуск создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pass'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/passes/{id}:
+    get:
+      summary: Получить пропуск по ID
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pass'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/passes/{id}/revoke:
+    post:
+      summary: Отозвать пропуск
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пропуск отозван
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  pass_id:
+                    type: string
+
+  /api/v1/passes/validate:
+    post:
+      summary: Валидировать QR код пропуска
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - qr_uuid
+              properties:
+                qr_uuid:
+                  type: string
+                  format: uuid
+                  description: UUID из QR кода
+      responses:
+        '200':
+          description: Результат валидации
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      valid:
+                        type: boolean
+                        example: true
+                      car_plate:
+                        type: string
+                      apartment:
+                        type: string
+                      valid_to:
+                        type: string
+                        format: date-time
+                  - type: object
+                    properties:
+                      valid:
+                        type: boolean
+                        example: false
+                      reason:
+                        type: string
+                        enum: [PASS_NOT_FOUND, PASS_EXPIRED, PASS_REVOKED, PASS_NOT_YET_VALID, QUIET_HOURS]
+
+  /api/v1/passes/active:
+    get:
+      summary: Список активных пропусков
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: apartment_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pass'
+
+  /api/v1/rules:
+    get:
+      summary: Получить правила для здания
+      tags:
+        - Rules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Обновить правила (только админ)
+      tags:
+        - Rules
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRuleRequest'
+      responses:
+        '200':
+          description: Правила обновлены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rule'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Pass:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        apartment_id:
+          type: integer
+        car_plate:
+          type: string
+        guest_name:
+          type: string
+          nullable: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatePassRequest:
+      type: object
+      required:
+        - apartment_id
+        - car_plate
+        - valid_to
+      properties:
+        apartment_id:
+          type: integer
+        car_plate:
+          type: string
+        guest_name:
+          type: string
+          nullable: true
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+        valid_to:
+          type: string
+          format: date-time
+
+    Rule:
+      type: object
+      properties:
+        id:
+          type: integer
+        building_id:
+          type: integer
+        quiet_hours_start:
+          type: string
+          format: time
+          nullable: true
+          example: "22:00"
+        quiet_hours_end:
+          type: string
+          format: time
+          nullable: true
+          example: "08:00"
+        daily_pass_limit_per_apartment:
+          type: integer
+          example: 5
+        max_pass_duration_hours:
+          type: integer
+          example: 24
+
+    UpdateRuleRequest:
+      type: object
+      properties:
+        quiet_hours_start:
+          type: string
+          format: time
+          nullable: true
+        quiet_hours_end:
+          type: string
+          format: time
+          nullable: true
+        daily_pass_limit_per_apartment:
+          type: integer
+        max_pass_duration_hours:
+          type: integer
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INVALID_REQUEST
+              message: Invalid request body
+
+    Unauthorized:
+      description: Не авторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INVALID_TOKEN
+              message: Invalid or expired token
+
+    Forbidden:
+      description: Доступ запрещен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: INSUFFICIENT_PERMISSIONS
+              message: Insufficient permissions
+
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: PASS_NOT_FOUND
+              message: Pass not found
+

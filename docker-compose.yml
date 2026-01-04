@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: yardpass-postgres
+    environment:
+      POSTGRES_DB: yardpass
+      POSTGRES_USER: yardpass
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yardpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: yardpass-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: yardpass-backend
+    environment:
+      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
+      - JWT_ACCESS_TTL=15m
+      - JWT_REFRESH_TTL=168h
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bot:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+      target: bot
+    container_name: yardpass-bot
+    environment:
+      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
+      - API_BASE_URL=http://backend:8080
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: yardpass-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+      - VITE_DEFAULT_BUILDING_ID=1
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+

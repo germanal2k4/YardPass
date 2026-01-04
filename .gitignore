@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+build/
+bin/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+.cache/
+
+# Mock server
+mock-server/
+docker-compose.dev.yml

@@ -28,10 +28,10 @@ lint:
 	@golangci-lint run
 
 migrate-up:
-	@echo "Migrations should be run by infrastructure team"
+	@./scripts/migrate.sh
 
 migrate-down:
-	@echo "Migrations should be run by infrastructure team"
+	@./scripts/rollback.sh
 
 clean:
 	@rm -rf bin/

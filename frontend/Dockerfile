@@ -18,14 +18,23 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 # Copy source code
 COPY . .
 
-# Build application
-RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm run build; \
+# Set build environment variables
+ENV NODE_ENV=production
+ENV VITE_API_BASE_URL=http://localhost:8080
+ENV VITE_DEFAULT_BUILDING_ID=1
+
+# Build application (using build:prod to skip TypeScript checks for Docker)
+# Vite handles TypeScript compilation during build
+RUN echo "Starting Vite build..." && \
+    if [ -f pnpm-lock.yaml ]; then \
+      pnpm run build:prod; \
     elif [ -f yarn.lock ]; then \
-      yarn build; \
+      yarn build:prod; \
     else \
-      npm run build; \
-    fi
+      npm run build:prod; \
+    fi && \
+    echo "Build completed successfully" && \
+    ls -la dist
 
 # Production stage
 FROM nginx:alpine

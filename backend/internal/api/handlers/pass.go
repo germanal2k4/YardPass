@@ -133,21 +133,63 @@ func (h *PassHandler) Validate(c *gin.Context) {
 }
 
 func (h *PassHandler) GetActive(c *gin.Context) {
-	apartmentIDStr := c.Query("apartment_id")
-	if apartmentIDStr == "" {
-		errors.BadRequest(c, "MISSING_APARTMENT_ID", "apartment_id query parameter is required")
+	role, _ := c.Get("role")
+	buildingID, _ := c.Get("building_id")
+
+	var passes []*domain.Pass
+	var err error
+
+	if role == "guard" && buildingID != nil {
+		passes, err = h.passService.GetActivePassesByBuilding(c.Request.Context(), buildingID.(int64))
+	} else if apartmentIDStr := c.Query("apartment_id"); apartmentIDStr != "" {
+		apartmentID, parseErr := strconv.ParseInt(apartmentIDStr, 10, 64)
+		if parseErr != nil {
+			errors.BadRequest(c, "INVALID_APARTMENT_ID", "Invalid apartment ID format")
+			return
+		}
+		passes, err = h.passService.GetActivePasses(c.Request.Context(), apartmentID)
+	} else if role == "admin" && buildingID != nil {
+		passes, err = h.passService.GetActivePassesByBuilding(c.Request.Context(), buildingID.(int64))
+	} else {
+		errors.BadRequest(c, "MISSING_PARAMETER", "apartment_id or building_id required")
 		return
 	}
 
-	apartmentID, err := strconv.ParseInt(apartmentIDStr, 10, 64)
-	if err != nil {
-		errors.BadRequest(c, "INVALID_APARTMENT_ID", "Invalid apartment ID format")
-		return
-	}
-
-	passes, err := h.passService.GetActivePasses(c.Request.Context(), apartmentID)
 	if err != nil {
 		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"passes": passes,
+	})
+}
+
+func (h *PassHandler) Search(c *gin.Context) {
+	carPlate := c.Query("car_plate")
+	if carPlate == "" {
+		errors.BadRequest(c, "MISSING_CAR_PLATE", "car_plate query parameter is required")
+		return
+	}
+
+	role, _ := c.Get("role")
+	buildingID, _ := c.Get("building_id")
+
+	var bID *int64
+	if role == "guard" && buildingID != nil {
+		id := buildingID.(int64)
+		bID = &id
+	} else if role == "admin" {
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
+		}
+	}
+
+	passes, err := h.passService.SearchPassesByCarPlate(c.Request.Context(), carPlate, bID)
+	if err != nil {
+		errors.InternalServerError(c, "SEARCH_FAILED", err.Error())
 		return
 	}
 

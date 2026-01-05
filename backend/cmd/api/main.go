@@ -46,8 +46,10 @@ func main() {
 	postgresRepo := repo.NewPostgresRepo(pool, logger)
 	passRepo := repo.NewPassRepo(postgresRepo)
 	apartmentRepo := repo.NewApartmentRepo(postgresRepo)
+	buildingRepo := repo.NewBuildingRepo(postgresRepo)
 	ruleRepo := repo.NewRuleRepo(postgresRepo)
 	userRepo := repo.NewUserRepo(postgresRepo)
+	residentRepo := repo.NewResidentRepo(postgresRepo)
 	scanEventRepo := repo.NewScanEventRepo(postgresRepo)
 
 	redisClient, err := redis.NewClient(cfg.Redis.URL, logger)
@@ -58,12 +60,19 @@ func main() {
 
 	jwtService := auth.NewJWTService(cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL, userRepo)
 	passService := service.NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger)
+	userService := service.NewUserService(userRepo, buildingRepo, logger)
+	residentService := service.NewResidentService(residentRepo, apartmentRepo, logger)
 
 	authHandler := handlers.NewAuthHandler(jwtService)
 	passHandler := handlers.NewPassHandler(passService)
 	ruleHandler := handlers.NewRuleHandler(ruleRepo)
+	userHandler := handlers.NewUserHandler(userService)
+	residentHandler := handlers.NewResidentHandler(residentService)
+	scanEventHandler := handlers.NewScanEventHandler(scanEventRepo)
+	reportHandler := handlers.NewReportHandler(scanEventRepo, passRepo)
+	parkingHandler := handlers.NewParkingHandler(passService)
 
-	router := api.SetupRouter(cfg, authHandler, passHandler, ruleHandler, jwtService, redisClient)
+	router := api.SetupRouter(cfg, authHandler, passHandler, ruleHandler, userHandler, residentHandler, scanEventHandler, reportHandler, parkingHandler, jwtService, redisClient)
 
 	addr := fmt.Sprintf("%s:%s", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{

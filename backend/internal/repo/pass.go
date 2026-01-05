@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -186,5 +187,93 @@ func (r *PassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 
 	_, err := r.pool.Exec(ctx, query, id)
 	return err
+}
+
+func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
+	query := `
+		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
+		FROM passes p
+		INNER JOIN apartments a ON p.apartment_id = a.id
+		WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE UPPER(REPLACE($1, ' ', ''))
+	`
+	args := []interface{}{"%" + carPlate + "%"}
+	argPos := 2
+
+	if buildingID != nil {
+		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
+		args = append(args, *buildingID)
+		argPos++
+	}
+
+	query += ` ORDER BY p.created_at DESC LIMIT $` + fmt.Sprintf("%d", argPos)
+	args = append(args, limit)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var passes []*domain.Pass
+	for rows.Next() {
+		var pass domain.Pass
+		if err := rows.Scan(
+			&pass.ID,
+			&pass.ApartmentID,
+			&pass.CarPlate,
+			&pass.GuestName,
+			&pass.ValidFrom,
+			&pass.ValidTo,
+			&pass.Status,
+			&pass.CreatedAt,
+			&pass.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		passes = append(passes, &pass)
+	}
+
+	return passes, rows.Err()
+}
+
+func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+	now := time.Now()
+	query := `
+		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
+		FROM passes p
+		INNER JOIN apartments a ON p.apartment_id = a.id
+		WHERE a.building_id = $1
+			AND p.status = 'active'
+			AND p.valid_from <= $2
+			AND p.valid_to >= $2
+		ORDER BY p.created_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, buildingID, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var passes []*domain.Pass
+	for rows.Next() {
+		var pass domain.Pass
+		if err := rows.Scan(
+			&pass.ID,
+			&pass.ApartmentID,
+			&pass.CarPlate,
+			&pass.GuestName,
+			&pass.ValidFrom,
+			&pass.ValidTo,
+			&pass.Status,
+			&pass.CreatedAt,
+			&pass.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		passes = append(passes, &pass)
+	}
+
+	return passes, rows.Err()
 }
 

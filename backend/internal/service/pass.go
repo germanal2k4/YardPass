@@ -196,6 +196,14 @@ func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([
 	return s.passRepo.GetActiveByApartmentID(ctx, apartmentID)
 }
 
+func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+	return s.passRepo.GetActiveByBuildingID(ctx, buildingID)
+}
+
+func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*domain.Pass, error) {
+	return s.passRepo.SearchByCarPlate(ctx, carPlate, buildingID, 50)
+}
+
 func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardUserID int64, result, reason string) {
 	event := &domain.ScanEvent{
 		PassID:      passID,

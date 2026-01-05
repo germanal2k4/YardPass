@@ -17,6 +17,11 @@ func SetupRouter(
 	authHandler *handlers.AuthHandler,
 	passHandler *handlers.PassHandler,
 	ruleHandler *handlers.RuleHandler,
+	userHandler *handlers.UserHandler,
+	residentHandler *handlers.ResidentHandler,
+	scanEventHandler *handlers.ScanEventHandler,
+	reportHandler *handlers.ReportHandler,
+	parkingHandler *handlers.ParkingHandler,
 	jwtService *auth.JWTService,
 	redisClient *redis.Client,
 ) *gin.Engine {
@@ -52,13 +57,50 @@ func SetupRouter(
 			passes.POST("/:id/revoke", passHandler.Revoke)
 			passes.POST("/validate", passHandler.Validate)
 			passes.GET("/active", passHandler.GetActive)
+			passes.GET("/search", passHandler.Search)
 		}
 
 		rules := api.Group("/rules")
-		rules.Use(middleware.RequireRole("admin"))
+		rules.Use(middleware.RequireRole("admin", "superuser"))
 		{
 			rules.GET("", ruleHandler.Get)
 			rules.PUT("", ruleHandler.Update)
+		}
+
+		users := api.Group("/users")
+		users.Use(middleware.RequireRole("superuser"))
+		{
+			users.POST("", userHandler.RegisterUser)
+			users.GET("", userHandler.ListUsers)
+		}
+
+		residents := api.Group("/residents")
+		residents.Use(middleware.RequireRole("admin", "superuser"))
+		{
+			residents.POST("", residentHandler.CreateResident)
+			residents.POST("/bulk", residentHandler.BulkCreateResidents)
+			residents.POST("/import", residentHandler.ImportFromCSV)
+			residents.GET("", residentHandler.ListResidents)
+		}
+
+		scanEvents := api.Group("/scan-events")
+		scanEvents.Use(middleware.RequireRole("guard", "admin", "superuser"))
+		{
+			scanEvents.GET("", scanEventHandler.ListEvents)
+		}
+
+		reports := api.Group("/reports")
+		reports.Use(middleware.RequireRole("admin", "superuser"))
+		{
+			reports.GET("/statistics", reportHandler.GetStatistics)
+			reports.GET("/export", reportHandler.ExportToExcel)
+		}
+
+		parking := api.Group("/parking")
+		parking.Use(middleware.RequireRole("guard", "admin", "superuser"))
+		{
+			parking.GET("/occupancy", parkingHandler.GetOccupancy)
+			parking.GET("/vehicles", parkingHandler.GetVehicles)
 		}
 	}
 

@@ -28,9 +28,10 @@ func NewJWTService(secret string, accessTTL, refreshTTL time.Duration, userRepo 
 }
 
 type Claims struct {
-	UserID int64  `json:"user_id"`
-	Role   string `json:"role"`
-	Type   string `json:"type"`
+	UserID     int64   `json:"user_id"`
+	Role       string  `json:"role"`
+	BuildingID *int64  `json:"building_id,omitempty"`
+	Type       string  `json:"type"`
 	jwt.RegisteredClaims
 }
 
@@ -52,12 +53,12 @@ func (s *JWTService) Login(ctx context.Context, username, password string) (*dom
 		return nil, errors.New("invalid credentials")
 	}
 
-	accessToken, err := s.generateToken(user.ID, user.Role, "access", s.accessTTL)
+	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, err := s.generateToken(user.ID, user.Role, "refresh", s.refreshTTL)
+	refreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -88,12 +89,12 @@ func (s *JWTService) RefreshToken(ctx context.Context, refreshToken string) (*do
 		return nil, errors.New("user account is inactive")
 	}
 
-	accessToken, err := s.generateToken(user.ID, user.Role, "access", s.accessTTL)
+	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	newRefreshToken, err := s.generateToken(user.ID, user.Role, "refresh", s.refreshTTL)
+	newRefreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -116,18 +117,20 @@ func (s *JWTService) ValidateToken(ctx context.Context, token string) (*domain.T
 	}
 
 	return &domain.TokenClaims{
-		UserID: claims.UserID,
-		Role:   claims.Role,
-		Type:   claims.Type,
+		UserID:     claims.UserID,
+		Role:       claims.Role,
+		BuildingID: claims.BuildingID,
+		Type:       claims.Type,
 	}, nil
 }
 
-func (s *JWTService) generateToken(userID int64, role, tokenType string, ttl time.Duration) (string, error) {
+func (s *JWTService) generateToken(userID int64, role string, buildingID *int64, tokenType string, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := &Claims{
-		UserID: userID,
-		Role:   role,
-		Type:   tokenType,
+		UserID:     userID,
+		Role:       role,
+		BuildingID: buildingID,
+		Type:       tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(now),

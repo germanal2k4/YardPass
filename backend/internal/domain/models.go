@@ -74,6 +74,7 @@ type User struct {
 	Email        *string   `json:"email,omitempty"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
+	BuildingID   *int64    `json:"building_id,omitempty"`
 	Status       string    `json:"status"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`

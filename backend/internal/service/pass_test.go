@@ -54,6 +54,16 @@ func (m *MockPassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
+func (m *MockPassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+	args := m.Called(ctx, buildingID)
+	return args.Get(0).([]*domain.Pass), args.Error(1)
+}
+
+func (m *MockPassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
+	args := m.Called(ctx, carPlate, buildingID, limit)
+	return args.Get(0).([]*domain.Pass), args.Error(1)
+}
+
 type MockApartmentRepo struct {
 	mock.Mock
 }

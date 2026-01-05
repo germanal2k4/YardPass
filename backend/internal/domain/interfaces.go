@@ -24,12 +24,24 @@ type ResidentRepository interface {
 	GetByTelegramID(ctx context.Context, telegramID int64) (*Resident, error)
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
+	BulkCreate(ctx context.Context, residents []*Resident) error
+	List(ctx context.Context, filters ResidentFilters) ([]*Resident, error)
+}
+
+type ResidentFilters struct {
+	ApartmentID *int64
+	BuildingID  *int64
+	Status      *string
+	Limit       int
+	Offset      int
 }
 
 type PassRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Pass, error)
 	GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*Pass, error)
 	GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*Pass, error)
+	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*Pass, error)
+	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
 	Create(ctx context.Context, pass *Pass) error
 	Update(ctx context.Context, pass *Pass) error
@@ -63,6 +75,15 @@ type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, user *User) error
+	List(ctx context.Context, filters UserFilters) ([]*User, error)
+}
+
+type UserFilters struct {
+	Role       *string
+	BuildingID *int64
+	Status     *string
+	Limit      int
+	Offset     int
 }
 
 
@@ -71,6 +92,8 @@ type PassService interface {
 	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
 	GetActivePasses(ctx context.Context, apartmentID int64) ([]*Pass, error)
+	GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*Pass, error)
+	SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*Pass, error)
 }
 
 type CreatePassRequest struct {
@@ -99,8 +122,9 @@ type AuthTokens struct {
 }
 
 type TokenClaims struct {
-	UserID int64
-	Role   string
-	Type   string
+	UserID     int64
+	Role       string
+	BuildingID *int64
+	Type       string
 }
 

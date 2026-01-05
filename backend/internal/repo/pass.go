@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -183,6 +184,21 @@ func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentI
 	return count, err
 }
 
+func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
+	today := time.Now().Truncate(24 * time.Hour)
+	query := `
+		SELECT COUNT(*)
+		FROM passes
+		WHERE resident_id = $1
+			AND status = 'active'
+			AND created_at >= $2
+	`
+
+	var count int
+	err := r.pool.QueryRow(ctx, query, residentID, today).Scan(&count)
+	return count, err
+}
+
 func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	query := `
 		INSERT INTO passes (id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status)
@@ -323,4 +339,3 @@ func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) 
 
 	return passes, rows.Err()
 }
-

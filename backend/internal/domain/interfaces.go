@@ -43,6 +43,7 @@ type PassRepository interface {
 	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*Pass, error)
 	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
+	CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error)
 	Create(ctx context.Context, pass *Pass) error
 	Update(ctx context.Context, pass *Pass) error
 	Revoke(ctx context.Context, id uuid.UUID) error

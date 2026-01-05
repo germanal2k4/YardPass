@@ -65,7 +65,7 @@ func NewBot(
 		location = time.UTC
 	}
 
-	return &Bot{
+	bot := &Bot{
 		token:         cfg.Telegram.BotToken,
 		apiURL:        fmt.Sprintf("https://api.telegram.org/bot%s", cfg.Telegram.BotToken),
 		passService:   passService,
@@ -77,6 +77,16 @@ func NewBot(
 		states:        make(map[int64]*UserState),
 		location:      location,
 	}
+
+	// Устанавливаем меню команд при инициализации
+	ctx := context.Background()
+	if err := bot.SetMyCommands(ctx); err != nil {
+		logger.Warn("Failed to set bot commands", zap.Error(err))
+	} else {
+		logger.Info("Bot commands menu set successfully")
+	}
+
+	return bot
 }
 
 type Update struct {
@@ -123,8 +133,39 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	userID := msg.From.ID
 	text := msg.Text
 
-	if text == "/start" {
-		b.handleStart(ctx, msg)
+	// Обработка команд из меню
+	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" {
+		switch text {
+		case "/start":
+			b.handleStart(ctx, msg)
+		case "/create":
+			// Имитируем нажатие кнопки "create_pass"
+			cb := CallbackQuery{
+				ID:      "",
+				From:    msg.From,
+				Message: &msg,
+				Data:    "create_pass",
+			}
+			b.handleCallbackQuery(ctx, cb)
+		case "/list":
+			// Имитируем нажатие кнопки "list_active"
+			cb := CallbackQuery{
+				ID:      "",
+				From:    msg.From,
+				Message: &msg,
+				Data:    "list_active",
+			}
+			b.handleCallbackQuery(ctx, cb)
+		case "/revoke":
+			// Имитируем нажатие кнопки "revoke_pass"
+			cb := CallbackQuery{
+				ID:      "",
+				From:    msg.From,
+				Message: &msg,
+				Data:    "revoke_pass",
+			}
+			b.handleCallbackQuery(ctx, cb)
+		}
 		return
 	}
 
@@ -809,6 +850,21 @@ func (b *Bot) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
 	}
 
 	return result.Result, nil
+}
+
+func (b *Bot) SetMyCommands(ctx context.Context) error {
+	commands := []map[string]string{
+		{"command": "start", "description": "Главное меню"},
+		{"command": "create", "description": "Выдать пропуск гостю"},
+		{"command": "list", "description": "Мои активные пропуска"},
+		{"command": "revoke", "description": "Отозвать пропуск"},
+	}
+
+	payload := map[string]interface{}{
+		"commands": commands,
+	}
+
+	return b.callAPI(ctx, "setMyCommands", payload)
 }
 
 func (b *Bot) callAPI(ctx context.Context, method string, payload map[string]interface{}) error {

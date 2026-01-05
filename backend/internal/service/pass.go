@@ -72,12 +72,17 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
 
-	count, err := s.passRepo.CountActiveTodayByApartmentID(ctx, req.ApartmentID)
+	// Проверяем лимит для конкретного жителя, а не для всей квартиры
+	if req.ResidentID == nil {
+		return nil, errors.New("resident_id is required")
+	}
+
+	count, err := s.passRepo.CountActiveTodayByResidentID(ctx, *req.ResidentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check daily limit: %w", err)
 	}
 	if count >= rule.DailyPassLimitPerApartment {
-		return nil, errors.New("daily pass limit exceeded")
+		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
 	}
 
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {

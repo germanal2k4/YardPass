@@ -17,6 +17,7 @@ import (
 	"yardpass/internal/redis"
 	"yardpass/internal/repo"
 	"yardpass/internal/service"
+
 	"go.uber.org/zap"
 )
 
@@ -24,6 +25,12 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Проверяем JWT_SECRET для API сервера
+	if cfg.JWT.Secret == "" {
+		fmt.Fprintf(os.Stderr, "JWT_SECRET is required for API server\n")
 		os.Exit(1)
 	}
 

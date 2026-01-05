@@ -96,9 +96,8 @@ func Load() (*Config, error) {
 		},
 	}
 
-	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("JWT_SECRET is required")
-	}
+	// JWT_SECRET требуется только для API сервера, не для бота
+	// Проверка убрана, чтобы бот мог работать без него
 
 	if cfg.Telegram.BotToken == "" {
 		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")

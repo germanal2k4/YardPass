@@ -45,6 +45,11 @@ func (m *MockPassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartm
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockPassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
+	args := m.Called(ctx, residentID)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockPassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	args := m.Called(ctx, pass)
 	return args.Error(0)
@@ -164,12 +169,14 @@ func TestPassService_CreatePass(t *testing.T) {
 			MaxPassDurationHours:       24,
 		}, nil)
 
-		passRepo.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(2, nil)
+		residentID := int64(1)
+		passRepo.On("CountActiveTodayByResidentID", ctx, residentID).Return(2, nil)
 		passRepo.On("Create", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 
 		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
+			ResidentID:  &residentID,
 			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,
@@ -212,11 +219,13 @@ func TestPassService_CreatePass(t *testing.T) {
 		}, nil)
 
 		// Лимит 5, уже создано 5, значит лимит превышен (>=)
-		passRepo2.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(5, nil)
+		residentID := int64(1)
+		passRepo2.On("CountActiveTodayByResidentID", ctx, residentID).Return(5, nil)
 
 		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
+			ResidentID:  &residentID,
 			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,

@@ -24,7 +24,7 @@ func NewPassHandler(passService domain.PassService) *PassHandler {
 
 type CreatePassRequest struct {
 	ApartmentID int64     `json:"apartment_id" binding:"required"`
-	CarPlate    string    `json:"car_plate" binding:"required"`
+	CarPlate    *string   `json:"car_plate,omitempty"` // NULL for pedestrian guests
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
 	ValidTo     time.Time `json:"valid_to" binding:"required"`

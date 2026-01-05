@@ -20,7 +20,7 @@ func NewPassRepo(repo *PostgresRepo) *PassRepo {
 
 func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
 	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
+		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
 		WHERE id = $1
 	`
@@ -29,6 +29,7 @@ func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, err
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&pass.ID,
 		&pass.ApartmentID,
+		&pass.ResidentID,
 		&pass.CarPlate,
 		&pass.GuestName,
 		&pass.ValidFrom,
@@ -50,7 +51,7 @@ func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, err
 
 func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*domain.Pass, error) {
 	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
+		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
 		WHERE apartment_id = $1 AND status = $2
 		ORDER BY created_at DESC
@@ -68,6 +69,7 @@ func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, stat
 		if err := rows.Scan(
 			&pass.ID,
 			&pass.ApartmentID,
+			&pass.ResidentID,
 			&pass.CarPlate,
 			&pass.GuestName,
 			&pass.ValidFrom,
@@ -87,7 +89,7 @@ func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, stat
 func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
 	now := time.Now()
 	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
+		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
 		WHERE apartment_id = $1 
 			AND status = 'active'
@@ -108,6 +110,48 @@ func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64
 		if err := rows.Scan(
 			&pass.ID,
 			&pass.ApartmentID,
+			&pass.ResidentID,
+			&pass.CarPlate,
+			&pass.GuestName,
+			&pass.ValidFrom,
+			&pass.ValidTo,
+			&pass.Status,
+			&pass.CreatedAt,
+			&pass.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		passes = append(passes, &pass)
+	}
+
+	return passes, rows.Err()
+}
+
+func (r *PassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+	now := time.Now()
+	query := `
+		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
+		FROM passes
+		WHERE resident_id = $1 
+			AND status = 'active'
+			AND valid_from <= $2
+			AND valid_to >= $2
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, residentID, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var passes []*domain.Pass
+	for rows.Next() {
+		var pass domain.Pass
+		if err := rows.Scan(
+			&pass.ID,
+			&pass.ApartmentID,
+			&pass.ResidentID,
 			&pass.CarPlate,
 			&pass.GuestName,
 			&pass.ValidFrom,
@@ -141,14 +185,15 @@ func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentI
 
 func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	query := `
-		INSERT INTO passes (id, apartment_id, car_plate, guest_name, valid_from, valid_to, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO passes (id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING created_at, updated_at
 	`
 
 	err := r.pool.QueryRow(ctx, query,
 		pass.ID,
 		pass.ApartmentID,
+		pass.ResidentID,
 		pass.CarPlate,
 		pass.GuestName,
 		pass.ValidFrom,
@@ -191,7 +236,7 @@ func (r *PassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 
 func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
 	query := `
-		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
+		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 		FROM passes p
 		INNER JOIN apartments a ON p.apartment_id = a.id
 		WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE UPPER(REPLACE($1, ' ', ''))
@@ -220,6 +265,7 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 		if err := rows.Scan(
 			&pass.ID,
 			&pass.ApartmentID,
+			&pass.ResidentID,
 			&pass.CarPlate,
 			&pass.GuestName,
 			&pass.ValidFrom,
@@ -239,7 +285,7 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
 	now := time.Now()
 	query := `
-		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
+		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 		FROM passes p
 		INNER JOIN apartments a ON p.apartment_id = a.id
 		WHERE a.building_id = $1
@@ -261,6 +307,7 @@ func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) 
 		if err := rows.Scan(
 			&pass.ID,
 			&pass.ApartmentID,
+			&pass.ResidentID,
 			&pass.CarPlate,
 			&pass.GuestName,
 			&pass.ValidFrom,

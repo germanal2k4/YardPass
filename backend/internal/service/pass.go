@@ -7,17 +7,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 type PassService struct {
-	passRepo     domain.PassRepository
+	passRepo      domain.PassRepository
 	apartmentRepo domain.ApartmentRepository
-	ruleRepo     domain.RuleRepository
+	ruleRepo      domain.RuleRepository
 	scanEventRepo domain.ScanEventRepository
-	logger       *zap.Logger
+	logger        *zap.Logger
 }
 
 func NewPassService(
@@ -37,10 +38,15 @@ func NewPassService(
 }
 
 func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
-	carPlate := normalizeCarPlate(req.CarPlate)
-	if carPlate == "" {
-		return nil, errors.New("invalid car plate number")
+	var carPlate *string
+	if req.CarPlate != nil && *req.CarPlate != "" {
+		normalized := normalizeCarPlate(*req.CarPlate)
+		if normalized == "" {
+			return nil, errors.New("invalid car plate number")
+		}
+		carPlate = &normalized
 	}
+	// carPlate can be nil for pedestrian guests
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
@@ -57,7 +63,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	if rule == nil {
 		rule = &domain.Rule{
 			DailyPassLimitPerApartment: 5,
-			MaxPassDurationHours:        24,
+			MaxPassDurationHours:       24,
 		}
 	}
 
@@ -83,6 +89,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	pass := &domain.Pass{
 		ID:          uuid.New(),
 		ApartmentID: req.ApartmentID,
+		ResidentID:  req.ResidentID,
 		CarPlate:    carPlate,
 		GuestName:   req.GuestName,
 		ValidFrom:   req.ValidFrom,
@@ -94,11 +101,16 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, fmt.Errorf("failed to create pass: %w", err)
 	}
 
-	s.logger.Info("pass created",
+	logFields := []zap.Field{
 		zap.String("pass_id", pass.ID.String()),
 		zap.Int64("apartment_id", pass.ApartmentID),
-		zap.String("car_plate", carPlate),
-	)
+	}
+	if carPlate != nil {
+		logFields = append(logFields, zap.String("car_plate", *carPlate))
+	} else {
+		logFields = append(logFields, zap.String("type", "pedestrian"))
+	}
+	s.logger.Info("pass created", logFields...)
 
 	return pass, nil
 }
@@ -156,7 +168,9 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 
 	result.Valid = true
 	result.Pass = pass
-	result.CarPlate = pass.CarPlate
+	if pass.CarPlate != nil {
+		result.CarPlate = *pass.CarPlate
+	}
 	result.ValidTo = &pass.ValidTo
 
 	if apartment != nil {
@@ -196,6 +210,10 @@ func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([
 	return s.passRepo.GetActiveByApartmentID(ctx, apartmentID)
 }
 
+func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+	return s.passRepo.GetActiveByResidentID(ctx, residentID)
+}
+
 func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
 	return s.passRepo.GetActiveByBuildingID(ctx, buildingID)
 }
@@ -220,14 +238,14 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 
 func normalizeCarPlate(plate string) string {
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
-	
+
 	var result strings.Builder
 	for _, r := range normalized {
 		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	return result.String()
 }
 
@@ -284,4 +302,3 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
 }
-

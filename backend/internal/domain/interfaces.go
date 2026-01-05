@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 )
 
-
 type BuildingRepository interface {
 	GetByID(ctx context.Context, id int64) (*Building, error)
 	List(ctx context.Context) ([]*Building, error)
@@ -40,6 +39,7 @@ type PassRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Pass, error)
 	GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*Pass, error)
 	GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*Pass, error)
+	GetActiveByResidentID(ctx context.Context, residentID int64) ([]*Pass, error)
 	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*Pass, error)
 	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
@@ -86,19 +86,20 @@ type UserFilters struct {
 	Offset     int
 }
 
-
 type PassService interface {
 	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
 	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
 	GetActivePasses(ctx context.Context, apartmentID int64) ([]*Pass, error)
+	GetActivePassesByResident(ctx context.Context, residentID int64) ([]*Pass, error)
 	GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*Pass, error)
 	SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*Pass, error)
 }
 
 type CreatePassRequest struct {
 	ApartmentID int64
-	CarPlate    string
+	ResidentID  *int64  // Resident who creates the pass
+	CarPlate    *string // NULL for pedestrian guests
 	GuestName   *string
 	ValidFrom   time.Time
 	ValidTo     time.Time
@@ -127,4 +128,3 @@ type TokenClaims struct {
 	BuildingID *int64
 	Type       string
 }
-

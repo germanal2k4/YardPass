@@ -5,15 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"yardpass/internal/domain"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"yardpass/internal/domain"
 	"go.uber.org/zap"
 )
 
 type MockPassRepo struct {
 	mock.Mock
+}
+
+func (m *MockPassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+	args := m.Called(ctx, residentID)
+	return args.Get(0).([]*domain.Pass), args.Error(1)
 }
 
 func (m *MockPassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
@@ -161,9 +167,10 @@ func TestPassService_CreatePass(t *testing.T) {
 		passRepo.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(2, nil)
 		passRepo.On("Create", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 
+		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,
 		}
@@ -172,7 +179,8 @@ func TestPassService_CreatePass(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, pass)
-		assert.Equal(t, "A123BC", pass.CarPlate)
+		assert.NotNil(t, pass.CarPlate)
+		assert.Equal(t, "A123BC", *pass.CarPlate)
 		assert.Equal(t, "active", pass.Status)
 
 		passRepo.AssertExpectations(t)
@@ -181,35 +189,50 @@ func TestPassService_CreatePass(t *testing.T) {
 	})
 
 	t.Run("daily limit exceeded", func(t *testing.T) {
+		// Создаем новые моки для этого теста
+		passRepo2 := new(MockPassRepo)
+		apartmentRepo2 := new(MockApartmentRepo)
+		ruleRepo2 := new(MockRuleRepo)
+		scanEventRepo2 := new(MockScanEventRepo)
+		service2 := NewPassService(passRepo2, apartmentRepo2, ruleRepo2, scanEventRepo2, logger)
+
 		apartmentID := int64(1)
 		buildingID := int64(1)
 		now := time.Now()
 		validTo := now.Add(2 * time.Hour)
 
-		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		apartmentRepo2.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
 		}, nil)
 
-		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		ruleRepo2.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
 			DailyPassLimitPerApartment: 5,
 			MaxPassDurationHours:       24,
 		}, nil)
 
-		passRepo.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(5, nil)
+		// Лимит 5, уже создано 5, значит лимит превышен (>=)
+		passRepo2.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(5, nil)
 
+		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,
 		}
 
-		pass, err := service.CreatePass(ctx, req)
+		pass, err := service2.CreatePass(ctx, req)
 
 		assert.Error(t, err)
 		assert.Nil(t, pass)
-		assert.Contains(t, err.Error(), "daily pass limit exceeded")
+		if err != nil {
+			assert.Contains(t, err.Error(), "daily pass limit")
+		}
+
+		passRepo2.AssertExpectations(t)
+		apartmentRepo2.AssertExpectations(t)
+		ruleRepo2.AssertExpectations(t)
 	})
 }
 
@@ -230,10 +253,11 @@ func TestPassService_ValidatePass(t *testing.T) {
 		buildingID := int64(1)
 		now := time.Now()
 
+		carPlate := "A123BC"
 		pass := &domain.Pass{
 			ID:          passID,
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			CarPlate:    &carPlate,
 			Status:      "active",
 			ValidFrom:   now.Add(-1 * time.Hour),
 			ValidTo:     now.Add(1 * time.Hour),

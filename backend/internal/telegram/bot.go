@@ -9,12 +9,15 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
 	"yardpass/internal/qr"
 	"yardpass/internal/redis"
+
+	"github.com/google/uuid"
 
 	"go.uber.org/zap"
 )
@@ -29,6 +32,7 @@ type Bot struct {
 	redis         *redis.Client
 	logger        *zap.Logger
 	states        map[int64]*UserState
+	location      *time.Location
 }
 
 type UserState struct {
@@ -38,6 +42,7 @@ type UserState struct {
 }
 
 const (
+	StateWaitingGuestType  = "waiting_guest_type"
 	StateWaitingCarPlate   = "waiting_car_plate"
 	StateWaitingDuration   = "waiting_duration"
 	StateWaitingCustomTime = "waiting_custom_time"
@@ -53,6 +58,13 @@ func NewBot(
 	redisClient *redis.Client,
 	logger *zap.Logger,
 ) *Bot {
+	// Загружаем локальный часовой пояс (Europe/Moscow для России)
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		logger.Warn("Failed to load Europe/Moscow timezone, using UTC", zap.Error(err))
+		location = time.UTC
+	}
+
 	return &Bot{
 		token:         cfg.Telegram.BotToken,
 		apiURL:        fmt.Sprintf("https://api.telegram.org/bot%s", cfg.Telegram.BotToken),
@@ -63,6 +75,7 @@ func NewBot(
 		redis:         redisClient,
 		logger:        logger,
 		states:        make(map[int64]*UserState),
+		location:      location,
 	}
 }
 
@@ -122,6 +135,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	}
 
 	switch state.Step {
+	case StateWaitingGuestType:
+		b.sendMessage(ctx, msg.Chat.ID, "Используйте кнопки для выбора типа гостя")
 	case StateWaitingCarPlate:
 		b.handleCarPlate(ctx, msg, state)
 	case StateWaitingDuration:
@@ -153,6 +168,9 @@ func (b *Bot) handleStart(ctx context.Context, msg Message) {
 			{
 				{"text": "Мои активные пропуска", "callback_data": "list_active"},
 			},
+			{
+				{"text": "Отозвать пропуск", "callback_data": "revoke_pass"},
+			},
 		},
 	}
 
@@ -165,12 +183,22 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 
 	switch data {
 	case "create_pass":
+		keyboard := map[string]interface{}{
+			"inline_keyboard": [][]map[string]interface{}{
+				{
+					{"text": "🚗 На автомобиле", "callback_data": "guest_car"},
+				},
+				{
+					{"text": "🚶 Пеший гость", "callback_data": "guest_pedestrian"},
+				},
+			},
+		}
 		b.setState(userID, &UserState{
-			Step:      StateWaitingCarPlate,
+			Step:      StateWaitingGuestType,
 			Data:      make(map[string]interface{}),
 			ExpiresAt: time.Now().Add(10 * time.Minute),
 		})
-		b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля:")
+		b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите тип гостя:", keyboard)
 		b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "list_active":
@@ -178,7 +206,44 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 		b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "revoke_pass":
-		b.sendMessage(ctx, cb.Message.Chat.ID, "Функция отзыва пропуска")
+		b.showPassesForRevoke(ctx, cb.Message.Chat.ID, userID)
+		b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "guest_car":
+		state := b.getState(userID)
+		if state == nil {
+			b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
+			b.answerCallbackQuery(ctx, cb.ID, "")
+			return
+		}
+		state.Step = StateWaitingCarPlate
+		b.setState(userID, state)
+		b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля (на английском, например: A123BC77):")
+		b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "guest_pedestrian":
+		state := b.getState(userID)
+		if state == nil {
+			b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
+			b.answerCallbackQuery(ctx, cb.ID, "")
+			return
+		}
+		state.Data["is_pedestrian"] = true
+		state.Step = StateWaitingDuration
+		b.setState(userID, state)
+		keyboard := map[string]interface{}{
+			"inline_keyboard": [][]map[string]interface{}{
+				{
+					{"text": "1 час", "callback_data": "duration_1h"},
+					{"text": "2 часа", "callback_data": "duration_2h"},
+				},
+				{
+					{"text": "4 часа", "callback_data": "duration_4h"},
+					{"text": "До времени", "callback_data": "duration_custom"},
+				},
+			},
+		}
+		b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите срок действия пропуска:", keyboard)
 		b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "duration_1h", "duration_2h", "duration_4h", "duration_custom":
@@ -198,14 +263,31 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 			state.Data["duration"] = 4 * time.Hour
 		case "duration_custom":
 			state.Step = StateWaitingCustomTime
+			b.setState(userID, state)
 			b.sendMessage(ctx, cb.Message.Chat.ID, "Введите время окончания действия пропуска в формате ЧЧ:ММ (например, 22:00):")
 			b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 
 		state.Step = StateWaitingGuestName
+		b.setState(userID, state)
 		b.sendMessage(ctx, cb.Message.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
 		b.answerCallbackQuery(ctx, cb.ID, "")
+
+	default:
+		// Обработка отзыва конкретного пропуска (формат: revoke_pass_{uuid})
+		if strings.HasPrefix(data, "revoke_pass_") {
+			passIDStr := strings.TrimPrefix(data, "revoke_pass_")
+			passID, err := uuid.Parse(passIDStr)
+			if err != nil {
+				b.sendMessage(ctx, cb.Message.Chat.ID, "Ошибка: неверный ID пропуска")
+				b.answerCallbackQuery(ctx, cb.ID, "")
+				return
+			}
+			b.revokePass(ctx, cb.Message.Chat.ID, userID, passID)
+			b.answerCallbackQuery(ctx, cb.ID, "")
+			return
+		}
 	}
 }
 
@@ -227,6 +309,7 @@ func (b *Bot) handleCarPlate(ctx context.Context, msg Message, state *UserState)
 	}
 
 	state.Step = StateWaitingDuration
+	b.setState(msg.From.ID, state)
 	b.sendMessageWithKeyboard(ctx, msg.Chat.ID, "Выберите срок действия пропуска:", keyboard)
 }
 
@@ -236,7 +319,7 @@ func (b *Bot) handleDuration(ctx context.Context, msg Message, state *UserState)
 
 func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserState) {
 	timeStr := msg.Text
-	now := time.Now()
+	now := time.Now().In(b.location)
 
 	parsedTime, err := time.Parse("15:04", timeStr)
 	if err != nil {
@@ -244,13 +327,18 @@ func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserStat
 		return
 	}
 
-	targetTime := time.Date(now.Year(), now.Month(), now.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, now.Location())
+	// Создаем время в локальном часовом поясе
+	targetTime := time.Date(now.Year(), now.Month(), now.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, b.location)
 	if targetTime.Before(now) {
 		targetTime = targetTime.Add(24 * time.Hour)
 	}
 
+	// Конвертируем в UTC для сохранения в state (будет конвертировано обратно при сохранении в БД)
+	state.Data["valid_to"] = targetTime.UTC()
+
 	state.Data["valid_to"] = targetTime
 	state.Step = StateWaitingGuestName
+	b.setState(msg.From.ID, state)
 	b.sendMessage(ctx, msg.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
 }
 
@@ -271,21 +359,52 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		return
 	}
 
-	carPlate, ok := state.Data["car_plate"].(string)
-	if !ok {
-		b.sendMessage(ctx, chatID, "Ошибка: номер автомобиля не указан")
-		return
+	var carPlate *string
+	isPedestrian, _ := state.Data["is_pedestrian"].(bool)
+	if !isPedestrian {
+		carPlateStr, ok := state.Data["car_plate"].(string)
+		if !ok || carPlateStr == "" {
+			b.sendMessage(ctx, chatID, "Ошибка: номер автомобиля не указан")
+			return
+		}
+		carPlate = &carPlateStr
 	}
 
+	// Используем UTC для сохранения в БД, но работаем с локальным временем для пользователя
 	now := time.Now()
 	var validTo time.Time
 
-	if duration, ok := state.Data["duration"].(time.Duration); ok {
+	// Пытаемся получить duration (может быть time.Duration или float64/int64 из Redis)
+	var duration time.Duration
+	if d, ok := state.Data["duration"].(time.Duration); ok {
+		duration = d
+	} else if dNs, ok := state.Data["duration"].(float64); ok {
+		duration = time.Duration(dNs)
+	} else if dNs, ok := state.Data["duration"].(int64); ok {
+		duration = time.Duration(dNs)
+	}
+
+	if duration > 0 {
 		validTo = now.Add(duration)
 	} else if validToTime, ok := state.Data["valid_to"].(time.Time); ok {
-		validTo = validToTime
+		// Если время было сохранено в локальном часовом поясе, конвертируем в UTC
+		if validToTime.Location() != time.UTC {
+			validTo = validToTime.UTC()
+		} else {
+			validTo = validToTime
+		}
+	} else if validToStr, ok := state.Data["valid_to"].(string); ok {
+		// Восстанавливаем из строки (если пришло из Redis)
+		if parsedTime, err := time.Parse(time.RFC3339, validToStr); err == nil {
+			validTo = parsedTime.UTC()
+		} else {
+			b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
+			b.logger.Error("failed to parse valid_to", zap.String("valid_to_str", validToStr), zap.Error(err))
+			return
+		}
 	} else {
 		b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
+		b.logger.Error("duration not found in state", zap.Any("state_data", state.Data))
 		return
 	}
 
@@ -296,6 +415,7 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 
 	req := domain.CreatePassRequest{
 		ApartmentID: resident.ApartmentID,
+		ResidentID:  &resident.ID,
 		CarPlate:    carPlate,
 		GuestName:   guestName,
 		ValidFrom:   now,
@@ -316,15 +436,33 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		return
 	}
 
-	err = b.sendPhoto(ctx, chatID, qrPNG, fmt.Sprintf(
-		"✅ Пропуск создан!\n\n"+
-			"Номер авто: %s\n"+
-			"Действует до: %s\n"+
-			"ID пропуска: %s",
-		pass.CarPlate,
-		pass.ValidTo.Format("15:04 02.01.2006"),
-		pass.ID.String(),
-	))
+	var caption string
+	if pass.CarPlate != nil {
+		caption = fmt.Sprintf(
+			"✅ Пропуск создан!\n\n"+
+				"Тип: Автомобиль\n"+
+				"Номер авто: %s\n"+
+				"Действует до: %s\n"+
+				"ID пропуска: %s",
+			*pass.CarPlate,
+			b.formatLocalTime(pass.ValidTo),
+			pass.ID.String(),
+		)
+	} else {
+		caption = fmt.Sprintf(
+			"✅ Пропуск создан!\n\n"+
+				"Тип: Пеший гость\n"+
+				"Действует до: %s\n"+
+				"ID пропуска: %s",
+			b.formatLocalTime(pass.ValidTo),
+			pass.ID.String(),
+		)
+	}
+	if pass.GuestName != nil && *pass.GuestName != "" {
+		caption = fmt.Sprintf("%s\nГость: %s", caption, *pass.GuestName)
+	}
+
+	err = b.sendPhoto(ctx, chatID, qrPNG, caption)
 	if err != nil {
 		b.logger.Error("failed to send photo", zap.Error(err))
 	}
@@ -337,7 +475,8 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 		return
 	}
 
-	passes, err := b.passService.GetActivePasses(ctx, resident.ApartmentID)
+	// Получаем только пропуски этого жителя
+	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
 		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
 		b.logger.Error("failed to get active passes", zap.Error(err), zap.Int64("user_id", userID))
@@ -355,16 +494,144 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 		if pass.GuestName != nil {
 			guestName = fmt.Sprintf(" (%s)", *pass.GuestName)
 		}
-		text += fmt.Sprintf("%d. 🚗 %s%s\n   Действует до: %s\n   ID: %s\n\n",
+
+		var passType, identifier string
+		if pass.CarPlate != nil {
+			passType = "🚗"
+			identifier = *pass.CarPlate
+		} else {
+			passType = "🚶"
+			identifier = "Пеший гость"
+		}
+
+		text += fmt.Sprintf("%d. %s %s%s\n   Действует до: %s\n   ID: %s\n\n",
 			i+1,
-			pass.CarPlate,
+			passType,
+			identifier,
 			guestName,
-			pass.ValidTo.Format("15:04 02.01.2006"),
+			b.formatLocalTime(pass.ValidTo),
 			pass.ID.String()[:8],
 		)
 	}
 
 	b.sendMessage(ctx, chatID, text)
+}
+
+// formatLocalTime форматирует время в локальном часовом поясе
+func (b *Bot) formatLocalTime(t time.Time) string {
+	return t.In(b.location).Format("15:04 02.01.2006")
+}
+
+func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int64) {
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		return
+	}
+
+	// Получаем только пропуски этого жителя
+	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
+	if err != nil {
+		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
+		b.logger.Error("failed to get active passes for revoke", zap.Error(err), zap.Int64("user_id", userID))
+		return
+	}
+
+	if len(passes) == 0 {
+		b.sendMessage(ctx, chatID, "У вас нет активных пропусков для отзыва")
+		return
+	}
+
+	// Создаем клавиатуру с кнопками для каждого пропуска
+	var keyboardRows [][]map[string]interface{}
+
+	text := "Выберите пропуск для отзыва:\n\n"
+	for i, pass := range passes {
+		guestName := ""
+		if pass.GuestName != nil {
+			guestName = fmt.Sprintf(" (%s)", *pass.GuestName)
+		}
+
+		var passType, identifier string
+		if pass.CarPlate != nil {
+			passType = "🚗"
+			identifier = *pass.CarPlate
+		} else {
+			passType = "🚶"
+			identifier = "Пеший гость"
+		}
+
+		text += fmt.Sprintf("%d. %s %s%s\n   Действует до: %s\n\n",
+			i+1,
+			passType,
+			identifier,
+			guestName,
+			b.formatLocalTime(pass.ValidTo),
+		)
+
+		// Добавляем кнопку для отзыва
+		buttonText := fmt.Sprintf("%s %s", passType, identifier)
+		if len(buttonText) > 64 {
+			buttonText = buttonText[:61] + "..."
+		}
+		keyboardRows = append(keyboardRows, []map[string]interface{}{
+			{"text": buttonText, "callback_data": fmt.Sprintf("revoke_pass_%s", pass.ID.String())},
+		})
+	}
+
+	keyboard := map[string]interface{}{
+		"inline_keyboard": keyboardRows,
+	}
+
+	b.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
+}
+
+func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID uuid.UUID) {
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		return
+	}
+
+	// Получаем активные пропуска этого жителя для проверки принадлежности
+	activePasses, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
+	if err != nil {
+		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при проверке пропуска: %s", err.Error()))
+		return
+	}
+
+	// Проверяем, что пропуск существует и принадлежит жителю, и сохраняем информацию о нем
+	var passInfo string
+	found := false
+	for _, p := range activePasses {
+		if p.ID == passID {
+			found = true
+			if p.CarPlate != nil {
+				passInfo = fmt.Sprintf("🚗 %s", *p.CarPlate)
+			} else {
+				passInfo = "🚶 Пеший гость"
+			}
+			if p.GuestName != nil {
+				passInfo += fmt.Sprintf(" (%s)", *p.GuestName)
+			}
+			break
+		}
+	}
+
+	if !found {
+		b.sendMessage(ctx, chatID, "Ошибка: пропуск не найден или не принадлежит вам")
+		return
+	}
+
+	// Отзываем пропуск
+	err = b.passService.RevokePass(ctx, passID, 0) // 0 = отозван через бота
+	if err != nil {
+		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при отзыве пропуска: %s", err.Error()))
+		b.logger.Error("failed to revoke pass", zap.Error(err), zap.String("pass_id", passID.String()), zap.Int64("user_id", userID))
+		return
+	}
+
+	b.sendMessage(ctx, chatID, fmt.Sprintf("✅ Пропуск отозван:\n%s\n\nID: %s", passInfo, passID.String()[:8]))
 }
 
 func (b *Bot) getState(userID int64) *UserState {
@@ -374,6 +641,16 @@ func (b *Bot) getState(userID int64) *UserState {
 		var state UserState
 		if json.Unmarshal([]byte(stateJSON), &state) == nil {
 			if time.Now().Before(state.ExpiresAt) {
+				// Восстанавливаем time.Duration из числа (наносекунды)
+				if durationNs, ok := state.Data["duration"].(float64); ok {
+					state.Data["duration"] = time.Duration(durationNs)
+				}
+				// Восстанавливаем time.Time из строки
+				if validToStr, ok := state.Data["valid_to"].(string); ok {
+					if validToTime, err := time.Parse(time.RFC3339, validToStr); err == nil {
+						state.Data["valid_to"] = validToTime
+					}
+				}
 				return &state
 			}
 		}
@@ -394,7 +671,24 @@ func (b *Bot) getState(userID int64) *UserState {
 
 func (b *Bot) setState(userID int64, state *UserState) {
 	key := fmt.Sprintf("bot_state:%d", userID)
-	stateJSON, _ := json.Marshal(state)
+
+	// Создаем копию состояния для сериализации
+	stateCopy := *state
+	stateCopyData := make(map[string]interface{})
+	for k, v := range state.Data {
+		// Конвертируем time.Duration в наносекунды (int64)
+		if duration, ok := v.(time.Duration); ok {
+			stateCopyData[k] = int64(duration)
+		} else if validToTime, ok := v.(time.Time); ok {
+			// Конвертируем time.Time в строку
+			stateCopyData[k] = validToTime.Format(time.RFC3339)
+		} else {
+			stateCopyData[k] = v
+		}
+	}
+	stateCopy.Data = stateCopyData
+
+	stateJSON, _ := json.Marshal(stateCopy)
 	b.redis.Set(context.Background(), key, stateJSON, 10*time.Minute)
 
 	b.states[userID] = state

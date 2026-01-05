@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -96,12 +95,7 @@ func Load() (*Config, error) {
 		},
 	}
 
-	// JWT_SECRET требуется только для API сервера, не для бота
-	// Проверка убрана, чтобы бот мог работать без него
-
-	if cfg.Telegram.BotToken == "" {
-		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
-	}
+	// JWT_SECRET и TELEGRAM_BOT_TOKEN требуются для разных сервисов
 
 	return cfg, nil
 }

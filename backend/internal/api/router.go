@@ -33,6 +33,7 @@ func SetupRouter(
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.InMemoryRateLimit(100, 200))
 
 	r.GET("/health", func(c *gin.Context) {

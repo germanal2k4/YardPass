@@ -94,23 +94,75 @@ export function RegistrationPage() {
           alignItems: 'center',
           justifyContent: 'center',
           py: 4,
+          background: 'linear-gradient(135deg, rgba(229, 57, 53, 0.05) 0%, rgba(255, 109, 0, 0.05) 100%)',
         }}
       >
-        <Paper elevation={3} sx={{ p: 4, width: '100%', position: 'relative' }}>
+        <Paper 
+          elevation={6} 
+          sx={{ 
+            p: 5, 
+            width: '100%', 
+            position: 'relative',
+            borderRadius: 4,
+            background: 'linear-gradient(to bottom, #FFFFFF 0%, #FAFAFA 100%)',
+          }}
+        >
           <IconButton
             onClick={() => navigate(APP_ROUTES.HOME)}
-            sx={{ position: 'absolute', top: 16, left: 16 }}
+            sx={{ 
+              position: 'absolute', 
+              top: 20, 
+              left: 20,
+              color: '#E53935',
+              '&:hover': {
+                backgroundColor: 'rgba(229, 57, 53, 0.08)',
+              },
+            }}
             aria-label="назад"
           >
             <ArrowBackIcon />
           </IconButton>
 
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <PersonAddIcon sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-            <Typography variant="h4" component="h1" gutterBottom>
+          <Box sx={{ textAlign: 'center', mb: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="YardPass Logo"
+              sx={{
+                height: { xs: 70, sm: 90 },
+                width: 'auto',
+                mb: 2,
+                display: 'block',
+                transition: 'transform 0.3s ease',
+                '&:hover': {
+                  transform: 'scale(1.05)',
+                },
+              }}
+            />
+            <PersonAddIcon 
+              sx={{ 
+                fontSize: 56, 
+                color: '#FF6D00',
+                mb: 1,
+                display: 'block',
+                filter: 'drop-shadow(0 2px 4px rgba(255, 109, 0, 0.3))',
+              }} 
+            />
+            <Typography 
+              variant="h3" 
+              component="h1" 
+              gutterBottom
+              fontWeight="800"
+              sx={{
+                background: 'linear-gradient(135deg, #E53935 0%, #FF6D00 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
               Регистрация
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body1" color="text.secondary" fontWeight="600">
               Создание нового пользователя
             </Typography>
           </Box>
@@ -194,13 +246,13 @@ export function RegistrationPage() {
               >
                 <MenuItem value="guard">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="Охранник" color="primary" size="small" />
+                    <Chip label="Охранник" color="secondary" size="small" />
                     <Typography variant="body2">Сканирование пропусков</Typography>
                   </Box>
                 </MenuItem>
                 <MenuItem value="admin">
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="Администратор" color="secondary" size="small" />
+                    <Chip label="Администратор" color="primary" size="small" />
                     <Typography variant="body2">Управление системой</Typography>
                   </Box>
                 </MenuItem>
@@ -214,6 +266,12 @@ export function RegistrationPage() {
               size="large"
               disabled={isLoading || success}
               startIcon={<PersonAddIcon />}
+              color={role === 'admin' ? 'primary' : 'secondary'}
+              sx={{
+                py: 1.5,
+                fontSize: '1.1rem',
+                fontWeight: 700,
+              }}
             >
               {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
             </Button>
@@ -226,7 +284,14 @@ export function RegistrationPage() {
                 component="button"
                 variant="body2"
                 onClick={() => navigate(`${APP_ROUTES.LOGIN}?role=${role}`)}
-                sx={{ cursor: 'pointer' }}
+                sx={{ 
+                  cursor: 'pointer',
+                  color: '#E53935',
+                  fontWeight: 700,
+                  '&:hover': {
+                    color: '#FF6D00',
+                  },
+                }}
               >
                 Войти
               </Link>

@@ -3,16 +3,14 @@ import {
   Box, 
   AppBar, 
   Toolbar, 
-  Typography, 
+  Typography,
   Button, 
   Container,
   Chip,
-  IconButton,
   Tooltip,
 } from '@mui/material';
 import { useAuth } from '@/features/auth/useAuth';
 import LogoutIcon from '@mui/icons-material/Logout';
-import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
@@ -37,10 +35,6 @@ export function Layout({ children, title }: LayoutProps) {
     return role === 'admin' ? 'Администратор' : 'Охрана';
   };
 
-  const getRoleColor = (role: string) => {
-    return role === 'admin' ? 'secondary' : 'primary';
-  };
-
   const getHomeRoute = () => {
     if (!user) return APP_ROUTES.HOME;
     return user.role === 'admin' ? APP_ROUTES.ADMIN : APP_ROUTES.SECURITY;
@@ -51,38 +45,35 @@ export function Layout({ children, title }: LayoutProps) {
       <AppBar 
         position="static" 
         sx={{ 
-          boxShadow: 3,
+          boxShadow: '0 4px 20px rgba(229, 57, 53, 0.3)',
           borderRadius: 0,
           background: user?.role === 'admin' 
-            ? 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)'
-            : 'linear-gradient(45deg, #2196f3 30%, #21cbf3 90%)',
+            ? 'linear-gradient(135deg, #E53935 0%, #FF6D00 50%, #FFB300 100%)'
+            : 'linear-gradient(135deg, #FF6D00 0%, #FFB300 50%, #FFC107 100%)',
         }}
       >
-        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
-          {/* Logo/Brand */}
+        <Toolbar sx={{ minHeight: { xs: 64, sm: 72 } }}>
+          {/* Logo - Clickable */}
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <Tooltip title="На главную">
-              <IconButton
-                color="inherit"
+            <Tooltip title="На главную" arrow>
+              <Box
+                component="img"
+                src="/logo.png"
+                alt="YardPass"
+                sx={{
+                  height: { xs: 50, sm: 65 },
+                  width: 'auto',
+                  cursor: 'pointer',
+                  filter: 'brightness(0) invert(1)', // Make logo white
+                  transition: 'all 0.3s ease',
+                  '&:hover': { 
+                    opacity: 0.85,
+                    transform: 'scale(1.05)',
+                  },
+                }}
                 onClick={() => navigate(getHomeRoute())}
-                sx={{ mr: 1 }}
-              >
-                <HomeIcon />
-              </IconButton>
+              />
             </Tooltip>
-            <Typography 
-              variant="h6" 
-              component="div" 
-              sx={{ 
-                fontWeight: 700,
-                letterSpacing: 1,
-                cursor: 'pointer',
-                '&:hover': { opacity: 0.8 },
-              }} 
-              onClick={() => navigate(getHomeRoute())}
-            >
-              YardPass
-            </Typography>
           </Box>
           
           {user && (
@@ -91,11 +82,17 @@ export function Layout({ children, title }: LayoutProps) {
               <Chip
                 icon={getRoleIcon(user.role)}
                 label={getRoleName(user.role)}
-                color={getRoleColor(user.role)}
                 variant="filled"
                 sx={{
-                  fontWeight: 600,
+                  fontWeight: 700,
                   display: { xs: 'none', sm: 'flex' },
+                  backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                  color: user.role === 'admin' ? '#E53935' : '#FF6D00',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                  border: '2px solid rgba(255, 255, 255, 1)',
+                  '& .MuiChip-icon': {
+                    color: user.role === 'admin' ? '#E53935' : '#FF6D00',
+                  },
                 }}
               />
               
@@ -108,7 +105,7 @@ export function Layout({ children, title }: LayoutProps) {
                       onClick={() => navigate(APP_ROUTES.ADMIN_RULES)}
                       startIcon={<SettingsIcon />}
                       sx={{ 
-                        fontWeight: 600,
+                        fontWeight: 700,
                         '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
                       }}
                     >
@@ -123,7 +120,7 @@ export function Layout({ children, title }: LayoutProps) {
                       onClick={() => navigate(APP_ROUTES.ADMIN_REPORTS)}
                       startIcon={<AssessmentIcon />}
                       sx={{ 
-                        fontWeight: 600,
+                        fontWeight: 700,
                         '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
                       }}
                     >
@@ -142,7 +139,7 @@ export function Layout({ children, title }: LayoutProps) {
                   onClick={logout} 
                   startIcon={<LogoutIcon />}
                   sx={{ 
-                    fontWeight: 600,
+                    fontWeight: 700,
                     '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
                   }}
                 >
@@ -160,19 +157,21 @@ export function Layout({ children, title }: LayoutProps) {
         <Box 
           sx={{ 
             background: user?.role === 'admin'
-              ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-              : 'linear-gradient(135deg, #667eea 0%, #42a5f5 100%)',
+              ? 'linear-gradient(135deg, #E53935 0%, #FF6D00 50%, #FFB300 100%)'
+              : 'linear-gradient(135deg, #FF6D00 0%, #FFB300 50%, #FFC107 100%)',
             color: 'white', 
-            py: 4,
-            boxShadow: 2,
+            py: 5,
+            boxShadow: '0 4px 20px rgba(229, 57, 53, 0.3)',
           }}
         >
           <Container maxWidth="lg">
             <Typography 
-              variant="h4" 
+              variant="h3" 
               sx={{ 
-                fontWeight: 700,
-                textShadow: '2px 2px 4px rgba(0,0,0,0.2)',
+                fontWeight: 800,
+                color: '#FFFFFF',
+                textShadow: '3px 3px 6px rgba(0,0,0,0.3)',
+                letterSpacing: 0.5,
               }}
             >
               {title}

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+
+	"github.com/google/uuid"
 )
 
 type ScanEventRepo struct {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"yardpass/internal/domain"
@@ -40,14 +41,38 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 		}
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "admin" || role == "guard" {
+
+	// Для superuser - показываем все данные, если building_id не указан явно в query
+	// Для admin/guard - применяем фильтр по их building_id
+	if roleStr == "superuser" {
+		// Superuser может указать building_id в query параметрах для фильтрации
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
+		}
+		// Если не указан в query, показываем все данные (bID остается nil)
+	} else if roleStr == "admin" || roleStr == "guard" {
+		// Для admin и guard применяем фильтр по их building_id
 		if buildingID != nil {
-			id := buildingID.(int64)
-			bID = &id
+			if id, ok := buildingID.(int64); ok {
+				bID = &id
+			}
 		}
 	}
 
@@ -90,14 +115,38 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 		}
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "admin" || role == "guard" {
+
+	// Для superuser - показываем все данные, если building_id не указан явно в query
+	// Для admin/guard - применяем фильтр по их building_id
+	if roleStr == "superuser" {
+		// Superuser может указать building_id в query параметрах для фильтрации
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
+		}
+		// Если не указан в query, показываем все данные (bID остается nil)
+	} else if roleStr == "admin" || roleStr == "guard" {
+		// Для admin и guard применяем фильтр по их building_id
 		if buildingID != nil {
-			id := buildingID.(int64)
-			bID = &id
+			if id, ok := buildingID.(int64); ok {
+				bID = &id
+			}
 		}
 	}
 

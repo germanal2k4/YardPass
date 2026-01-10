@@ -255,6 +255,7 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 	for rows.Next() {
 		var event ScanEventWithDetails
 		var guardUsername *string
+		var carPlate *string
 		if err := rows.Scan(
 			&event.ID,
 			&event.PassID,
@@ -263,7 +264,7 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 			&event.Result,
 			&event.Reason,
 			&event.Meta,
-			&event.CarPlate,
+			&carPlate,
 			&event.ApartmentNumber,
 			&event.BuildingID,
 			&guardUsername,
@@ -272,6 +273,11 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 		}
 		if guardUsername != nil {
 			event.GuardUsername = *guardUsername
+		}
+		if carPlate != nil {
+			event.CarPlate = *carPlate
+		} else {
+			event.CarPlate = "" // Пустая строка для пешеходных пропусков
 		}
 		events = append(events, &event)
 	}

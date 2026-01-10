@@ -72,7 +72,6 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
 
-	// Проверяем лимит для конкретного жителя, а не для всей квартиры
 	if req.ResidentID == nil {
 		return nil, errors.New("resident_id is required")
 	}
@@ -132,7 +131,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 
 	if pass == nil {
 		result.Reason = "PASS_NOT_FOUND"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		
 		return result, nil
 	}
 
@@ -142,7 +141,6 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		return result, nil
 	}
 
-	// Используем UTC для сравнения, чтобы избежать проблем с часовыми поясами
 	now := time.Now().UTC()
 	validFrom := pass.ValidFrom.UTC()
 	validTo := pass.ValidTo.UTC()
@@ -232,16 +230,23 @@ func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate strin
 }
 
 func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardUserID int64, result, reason string) {
+	
 	event := &domain.ScanEvent{
 		PassID:      passID,
 		GuardUserID: guardUserID,
-		ScannedAt:   time.Now(),
+		ScannedAt:   time.Now().UTC(),
 		Result:      result,
 		Reason:      &reason,
 	}
 
 	if err := s.scanEventRepo.Create(ctx, event); err != nil {
-		s.logger.Error("failed to log scan event", zap.Error(err))
+		
+		s.logger.Error("failed to log scan event", 
+			zap.Error(err),
+			zap.String("pass_id", passID.String()),
+			zap.String("result", result),
+			zap.String("reason", reason),
+		)
 	}
 }
 

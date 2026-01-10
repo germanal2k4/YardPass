@@ -320,6 +320,150 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /api/v1/scan-events:
+    get:
+      summary: Получить журнал событий сканирования
+      description: Возвращает список событий сканирования с возможностью фильтрации
+      tags:
+        - Scan Events
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 20
+          description: Количество записей на странице
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Смещение для пагинации
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Начало периода (RFC3339)
+          example: "2024-01-01T00:00:00Z"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Конец периода (RFC3339)
+          example: "2024-01-31T23:59:59Z"
+        - name: result
+          in: query
+          schema:
+            type: string
+            enum: [valid, invalid]
+          description: Фильтр по результату сканирования
+      responses:
+        '200':
+          description: Список событий
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScanEventWithDetails'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/reports/statistics:
+    get:
+      summary: Получить статистику по сканированиям
+      description: Возвращает статистику по событиям сканирования за указанный период
+      tags:
+        - Reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Начало периода (RFC3339)
+          example: "2024-01-01T00:00:00Z"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Конец периода (RFC3339)
+          example: "2024-01-31T23:59:59Z"
+      responses:
+        '200':
+          description: Статистика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/reports/export:
+    get:
+      summary: Экспортировать события в Excel
+      description: Экспортирует события сканирования в файл Excel (.xlsx)
+      tags:
+        - Reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [xlsx]
+            default: xlsx
+          description: Формат экспорта (только xlsx)
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Начало периода (RFC3339)
+          example: "2024-01-01T00:00:00Z"
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Конец периода (RFC3339)
+          example: "2024-01-31T23:59:59Z"
+      responses:
+        '200':
+          description: Файл Excel
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Имя файла для скачивания
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -418,6 +562,81 @@ components:
           type: integer
         max_pass_duration_hours:
           type: integer
+
+    ScanEventWithDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: ID события
+        pass_id:
+          type: string
+          format: uuid
+          description: ID пропуска
+        guard_user_id:
+          type: integer
+          description: ID охранника
+        guard_username:
+          type: string
+          description: Имя пользователя охранника
+        scanned_at:
+          type: string
+          format: date-time
+          description: Время сканирования
+        result:
+          type: string
+          enum: [valid, invalid]
+          description: Результат сканирования
+        reason:
+          type: string
+          nullable: true
+          description: Причина (если невалидно)
+        meta:
+          type: string
+          nullable: true
+          description: Дополнительные метаданные (JSON)
+        car_plate:
+          type: string
+          description: Номер автомобиля
+        apartment_number:
+          type: string
+          description: Номер квартиры
+        building_id:
+          type: integer
+          description: ID здания
+
+    Statistics:
+      type: object
+      properties:
+        total_scans:
+          type: integer
+          description: Общее количество сканирований
+        valid_scans:
+          type: integer
+          description: Количество валидных сканирований
+        invalid_scans:
+          type: integer
+          description: Количество невалидных сканирований
+        unique_passes:
+          type: integer
+          description: Количество уникальных пропусков
+        unique_guards:
+          type: integer
+          description: Количество уникальных охранников
+        valid_percent:
+          type: number
+          format: float
+          description: Процент валидных сканирований
+        period_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: Начало периода
+        period_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: Конец периода
 
     Error:
       type: object

@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 	"yardpass/internal/repo"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ScanEventHandler struct {
@@ -56,13 +57,39 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		filters.Result = &result
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "guard" && buildingID != nil {
-		id := buildingID.(int64)
-		bID = &id
+
+	// Для superuser - показываем все данные, если building_id не указан явно в query
+	// Для admin/guard - применяем фильтр по их building_id
+	if roleStr == "superuser" {
+		// Superuser может указать building_id в query параметрах для фильтрации
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
+		}
+		// Если не указан в query, показываем все данные (bID остается nil)
+	} else if roleStr == "admin" || roleStr == "guard" {
+		// Для admin и guard применяем фильтр по их building_id
+		if buildingID != nil {
+			if id, ok := buildingID.(int64); ok {
+				bID = &id
+			}
+		}
 	}
 
 	events, err := h.scanEventRepo.GetEventsWithDetails(c.Request.Context(), filters, bID)
@@ -77,4 +104,3 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		"offset": filters.Offset,
 	})
 }
-

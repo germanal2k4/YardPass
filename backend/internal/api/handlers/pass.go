@@ -42,8 +42,15 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		req.ValidFrom = time.Now()
+		// Используем UTC для единообразия с БД
+		req.ValidFrom = time.Now().UTC()
+	} else {
+		// Нормализуем к UTC, если время пришло с часовым поясом
+		req.ValidFrom = req.ValidFrom.UTC()
 	}
+	
+	// Нормализуем ValidTo к UTC
+	req.ValidTo = req.ValidTo.UTC()
 
 	createReq := domain.CreatePassRequest{
 		ApartmentID: req.ApartmentID,

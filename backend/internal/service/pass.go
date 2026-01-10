@@ -142,14 +142,18 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		return result, nil
 	}
 
-	now := time.Now()
-	if now.Before(pass.ValidFrom) {
+	// Используем UTC для сравнения, чтобы избежать проблем с часовыми поясами
+	now := time.Now().UTC()
+	validFrom := pass.ValidFrom.UTC()
+	validTo := pass.ValidTo.UTC()
+	
+	if now.Before(validFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
 		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
-	if now.After(pass.ValidTo) {
+	if now.After(validTo) {
 		result.Reason = "PASS_EXPIRED"
 		pass.Status = "expired"
 		_ = s.passRepo.Update(ctx, pass)

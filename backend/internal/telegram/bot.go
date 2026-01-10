@@ -411,8 +411,8 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		carPlate = &carPlateStr
 	}
 
-	// Используем UTC для сохранения в БД, но работаем с локальным временем для пользователя
-	now := time.Now()
+	// Используем UTC для сохранения в БД, чтобы избежать проблем с часовыми поясами
+	now := time.Now().UTC()
 	var validTo time.Time
 
 	// Пытаемся получить duration (может быть time.Duration или float64/int64 из Redis)
@@ -454,13 +454,17 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		guestName = gn
 	}
 
+	// Нормализуем время к UTC для единообразия с БД
+	validFromUTC := now.UTC()
+	validToUTC := validTo.UTC()
+	
 	req := domain.CreatePassRequest{
 		ApartmentID: resident.ApartmentID,
 		ResidentID:  &resident.ID,
 		CarPlate:    carPlate,
 		GuestName:   guestName,
-		ValidFrom:   now,
-		ValidTo:     validTo,
+		ValidFrom:   validFromUTC,
+		ValidTo:     validToUTC,
 	}
 
 	pass, err := b.passService.CreatePass(ctx, req)

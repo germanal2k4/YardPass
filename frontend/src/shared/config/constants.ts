@@ -25,6 +25,11 @@ export const API_ENDPOINTS = {
   // Rules
   RULES: '/api/v1/rules',
   
+  // Scan Events & Reports
+  SCAN_EVENTS: '/api/v1/scan-events',
+  STATISTICS: '/api/v1/reports/statistics',
+  EXPORT_REPORT: '/api/v1/reports/export',
+  
   // Health
   HEALTH: '/health',
 } as const;

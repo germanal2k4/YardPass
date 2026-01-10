@@ -7,7 +7,9 @@ import {
   Box,
   Alert,
   CircularProgress,
+  IconButton,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Layout } from '@/shared/ui/Layout';
 import { useMutation } from '@tanstack/react-query';
 import { passesApi } from '@/shared/api/passes';
@@ -75,6 +77,9 @@ export function SecurityPage() {
   const handleKeyPress = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' && qrInput.trim()) {
       e.preventDefault();
+      // Clear previous error when starting new scan
+      setErrorMsg('');
+      setValidationResult(null);
       validateMutation.mutate(qrInput.trim());
     }
   };
@@ -84,10 +89,18 @@ export function SecurityPage() {
     inputRef.current?.focus();
   }, []);
 
-  const handleInputFocus = () => {
-    // Clear previous results when focusing input
-    setValidationResult(null);
+  const handleCloseError = () => {
+    // Clear error when user explicitly closes it
     setErrorMsg('');
+    inputRef.current?.focus();
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQrInput(e.target.value);
+    // Only clear results when user starts typing (not just focusing)
+    if (e.target.value.length > 0 && validationResult) {
+      setValidationResult(null);
+    }
   };
 
   return (
@@ -114,9 +127,8 @@ export function SecurityPage() {
           <TextField
             inputRef={inputRef}
             value={qrInput}
-            onChange={(e) => setQrInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyPress={handleKeyPress}
-            onFocus={handleInputFocus}
             placeholder="Сканируйте QR-код или введите UUID..."
             fullWidth
             size="large"
@@ -142,7 +154,35 @@ export function SecurityPage() {
           />
 
           {errorMsg && (
-            <Alert severity="error" sx={{ mt: 2 }}>
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mt: 2,
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                animation: 'shake 0.5s',
+                '@keyframes shake': {
+                  '0%, 100%': { transform: 'translateX(0)' },
+                  '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-5px)' },
+                  '20%, 40%, 60%, 80%': { transform: 'translateX(5px)' },
+                },
+              }}
+              action={
+                <IconButton
+                  aria-label="close"
+                  color="inherit"
+                  size="small"
+                  onClick={handleCloseError}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                    },
+                  }}
+                >
+                  <CloseIcon fontSize="inherit" />
+                </IconButton>
+              }
+            >
               {errorMsg}
             </Alert>
           )}

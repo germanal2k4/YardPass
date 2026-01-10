@@ -140,3 +140,61 @@ export interface ScanEventFilters {
   offset?: number;
 }
 
+// Scan event with full details (for reports and logs)
+// Backend returns PascalCase field names
+export interface ScanEventWithDetails {
+  ID: number;
+  PassID: string; // UUID
+  GuardUserID: number;
+  GuardUsername: string;
+  ScannedAt: string; // ISO datetime
+  Result: 'valid' | 'invalid';
+  Reason?: string;
+  CarPlate?: string;
+  GuestName?: string;
+  ApartmentNumber?: string;
+  BuildingID?: number;
+  BuildingName?: string;
+  Meta?: any;
+}
+
+export interface GetScanEventsRequest {
+  limit?: number;
+  offset?: number;
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
+  result?: 'valid' | 'invalid';
+}
+
+export interface GetScanEventsResponse {
+  events: ScanEventWithDetails[];
+  limit: number;
+  offset: number;
+}
+
+// Statistics for reports
+
+export interface Statistics {
+  total_scans: number;
+  valid_scans: number;
+  invalid_scans: number;
+  unique_passes: number;
+  top_reasons?: Array<{
+    reason: string;
+    count: number;
+  }>;
+}
+
+export interface GetStatisticsRequest {
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
+}
+
+// Export reports
+
+export interface ExportReportRequest {
+  format: 'xlsx';
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
+}
+

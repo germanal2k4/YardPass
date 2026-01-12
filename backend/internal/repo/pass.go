@@ -92,7 +92,7 @@ func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
-		WHERE apartment_id = $1 
+		WHERE apartment_id = $1
 			AND status = 'active'
 			AND valid_from <= $2
 			AND valid_to >= $2
@@ -133,7 +133,7 @@ func (r *PassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) 
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
-		WHERE resident_id = $1 
+		WHERE resident_id = $1
 			AND status = 'active'
 			AND valid_from <= $2
 			AND valid_to >= $2
@@ -298,7 +298,6 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 	return passes, rows.Err()
 }
 
-// GetActiveByCarPlate находит активный пропуск по нормализованному номеру машины
 func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
 	now := time.Now()
 	query := `

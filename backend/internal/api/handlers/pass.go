@@ -24,15 +24,15 @@ func NewPassHandler(passService domain.PassService) *PassHandler {
 
 type CreatePassRequest struct {
 	ApartmentID int64     `json:"apartment_id" binding:"required"`
-	CarPlate    *string   `json:"car_plate,omitempty"` // NULL for pedestrian guests
+	CarPlate    *string   `json:"car_plate,omitempty"`
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
 	ValidTo     time.Time `json:"valid_to" binding:"required"`
 }
 
 type ValidatePassRequest struct {
-	QRUUID   string `json:"qr_uuid,omitempty"`   // UUID из QR кода (опционально)
-	CarPlate string `json:"car_plate,omitempty"`  // Номер машины (опционально, альтернатива QR)
+	QRUUID   string `json:"qr_uuid,omitempty"`
+	CarPlate string `json:"car_plate,omitempty"`
 }
 
 func (h *PassHandler) Create(c *gin.Context) {
@@ -43,14 +43,11 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		// Используем UTC для единообразия с БД
 		req.ValidFrom = time.Now().UTC()
 	} else {
-		// Нормализуем к UTC, если время пришло с часовым поясом
 		req.ValidFrom = req.ValidFrom.UTC()
 	}
-	
-	// Нормализуем ValidTo к UTC
+
 	req.ValidTo = req.ValidTo.UTC()
 
 	createReq := domain.CreatePassRequest{
@@ -124,11 +121,9 @@ func (h *PassHandler) Validate(c *gin.Context) {
 	var result *domain.PassValidationResult
 	var err error
 
-	// Валидация по номеру машины (приоритет, если указан)
 	if req.CarPlate != "" {
 		result, err = h.passService.ValidatePassByCarPlate(c.Request.Context(), req.CarPlate, guardUserID, bID)
 	} else if req.QRUUID != "" {
-		// Валидация по QR коду
 		passID, parseErr := uuid.Parse(req.QRUUID)
 		if parseErr != nil {
 			errors.BadRequest(c, "INVALID_QR_UUID", "Invalid QR code format")

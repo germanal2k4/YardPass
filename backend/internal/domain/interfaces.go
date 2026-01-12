@@ -101,8 +101,8 @@ type PassService interface {
 
 type CreatePassRequest struct {
 	ApartmentID int64
-	ResidentID  *int64  // Resident who creates the pass
-	CarPlate    *string // NULL for pedestrian guests
+	ResidentID  *int64
+	CarPlate    *string
 	GuestName   *string
 	ValidFrom   time.Time
 	ValidTo     time.Time

@@ -38,8 +38,8 @@ type Resident struct {
 type Pass struct {
 	ID          uuid.UUID `json:"id"`
 	ApartmentID int64     `json:"apartment_id"`
-	ResidentID  *int64    `json:"resident_id,omitempty"` // NULL for legacy passes
-	CarPlate    *string   `json:"car_plate,omitempty"`   // NULL for pedestrian guests
+	ResidentID  *int64    `json:"resident_id,omitempty"`
+	CarPlate    *string   `json:"car_plate,omitempty"`
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
 	ValidTo     time.Time `json:"valid_to"`

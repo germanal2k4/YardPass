@@ -17,7 +17,7 @@ func NewRuleRepo(repo *PostgresRepo) *RuleRepo {
 
 func (r *RuleRepo) GetByBuildingID(ctx context.Context, buildingID int64) (*domain.Rule, error) {
 	query := `
-		SELECT id, building_id, quiet_hours_start, quiet_hours_end, 
+		SELECT id, building_id, quiet_hours_start, quiet_hours_end,
 		       daily_pass_limit_per_apartment, max_pass_duration_hours, created_at, updated_at
 		FROM rules
 		WHERE building_id = $1
@@ -47,7 +47,7 @@ func (r *RuleRepo) GetByBuildingID(ctx context.Context, buildingID int64) (*doma
 
 func (r *RuleRepo) Create(ctx context.Context, rule *domain.Rule) error {
 	query := `
-		INSERT INTO rules (building_id, quiet_hours_start, quiet_hours_end, 
+		INSERT INTO rules (building_id, quiet_hours_start, quiet_hours_end,
 		                   daily_pass_limit_per_apartment, max_pass_duration_hours)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, created_at, updated_at

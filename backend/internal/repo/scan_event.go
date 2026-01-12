@@ -130,7 +130,7 @@ func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
 
 func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*Statistics, error) {
 	query := `
-		SELECT 
+		SELECT
 			COUNT(*) as total_scans,
 			COUNT(*) FILTER (WHERE result = 'valid') as valid_scans,
 			COUNT(*) FILTER (WHERE result = 'invalid') as invalid_scans,
@@ -184,7 +184,7 @@ type Statistics struct {
 
 func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*ScanEventWithDetails, error) {
 	query := `
-		SELECT 
+		SELECT
 			se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,
 			p.car_plate, a.number as apartment_number, a.building_id,
 			u.username as guard_username
@@ -278,7 +278,7 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 		if carPlate != nil {
 			event.CarPlate = *carPlate
 		} else {
-			event.CarPlate = "" // Пустая строка для пешеходных пропусков
+			event.CarPlate = ""
 		}
 		events = append(events, &event)
 	}

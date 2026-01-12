@@ -58,7 +58,6 @@ func NewBot(
 	redisClient *redis.Client,
 	logger *zap.Logger,
 ) *Bot {
-	// Загружаем локальный часовой пояс (Europe/Moscow для России)
 	location, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
 		logger.Warn("Failed to load Europe/Moscow timezone, using UTC", zap.Error(err))
@@ -78,7 +77,6 @@ func NewBot(
 		location:      location,
 	}
 
-	// Устанавливаем меню команд при инициализации
 	ctx := context.Background()
 	if err := bot.SetMyCommands(ctx); err != nil {
 		logger.Warn("Failed to set bot commands", zap.Error(err))
@@ -133,13 +131,11 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	userID := msg.From.ID
 	text := msg.Text
 
-	// Обработка команд из меню
 	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" {
 		switch text {
 		case "/start":
 			b.handleStart(ctx, msg)
 		case "/create":
-			// Имитируем нажатие кнопки "create_pass"
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -148,7 +144,6 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 			}
 			b.handleCallbackQuery(ctx, cb)
 		case "/list":
-			// Имитируем нажатие кнопки "list_active"
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -157,7 +152,6 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 			}
 			b.handleCallbackQuery(ctx, cb)
 		case "/revoke":
-			// Имитируем нажатие кнопки "revoke_pass"
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -316,7 +310,6 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 		b.answerCallbackQuery(ctx, cb.ID, "")
 
 	default:
-		// Обработка отзыва конкретного пропуска (формат: revoke_pass_{uuid})
 		if strings.HasPrefix(data, "revoke_pass_") {
 			passIDStr := strings.TrimPrefix(data, "revoke_pass_")
 			passID, err := uuid.Parse(passIDStr)
@@ -368,13 +361,11 @@ func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserStat
 		return
 	}
 
-	// Создаем время в локальном часовом поясе
 	targetTime := time.Date(now.Year(), now.Month(), now.Day(), parsedTime.Hour(), parsedTime.Minute(), 0, 0, b.location)
 	if targetTime.Before(now) {
 		targetTime = targetTime.Add(24 * time.Hour)
 	}
 
-	// Конвертируем в UTC для сохранения в state (будет конвертировано обратно при сохранении в БД)
 	state.Data["valid_to"] = targetTime.UTC()
 
 	state.Data["valid_to"] = targetTime
@@ -411,11 +402,9 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		carPlate = &carPlateStr
 	}
 
-	// Используем UTC для сохранения в БД, чтобы избежать проблем с часовыми поясами
 	now := time.Now().UTC()
 	var validTo time.Time
 
-	// Пытаемся получить duration (может быть time.Duration или float64/int64 из Redis)
 	var duration time.Duration
 	if d, ok := state.Data["duration"].(time.Duration); ok {
 		duration = d
@@ -428,14 +417,12 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 	if duration > 0 {
 		validTo = now.Add(duration)
 	} else if validToTime, ok := state.Data["valid_to"].(time.Time); ok {
-		// Если время было сохранено в локальном часовом поясе, конвертируем в UTC
 		if validToTime.Location() != time.UTC {
 			validTo = validToTime.UTC()
 		} else {
 			validTo = validToTime
 		}
 	} else if validToStr, ok := state.Data["valid_to"].(string); ok {
-		// Восстанавливаем из строки (если пришло из Redis)
 		if parsedTime, err := time.Parse(time.RFC3339, validToStr); err == nil {
 			validTo = parsedTime.UTC()
 		} else {
@@ -454,10 +441,9 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		guestName = gn
 	}
 
-	// Нормализуем время к UTC для единообразия с БД
 	validFromUTC := now.UTC()
 	validToUTC := validTo.UTC()
-	
+
 	req := domain.CreatePassRequest{
 		ApartmentID: resident.ApartmentID,
 		ResidentID:  &resident.ID,
@@ -520,7 +506,6 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 		return
 	}
 
-	// Получаем только пропуски этого жителя
 	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
 		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
@@ -562,7 +547,6 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 	b.sendMessage(ctx, chatID, text)
 }
 
-// formatLocalTime форматирует время в локальном часовом поясе
 func (b *Bot) formatLocalTime(t time.Time) string {
 	return t.In(b.location).Format("15:04 02.01.2006")
 }
@@ -574,7 +558,6 @@ func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int6
 		return
 	}
 
-	// Получаем только пропуски этого жителя
 	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
 		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
@@ -587,7 +570,6 @@ func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int6
 		return
 	}
 
-	// Создаем клавиатуру с кнопками для каждого пропуска
 	var keyboardRows [][]map[string]interface{}
 
 	text := "Выберите пропуск для отзыва:\n\n"
@@ -614,7 +596,6 @@ func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int6
 			b.formatLocalTime(pass.ValidTo),
 		)
 
-		// Добавляем кнопку для отзыва
 		buttonText := fmt.Sprintf("%s %s", passType, identifier)
 		if len(buttonText) > 64 {
 			buttonText = buttonText[:61] + "..."
@@ -638,14 +619,12 @@ func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID
 		return
 	}
 
-	// Получаем активные пропуска этого жителя для проверки принадлежности
 	activePasses, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
 		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при проверке пропуска: %s", err.Error()))
 		return
 	}
 
-	// Проверяем, что пропуск существует и принадлежит жителю, и сохраняем информацию о нем
 	var passInfo string
 	found := false
 	for _, p := range activePasses {
@@ -668,8 +647,7 @@ func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID
 		return
 	}
 
-	// Отзываем пропуск
-	err = b.passService.RevokePass(ctx, passID, 0) // 0 = отозван через бота
+	err = b.passService.RevokePass(ctx, passID, 0)
 	if err != nil {
 		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при отзыве пропуска: %s", err.Error()))
 		b.logger.Error("failed to revoke pass", zap.Error(err), zap.String("pass_id", passID.String()), zap.Int64("user_id", userID))
@@ -686,11 +664,9 @@ func (b *Bot) getState(userID int64) *UserState {
 		var state UserState
 		if json.Unmarshal([]byte(stateJSON), &state) == nil {
 			if time.Now().Before(state.ExpiresAt) {
-				// Восстанавливаем time.Duration из числа (наносекунды)
 				if durationNs, ok := state.Data["duration"].(float64); ok {
 					state.Data["duration"] = time.Duration(durationNs)
 				}
-				// Восстанавливаем time.Time из строки
 				if validToStr, ok := state.Data["valid_to"].(string); ok {
 					if validToTime, err := time.Parse(time.RFC3339, validToStr); err == nil {
 						state.Data["valid_to"] = validToTime
@@ -717,15 +693,12 @@ func (b *Bot) getState(userID int64) *UserState {
 func (b *Bot) setState(userID int64, state *UserState) {
 	key := fmt.Sprintf("bot_state:%d", userID)
 
-	// Создаем копию состояния для сериализации
 	stateCopy := *state
 	stateCopyData := make(map[string]interface{})
 	for k, v := range state.Data {
-		// Конвертируем time.Duration в наносекунды (int64)
 		if duration, ok := v.(time.Duration); ok {
 			stateCopyData[k] = int64(duration)
 		} else if validToTime, ok := v.(time.Time); ok {
-			// Конвертируем time.Time в строку
 			stateCopyData[k] = validToTime.Format(time.RFC3339)
 		} else {
 			stateCopyData[k] = v

@@ -46,7 +46,6 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		}
 		carPlate = &normalized
 	}
-	// carPlate can be nil for pedestrian guests
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
@@ -130,17 +129,13 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 			Valid:  false,
 			Reason: "PASS_NOT_FOUND",
 		}
-		// Не логируем событие для несуществующего пропуска (чтобы избежать FK violation)
 		return result, nil
 	}
 
-	// Используем общую логику валидации
 	return s.validatePassInternal(ctx, pass, guardUserID)
 }
 
-// ValidatePassByCarPlate валидирует пропуск по номеру машины
 func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
-	// Нормализуем номер машины (конвертируем русские буквы в английские)
 	normalizedCarPlate := normalizeCarPlate(carPlate)
 	if normalizedCarPlate == "" {
 		result := &domain.PassValidationResult{
@@ -150,7 +145,6 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 		return result, nil
 	}
 
-	// Ищем активный пропуск по нормализованному номеру
 	pass, err := s.passRepo.GetActiveByCarPlate(ctx, normalizedCarPlate, buildingID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pass by car plate: %w", err)
@@ -162,15 +156,12 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 
 	if pass == nil {
 		result.Reason = "PASS_NOT_FOUND"
-		// Не логируем событие для несуществующего пропуска (чтобы избежать FK violation)
 		return result, nil
 	}
 
-	// Используем существующую логику валидации
 	return s.validatePassInternal(ctx, pass, guardUserID)
 }
 
-// validatePassInternal - внутренняя логика валидации пропуска (используется и для QR, и для номера)
 func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pass, guardUserID int64) (*domain.PassValidationResult, error) {
 	result := &domain.PassValidationResult{
 		Valid: false,
@@ -185,7 +176,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 	now := time.Now().UTC()
 	validFrom := pass.ValidFrom.UTC()
 	validTo := pass.ValidTo.UTC()
-	
+
 	if now.Before(validFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
 		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
@@ -271,7 +262,7 @@ func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate strin
 }
 
 func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardUserID int64, result, reason string) {
-	
+
 	event := &domain.ScanEvent{
 		PassID:      passID,
 		GuardUserID: guardUserID,
@@ -281,8 +272,8 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	}
 
 	if err := s.scanEventRepo.Create(ctx, event); err != nil {
-		
-		s.logger.Error("failed to log scan event", 
+
+		s.logger.Error("failed to log scan event",
 			zap.Error(err),
 			zap.String("pass_id", passID.String()),
 			zap.String("result", result),
@@ -291,7 +282,6 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	}
 }
 
-// Маппинг русских букв на английские (для номеров машин)
 var russianToEnglish = map[rune]rune{
 	'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'К': 'K',
 	'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'Т': 'T',
@@ -302,19 +292,15 @@ var russianToEnglish = map[rune]rune{
 }
 
 func normalizeCarPlate(plate string) string {
-	// Убираем пробелы и приводим к верхнему регистру
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
 
 	var result strings.Builder
 	for _, r := range normalized {
-		// Конвертируем русские буквы в английские
 		if eng, ok := russianToEnglish[r]; ok {
 			result.WriteRune(eng)
 		} else if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			// Оставляем английские буквы и цифры как есть
 			result.WriteRune(r)
 		}
-		// Игнорируем все остальные символы
 	}
 
 	return result.String()

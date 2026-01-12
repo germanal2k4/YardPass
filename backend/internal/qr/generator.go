@@ -16,7 +16,7 @@ func NewGenerator() *Generator {
 
 func (g *Generator) GenerateQR(ctx context.Context, passID uuid.UUID) ([]byte, error) {
 	qrData := fmt.Sprintf("yardpass://pass/%s", passID.String())
-	
+
 	png, err := qrcode.Encode(qrData, qrcode.Medium, 256)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate QR code: %w", err)

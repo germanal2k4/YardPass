@@ -28,7 +28,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Проверяем TELEGRAM_BOT_TOKEN для бота
 	if cfg.Telegram.BotToken == "" {
 		fmt.Fprintf(os.Stderr, "TELEGRAM_BOT_TOKEN is required for Telegram bot\n")
 		os.Exit(1)

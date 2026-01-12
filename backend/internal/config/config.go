@@ -95,7 +95,6 @@ func Load() (*Config, error) {
 		},
 	}
 
-	// JWT_SECRET и TELEGRAM_BOT_TOKEN требуются для разных сервисов
 
 	return cfg, nil
 }

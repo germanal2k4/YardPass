@@ -204,7 +204,6 @@ func TestPassService_CreatePass(t *testing.T) {
 	})
 
 	t.Run("daily limit exceeded", func(t *testing.T) {
-		// Создаем новые моки для этого теста
 		passRepo2 := new(MockPassRepo)
 		apartmentRepo2 := new(MockApartmentRepo)
 		ruleRepo2 := new(MockRuleRepo)
@@ -226,7 +225,6 @@ func TestPassService_CreatePass(t *testing.T) {
 			MaxPassDurationHours:       24,
 		}, nil)
 
-		// Лимит 5, уже создано 5, значит лимит превышен (>=)
 		residentID := int64(1)
 		passRepo2.On("CountActiveTodayByResidentID", ctx, residentID).Return(5, nil)
 

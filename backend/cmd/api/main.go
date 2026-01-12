@@ -28,7 +28,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Проверяем JWT_SECRET для API сервера
 	if cfg.JWT.Secret == "" {
 		fmt.Fprintf(os.Stderr, "JWT_SECRET is required for API server\n")
 		os.Exit(1)

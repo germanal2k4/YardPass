@@ -41,7 +41,6 @@ func (s *UserService) RegisterUser(ctx context.Context, req RegisterUserRequest,
 		return nil, errors.New("creator not found")
 	}
 
-	// Разрешаем создавать пользователей superuser и admin
 	if creator.Role != "superuser" && creator.Role != "admin" {
 		return nil, errors.New("only superuser or admin can register users")
 	}

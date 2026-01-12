@@ -74,8 +74,15 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	role, _ := c.Get("role")
 
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"user_id": userID,
 		"role":    role,
-	})
+	}
+
+	// Include building_id if present in context
+	if buildingID, exists := c.Get("building_id"); exists {
+		response["building_id"] = buildingID
+	}
+
+	c.JSON(http.StatusOK, response)
 }

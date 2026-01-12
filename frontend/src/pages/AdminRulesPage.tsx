@@ -13,14 +13,14 @@ import {
 import { Layout } from '@/shared/ui/Layout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rulesApi } from '@/shared/api/rules';
-import { config } from '@/shared/config/env';
+import { useAuth } from '@/features/auth/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { UpdateRuleRequest } from '@/shared/types/api';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
-import { ERROR_MESSAGES } from '@/shared/config/constants';
+import { formatErrorMessage } from '@/shared/utils/errors';
 
 const ruleSchema = z.object({
   quiet_hours_start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Формат: HH:mm').optional().or(z.literal('')),
@@ -32,14 +32,16 @@ const ruleSchema = z.object({
 type RuleFormData = z.infer<typeof ruleSchema>;
 
 export function AdminRulesPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const buildingId = config.defaultBuildingId;
+  const buildingId = user?.building_id;
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const { data: rule, isLoading, error } = useQuery({
     queryKey: ['rules', buildingId],
-    queryFn: () => rulesApi.get(buildingId),
+    queryFn: () => rulesApi.get(buildingId!),
+    enabled: !!buildingId, // Запрос выполняется только если building_id определен
   });
 
   const {
@@ -69,7 +71,7 @@ export function AdminRulesPage() {
   }, [rule, reset]);
 
   const updateMutation = useMutation({
-    mutationFn: (data: UpdateRuleRequest) => rulesApi.update(buildingId, data),
+    mutationFn: (data: UpdateRuleRequest) => rulesApi.update(buildingId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules', buildingId] });
       setSuccessMsg('Правила успешно обновлены');
@@ -77,8 +79,7 @@ export function AdminRulesPage() {
       setTimeout(() => setSuccessMsg(''), 3000);
     },
     onError: (error: AxiosError<ErrorResponse>) => {
-      const errorCode = error.response?.data?.error?.code || 'UNKNOWN_ERROR';
-      setErrorMsg(ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.UNKNOWN_ERROR);
+      setErrorMsg(formatErrorMessage(error));
       setSuccessMsg('');
     },
   });
@@ -92,6 +93,18 @@ export function AdminRulesPage() {
     };
     updateMutation.mutate(updateData);
   };
+
+  if (!buildingId) {
+    return (
+      <Layout title="Правила и настройки">
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Alert severity="error">
+            Не удалось определить ID здания. Пожалуйста, обратитесь к администратору системы.
+          </Alert>
+        </Container>
+      </Layout>
+    );
+  }
 
   if (isLoading) {
     return (

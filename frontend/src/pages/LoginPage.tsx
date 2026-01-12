@@ -18,7 +18,8 @@ import SecurityIcon from '@mui/icons-material/Security';
 import { useAuth } from '@/features/auth/useAuth';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
-import { ERROR_MESSAGES, APP_ROUTES } from '@/shared/config/constants';
+import { formatErrorMessage } from '@/shared/utils/errors';
+import { APP_ROUTES } from '@/shared/config/constants';
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -52,8 +53,7 @@ export function LoginPage() {
       await login({ username, password });
     } catch (err) {
       const axiosError = err as AxiosError<ErrorResponse>;
-      const errorCode = axiosError.response?.data?.error?.code || 'UNKNOWN_ERROR';
-      setError(ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.UNKNOWN_ERROR);
+      setError(formatErrorMessage(axiosError));
     } finally {
       setIsLoading(false);
     }

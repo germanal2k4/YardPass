@@ -60,6 +60,18 @@ export interface Rule {
   updated_at: string;
 }
 
+export interface Resident {
+  id: number;
+  apartment_id: number;
+  telegram_id: number;
+  chat_id: number;
+  name?: string;
+  phone?: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
 // API Request/Response DTOs
 
 export interface LoginRequest {
@@ -81,6 +93,7 @@ export interface RefreshRequest {
 export interface MeResponse {
   user_id: number;
   role: 'guard' | 'admin';
+  building_id?: number; // ID здания, к которому привязан пользователь
 }
 
 export interface CreatePassRequest {
@@ -92,7 +105,8 @@ export interface CreatePassRequest {
 }
 
 export interface ValidatePassRequest {
-  qr_uuid: string; // UUID from QR code
+  qr_uuid?: string; // UUID from QR code (optional if car_plate is provided)
+  car_plate?: string; // Car plate number (optional if qr_uuid is provided)
 }
 
 export interface ValidatePassResponse {
@@ -112,6 +126,26 @@ export interface UpdateRuleRequest {
   quiet_hours_end?: string; // HH:mm
   daily_pass_limit_per_apartment?: number;
   max_pass_duration_hours?: number;
+}
+
+export interface CreateResidentRequest {
+  apartment_id: number;
+  telegram_id: number;
+  chat_id: number;
+  name?: string;
+  phone?: string;
+}
+
+export interface GetResidentsRequest {
+  apartment_id?: number;
+  building_id?: number;
+  status?: 'active' | 'inactive';
+  limit?: number;
+  offset?: number;
+}
+
+export interface GetResidentsResponse {
+  residents: Resident[];
 }
 
 export interface RevokePassResponse {

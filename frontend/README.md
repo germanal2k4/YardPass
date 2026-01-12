@@ -51,7 +51,6 @@ cp .env.example .env
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080
-VITE_DEFAULT_BUILDING_ID=1
 ```
 
 ### 3. Запуск в режиме разработки

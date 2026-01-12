@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import type { ValidatePassResponse } from '@/shared/types/api';
 import { ERROR_MESSAGES } from '@/shared/config/constants';
+import { translateMessage } from '@/shared/utils/errors';
 
 interface PassDetailsCardProps {
   result: ValidatePassResponse;
@@ -35,7 +36,7 @@ export function PassDetailsCard({ result }: PassDetailsCardProps) {
           </Typography>
           {!isValid && result.reason && (
             <Typography variant="body1" color="error.dark" sx={{ mt: 1 }}>
-              {ERROR_MESSAGES[result.reason] || result.reason}
+              {ERROR_MESSAGES[result.reason] || translateMessage(result.reason)}
             </Typography>
           )}
         </Box>

@@ -4,6 +4,7 @@ import { Layout } from '@/shared/ui/Layout';
 import { APP_ROUTES } from '@/shared/config/constants';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import PeopleIcon from '@mui/icons-material/People';
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -16,7 +17,8 @@ export function AdminPage() {
         </Typography>
 
         <Grid container spacing={4} sx={{ mt: 2 }}>
-          <Grid item xs={12} md={6}>
+          {/* Правила и настройки */}
+          <Grid item xs={12} sm={6} md={4}>
             <Paper
               elevation={4}
               sx={{
@@ -67,7 +69,63 @@ export function AdminPage() {
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          {/* Управление жителями */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Paper
+              elevation={4}
+              sx={{
+                p: 5,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                border: '2px solid transparent',
+                background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.08) 0%, rgba(255, 255, 255, 1) 100%)',
+                '&:hover': {
+                  transform: 'translateY(-8px)',
+                  boxShadow: '0 12px 40px rgba(255, 179, 0, 0.25)',
+                  borderColor: '#FFB300',
+                },
+              }}
+              onClick={() => navigate(APP_ROUTES.ADMIN_RESIDENTS)}
+            >
+              <PeopleIcon 
+                sx={{ 
+                  fontSize: 100, 
+                  color: '#FFB300',
+                  mb: 3,
+                  filter: 'drop-shadow(0 4px 8px rgba(255, 179, 0, 0.3))',
+                }} 
+              />
+              <Typography variant="h4" gutterBottom fontWeight="700" color="#263238">
+                Жители
+              </Typography>
+              <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
+                Управление жителями, добавление новых резидентов и просмотр списка
+              </Typography>
+              <Button 
+                variant="contained"
+                sx={{ 
+                  mt: 'auto',
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  backgroundColor: '#FFB300',
+                  '&:hover': {
+                    backgroundColor: '#FFA000',
+                  },
+                }}
+              >
+                Открыть
+              </Button>
+            </Paper>
+          </Grid>
+
+          {/* Отчеты */}
+          <Grid item xs={12} sm={6} md={4}>
             <Paper
               elevation={4}
               sx={{

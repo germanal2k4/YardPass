@@ -17,6 +17,14 @@ type MockPassRepo struct {
 	mock.Mock
 }
 
+func (m *MockPassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
+	args := m.Called(ctx, normalizedCarPlate, buildingID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Pass), args.Error(1)
+}
+
 func (m *MockPassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
 	args := m.Called(ctx, residentID)
 	return args.Get(0).([]*domain.Pass), args.Error(1)

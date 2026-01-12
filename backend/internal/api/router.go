@@ -69,7 +69,7 @@ func SetupRouter(
 		}
 
 		users := api.Group("/users")
-		users.Use(middleware.RequireRole("superuser"))
+		users.Use(middleware.RequireRole("admin", "superuser"))
 		{
 			users.POST("", userHandler.RegisterUser)
 			users.GET("", userHandler.ListUsers)

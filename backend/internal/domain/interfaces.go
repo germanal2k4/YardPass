@@ -41,6 +41,7 @@ type PassRepository interface {
 	GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*Pass, error)
 	GetActiveByResidentID(ctx context.Context, residentID int64) ([]*Pass, error)
 	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*Pass, error)
+	GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*Pass, error)
 	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
 	CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error)
@@ -90,6 +91,7 @@ type UserFilters struct {
 type PassService interface {
 	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
 	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
+	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
 	GetActivePasses(ctx context.Context, apartmentID int64) ([]*Pass, error)
 	GetActivePassesByResident(ctx context.Context, residentID int64) ([]*Pass, error)

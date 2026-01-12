@@ -119,7 +119,10 @@ paths:
                     type: integer
                   role:
                     type: string
-                    enum: [guard, admin]
+                    enum: [guard, admin, superuser]
+                  building_id:
+                    type: integer
+                    nullable: true
 
   /api/v1/passes:
     post:
@@ -197,7 +200,13 @@ paths:
 
   /api/v1/passes/validate:
     post:
-      summary: Валидировать QR код пропуска
+      summary: Валидировать пропуск (по QR коду или номеру машины)
+      description: |
+        Валидация пропуска может быть выполнена двумя способами:
+        1. По QR коду (qr_uuid) - UUID из QR кода
+        2. По номеру машины (car_plate) - номер машины (можно вводить на русском, автоматически конвертируется)
+        
+        Можно указать только один из параметров.
       tags:
         - Passes
       security:
@@ -208,13 +217,15 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - qr_uuid
               properties:
                 qr_uuid:
                   type: string
                   format: uuid
-                  description: UUID из QR кода
+                  description: UUID из QR кода (опционально, если указан car_plate)
+                car_plate:
+                  type: string
+                  description: Номер машины (опционально, если указан qr_uuid). Можно вводить на русском, автоматически конвертируется в английский
+                  example: "А123ВС777"
       responses:
         '200':
           description: Результат валидации
@@ -241,7 +252,9 @@ paths:
                         example: false
                       reason:
                         type: string
-                        enum: [PASS_NOT_FOUND, PASS_EXPIRED, PASS_REVOKED, PASS_NOT_YET_VALID, QUIET_HOURS]
+                        enum: [PASS_NOT_FOUND, PASS_EXPIRED, PASS_REVOKED, PASS_NOT_YET_VALID, QUIET_HOURS, INVALID_CAR_PLATE]
+        '400':
+          $ref: '#/components/responses/BadRequest'
 
   /api/v1/passes/active:
     get:
@@ -253,9 +266,14 @@ paths:
       parameters:
         - name: apartment_id
           in: query
-          required: true
           schema:
             type: integer
+          description: ID квартиры (для resident)
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания (для admin, если не указан в токене)
       responses:
         '200':
           description: OK
@@ -269,6 +287,264 @@ paths:
                     items:
                       $ref: '#/components/schemas/Pass'
 
+  /api/v1/passes/search:
+    get:
+      summary: Поиск пропусков по номеру машины
+      tags:
+        - Passes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: car_plate
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Номер машины для поиска (можно частично)
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания (для admin, если не указан в токене)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pass'
+
+  /api/v1/users:
+    post:
+      summary: Создать пользователя (admin или superuser)
+      description: |
+        Создание нового пользователя. Доступно для admin и superuser.
+        - Admin может создавать только admin и guard
+        - Superuser может создавать всех, кроме superuser
+        - Для admin/guard обязательно указать building_id
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      summary: Список пользователей
+      description: Получить список пользователей с фильтрацией
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [guard, admin, superuser]
+          description: Фильтр по роли
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по зданию
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+          description: Фильтр по статусу
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: Лимит записей
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/residents:
+    post:
+      summary: Создать жителя
+      tags:
+        - Residents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResidentRequest'
+      responses:
+        '201':
+          description: Житель создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resident'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      summary: Список жителей
+      tags:
+        - Residents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: apartment_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по квартире
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по зданию
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+          description: Фильтр по статусу
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: Лимит записей
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Смещение для пагинации
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  residents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Resident'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/residents/bulk:
+    post:
+      summary: Массовое создание жителей
+      tags:
+        - Residents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/CreateResidentRequest'
+      responses:
+        '200':
+          description: Результат массового создания
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  created:
+                    type: integer
+                  residents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Resident'
+                  errors:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/residents/import:
+    post:
+      summary: Импорт жителей из CSV
+      tags:
+        - Residents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV файл с жителями
+      responses:
+        '200':
+          description: Результат импорта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/v1/rules:
     get:
       summary: Получить правила для здания
@@ -276,12 +552,6 @@ paths:
         - Rules
       security:
         - bearerAuth: []
-      parameters:
-        - name: building_id
-          in: query
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
           description: OK
@@ -291,19 +561,15 @@ paths:
                 $ref: '#/components/schemas/Rule'
         '404':
           $ref: '#/components/responses/NotFound'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
     put:
-      summary: Обновить правила (только админ)
+      summary: Обновить правила (только admin или superuser)
       tags:
         - Rules
       security:
         - bearerAuth: []
-      parameters:
-        - name: building_id
-          in: query
-          required: true
-          schema:
-            type: integer
       requestBody:
         required: true
         content:
@@ -385,7 +651,11 @@ paths:
   /api/v1/reports/statistics:
     get:
       summary: Получить статистику по сканированиям
-      description: Возвращает статистику по событиям сканирования за указанный период
+      description: |
+        Возвращает статистику по событиям сканирования за указанный период.
+        - Superuser видит все данные по умолчанию
+        - Admin/guard видят только данные своего здания
+        - Superuser может указать building_id в query для фильтрации
       tags:
         - Reports
       security:
@@ -405,6 +675,11 @@ paths:
             format: date-time
           description: Конец периода (RFC3339)
           example: "2024-01-31T23:59:59Z"
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания для фильтрации (только для superuser)
       responses:
         '200':
           description: Статистика
@@ -446,6 +721,11 @@ paths:
             format: date-time
           description: Конец периода (RFC3339)
           example: "2024-01-31T23:59:59Z"
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания для фильтрации (только для superuser)
       responses:
         '200':
           description: Файл Excel
@@ -459,6 +739,79 @@ paths:
               schema:
                 type: string
               description: Имя файла для скачивания
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/parking/occupancy:
+    get:
+      summary: Получить информацию о загруженности парковки
+      tags:
+        - Parking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания (для admin, если не указан в токене)
+      responses:
+        '200':
+          description: Информация о загруженности
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParkingOccupancy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/parking/vehicles:
+    get:
+      summary: Получить список транспортных средств на парковке
+      tags:
+        - Parking
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания (для admin, если не указан в токене)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Лимит записей
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Смещение для пагинации
+      responses:
+        '200':
+          description: Список транспортных средств
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vehicles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pass'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -480,8 +833,13 @@ components:
           format: uuid
         apartment_id:
           type: integer
+        resident_id:
+          type: integer
+          nullable: true
         car_plate:
           type: string
+          nullable: true
+          description: Номер машины (NULL для пешеходных пропусков)
         guest_name:
           type: string
           nullable: true
@@ -505,13 +863,14 @@ components:
       type: object
       required:
         - apartment_id
-        - car_plate
         - valid_to
       properties:
         apartment_id:
           type: integer
         car_plate:
           type: string
+          nullable: true
+          description: Номер машины (опционально, NULL для пешеходных пропусков)
         guest_name:
           type: string
           nullable: true
@@ -519,9 +878,115 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: Если не указано, используется текущее время
         valid_to:
           type: string
           format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [guard, admin, superuser]
+        building_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        - username
+        - password
+        - role
+      properties:
+        username:
+          type: string
+          description: Имя пользователя
+        email:
+          type: string
+          nullable: true
+          description: Email (опционально)
+        password:
+          type: string
+          format: password
+          description: Пароль
+        role:
+          type: string
+          enum: [guard, admin]
+          description: Роль пользователя (admin может создавать только guard и admin)
+        building_id:
+          type: integer
+          nullable: true
+          description: ID здания (обязательно для guard и admin)
+
+    Resident:
+      type: object
+      properties:
+        id:
+          type: integer
+        apartment_id:
+          type: integer
+        telegram_id:
+          type: integer
+        chat_id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateResidentRequest:
+      type: object
+      required:
+        - apartment_id
+        - telegram_id
+        - chat_id
+      properties:
+        apartment_id:
+          type: integer
+          description: ID квартиры
+        telegram_id:
+          type: integer
+          description: Telegram ID пользователя
+        chat_id:
+          type: integer
+          description: Telegram Chat ID
+        name:
+          type: string
+          nullable: true
+          description: Имя жителя
+        phone:
+          type: string
+          nullable: true
+          description: Телефон
 
     Rule:
       type: object
@@ -546,6 +1011,12 @@ components:
         max_pass_duration_hours:
           type: integer
           example: 24
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     UpdateRuleRequest:
       type: object
@@ -597,7 +1068,7 @@ components:
           description: Дополнительные метаданные (JSON)
         car_plate:
           type: string
-          description: Номер автомобиля
+          description: Номер автомобиля (пустая строка для пешеходных пропусков)
         apartment_number:
           type: string
           description: Номер квартиры
@@ -637,6 +1108,23 @@ components:
           format: date-time
           nullable: true
           description: Конец периода
+
+    ParkingOccupancy:
+      type: object
+      properties:
+        occupied:
+          type: integer
+          description: Количество занятых мест
+        total:
+          type: integer
+          description: Общее количество мест
+        free:
+          type: integer
+          description: Количество свободных мест
+        percent:
+          type: number
+          format: float
+          description: Процент занятости
 
     Error:
       type: object
@@ -693,4 +1181,3 @@ components:
             error:
               code: PASS_NOT_FOUND
               message: Pass not found
-

@@ -125,19 +125,60 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		return nil, fmt.Errorf("failed to get pass: %w", err)
 	}
 
+	if pass == nil {
+		result := &domain.PassValidationResult{
+			Valid:  false,
+			Reason: "PASS_NOT_FOUND",
+		}
+		// Не логируем событие для несуществующего пропуска (чтобы избежать FK violation)
+		return result, nil
+	}
+
+	// Используем общую логику валидации
+	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+// ValidatePassByCarPlate валидирует пропуск по номеру машины
+func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	// Нормализуем номер машины (конвертируем русские буквы в английские)
+	normalizedCarPlate := normalizeCarPlate(carPlate)
+	if normalizedCarPlate == "" {
+		result := &domain.PassValidationResult{
+			Valid:  false,
+			Reason: "INVALID_CAR_PLATE",
+		}
+		return result, nil
+	}
+
+	// Ищем активный пропуск по нормализованному номеру
+	pass, err := s.passRepo.GetActiveByCarPlate(ctx, normalizedCarPlate, buildingID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pass by car plate: %w", err)
+	}
+
 	result := &domain.PassValidationResult{
 		Valid: false,
 	}
 
 	if pass == nil {
 		result.Reason = "PASS_NOT_FOUND"
-		
+		// Не логируем событие для несуществующего пропуска (чтобы избежать FK violation)
 		return result, nil
+	}
+
+	// Используем существующую логику валидации
+	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+// validatePassInternal - внутренняя логика валидации пропуска (используется и для QR, и для номера)
+func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pass, guardUserID int64) (*domain.PassValidationResult, error) {
+	result := &domain.PassValidationResult{
+		Valid: false,
 	}
 
 	if pass.Status == "revoked" {
 		result.Reason = "PASS_REVOKED"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
@@ -147,7 +188,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 	
 	if now.Before(validFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
@@ -155,7 +196,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		result.Reason = "PASS_EXPIRED"
 		pass.Status = "expired"
 		_ = s.passRepo.Update(ctx, pass)
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
@@ -166,7 +207,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
 				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
-					s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+					s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 					return result, nil
 				}
 			}
@@ -184,7 +225,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		result.Apartment = apartment.Number
 	}
 
-	s.logScanEvent(ctx, passID, guardUserID, "valid", "")
+	s.logScanEvent(ctx, pass.ID, guardUserID, "valid", "")
 	return result, nil
 }
 
@@ -250,14 +291,30 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	}
 }
 
+// Маппинг русских букв на английские (для номеров машин)
+var russianToEnglish = map[rune]rune{
+	'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'К': 'K',
+	'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'Т': 'T',
+	'У': 'Y', 'Х': 'X',
+	'а': 'A', 'в': 'B', 'с': 'C', 'е': 'E', 'к': 'K',
+	'м': 'M', 'н': 'H', 'о': 'O', 'р': 'P', 'т': 'T',
+	'у': 'Y', 'х': 'X',
+}
+
 func normalizeCarPlate(plate string) string {
+	// Убираем пробелы и приводим к верхнему регистру
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
 
 	var result strings.Builder
 	for _, r := range normalized {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+		// Конвертируем русские буквы в английские
+		if eng, ok := russianToEnglish[r]; ok {
+			result.WriteRune(eng)
+		} else if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			// Оставляем английские буквы и цифры как есть
 			result.WriteRune(r)
 		}
+		// Игнорируем все остальные символы
 	}
 
 	return result.String()

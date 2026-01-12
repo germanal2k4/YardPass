@@ -31,7 +31,8 @@ type CreatePassRequest struct {
 }
 
 type ValidatePassRequest struct {
-	QRUUID string `json:"qr_uuid" binding:"required"`
+	QRUUID   string `json:"qr_uuid,omitempty"`   // UUID из QR кода (опционально)
+	CarPlate string `json:"car_plate,omitempty"`  // Номер машины (опционально, альтернатива QR)
 }
 
 func (h *PassHandler) Create(c *gin.Context) {
@@ -106,19 +107,39 @@ func (h *PassHandler) Validate(c *gin.Context) {
 		return
 	}
 
-	passID, err := uuid.Parse(req.QRUUID)
-	if err != nil {
-		errors.BadRequest(c, "INVALID_QR_UUID", "Invalid QR code format")
-		return
-	}
-
 	userID, _ := c.Get("user_id")
 	var guardUserID int64
 	if userID != nil {
 		guardUserID = userID.(int64)
 	}
 
-	result, err := h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+	buildingID, _ := c.Get("building_id")
+	var bID *int64
+	if buildingID != nil {
+		if id, ok := buildingID.(int64); ok {
+			bID = &id
+		}
+	}
+
+	var result *domain.PassValidationResult
+	var err error
+
+	// Валидация по номеру машины (приоритет, если указан)
+	if req.CarPlate != "" {
+		result, err = h.passService.ValidatePassByCarPlate(c.Request.Context(), req.CarPlate, guardUserID, bID)
+	} else if req.QRUUID != "" {
+		// Валидация по QR коду
+		passID, parseErr := uuid.Parse(req.QRUUID)
+		if parseErr != nil {
+			errors.BadRequest(c, "INVALID_QR_UUID", "Invalid QR code format")
+			return
+		}
+		result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+	} else {
+		errors.BadRequest(c, "MISSING_PARAMETER", "Either qr_uuid or car_plate must be provided")
+		return
+	}
+
 	if err != nil {
 		errors.InternalServerError(c, "VALIDATION_ERROR", err.Error())
 		return

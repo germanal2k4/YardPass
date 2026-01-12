@@ -298,6 +298,53 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 	return passes, rows.Err()
 }
 
+// GetActiveByCarPlate находит активный пропуск по нормализованному номеру машины
+func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
+	now := time.Now()
+	query := `
+		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
+		FROM passes p
+		INNER JOIN apartments a ON p.apartment_id = a.id
+		WHERE p.car_plate = $1
+			AND p.status = 'active'
+			AND p.valid_from <= $2
+			AND p.valid_to >= $2
+	`
+	args := []interface{}{normalizedCarPlate, now}
+	argPos := 3
+
+	if buildingID != nil {
+		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
+		args = append(args, *buildingID)
+		argPos++
+	}
+
+	query += ` ORDER BY p.created_at DESC LIMIT 1`
+
+	var pass domain.Pass
+	err := r.pool.QueryRow(ctx, query, args...).Scan(
+		&pass.ID,
+		&pass.ApartmentID,
+		&pass.ResidentID,
+		&pass.CarPlate,
+		&pass.GuestName,
+		&pass.ValidFrom,
+		&pass.ValidTo,
+		&pass.Status,
+		&pass.CreatedAt,
+		&pass.UpdatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &pass, nil
+}
+
 func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
 	now := time.Now()
 	query := `

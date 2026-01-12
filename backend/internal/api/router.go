@@ -82,6 +82,7 @@ func SetupRouter(
 			residents.POST("/bulk", residentHandler.BulkCreateResidents)
 			residents.POST("/import", residentHandler.ImportFromCSV)
 			residents.GET("", residentHandler.ListResidents)
+			residents.DELETE("/:id", residentHandler.DeleteResident)
 		}
 
 		scanEvents := api.Group("/scan-events")

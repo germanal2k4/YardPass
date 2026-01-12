@@ -222,3 +222,8 @@ func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters)
 	return residents, rows.Err()
 }
 
+func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
+	query := `DELETE FROM residents WHERE id = $1`
+	_, err := r.pool.Exec(ctx, query, id)
+	return err
+}

@@ -47,7 +47,10 @@ func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
 
 	response := gin.H{
 		"created": len(residents),
-		"residents": residents,
+	}
+
+	if len(residents) > 0 {
+		response["residents"] = residents
 	}
 
 	if len(createErrors) > 0 {
@@ -55,6 +58,24 @@ func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *ResidentHandler) DeleteResident(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		errors.BadRequest(c, "INVALID_ID", "Invalid resident ID format")
+		return
+	}
+
+	if err := h.residentService.DeleteResident(c.Request.Context(), id); err != nil {
+		errors.BadRequest(c, "DELETE_FAILED", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Resident deleted successfully",
+	})
 }
 
 func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {

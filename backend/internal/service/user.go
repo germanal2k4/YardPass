@@ -61,6 +61,12 @@ func (s *UserService) RegisterUser(ctx context.Context, req RegisterUserRequest,
 		if building == nil {
 			return nil, errors.New("building not found")
 		}
+
+		if creator.Role == "admin" {
+			if creator.BuildingID == nil || *creator.BuildingID != *req.BuildingID {
+				return nil, errors.New("admin can only create users for their own building")
+			}
+		}
 	}
 
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)

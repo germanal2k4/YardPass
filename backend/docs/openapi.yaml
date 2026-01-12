@@ -324,8 +324,8 @@ paths:
       summary: Создать пользователя (admin или superuser)
       description: |
         Создание нового пользователя. Доступно для admin и superuser.
-        - Admin может создавать только admin и guard
-        - Superuser может создавать всех, кроме superuser
+        - Admin может создавать только admin и guard для своего ЖК (building_id должен совпадать с building_id админа)
+        - Superuser может создавать всех, кроме superuser, для любого ЖК
         - Для admin/guard обязательно указать building_id
       tags:
         - Users
@@ -495,18 +495,62 @@ paths:
                 properties:
                   created:
                     type: integer
+                    description: Количество успешно созданных жителей
                   residents:
                     type: array
+                    nullable: true
                     items:
                       $ref: '#/components/schemas/Resident'
+                    description: Список созданных жителей (только если есть успешные)
                   errors:
                     type: array
+                    nullable: true
                     items:
                       type: object
+                      properties:
+                        row:
+                          type: integer
+                          description: Номер строки с ошибкой
+                        error:
+                          type: string
+                          description: Описание ошибки
+                    description: Список ошибок (только если есть ошибки)
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/v1/residents/{id}:
+    delete:
+      summary: Удалить жителя
+      tags:
+        - Residents
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID жителя
+      responses:
+        '200':
+          description: Житель успешно удален
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Resident deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/v1/residents/import:
     post:
@@ -968,7 +1012,6 @@ components:
       required:
         - apartment_id
         - telegram_id
-        - chat_id
       properties:
         apartment_id:
           type: integer
@@ -978,7 +1021,8 @@ components:
           description: Telegram ID пользователя
         chat_id:
           type: integer
-          description: Telegram Chat ID
+          nullable: true
+          description: Telegram Chat ID (опционально, по умолчанию равен telegram_id)
         name:
           type: string
           nullable: true

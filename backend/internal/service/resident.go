@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"yardpass/internal/domain"
+
 	"go.uber.org/zap"
 )
 
@@ -30,7 +31,7 @@ func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo do
 type CreateResidentRequest struct {
 	ApartmentID int64   `json:"apartment_id" binding:"required"`
 	TelegramID  int64   `json:"telegram_id" binding:"required"`
-	ChatID      int64   `json:"chat_id" binding:"required"`
+	ChatID      *int64  `json:"chat_id,omitempty"`
 	Name        *string `json:"name,omitempty"`
 	Phone       *string `json:"phone,omitempty"`
 }
@@ -48,9 +49,15 @@ func (s *ResidentService) CreateResident(ctx context.Context, req CreateResident
 	if err != nil {
 		return nil, fmt.Errorf("failed to check telegram_id: %w", err)
 	}
+
+	chatID := req.TelegramID
+	if req.ChatID != nil {
+		chatID = *req.ChatID
+	}
+
 	if existing != nil {
 		existing.ApartmentID = req.ApartmentID
-		existing.ChatID = req.ChatID
+		existing.ChatID = chatID
 		existing.Name = req.Name
 		existing.Phone = req.Phone
 		if err := s.residentRepo.Update(ctx, existing); err != nil {
@@ -62,7 +69,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req CreateResident
 	resident := &domain.Resident{
 		ApartmentID: req.ApartmentID,
 		TelegramID:  req.TelegramID,
-		ChatID:      req.ChatID,
+		ChatID:      chatID,
 		Name:        req.Name,
 		Phone:       req.Phone,
 		Status:      "active",
@@ -75,20 +82,28 @@ func (s *ResidentService) CreateResident(ctx context.Context, req CreateResident
 	return resident, nil
 }
 
-func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []CreateResidentRequest) ([]*domain.Resident, []error) {
+type BulkCreateError struct {
+	Row   int    `json:"row"`
+	Error string `json:"error"`
+}
+
+func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []CreateResidentRequest) ([]*domain.Resident, []BulkCreateError) {
 	var residents []*domain.Resident
-	var errors []error
+	var createErrors []BulkCreateError
 
 	for i, req := range requests {
 		resident, err := s.CreateResident(ctx, req)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("row %d: %w", i+1, err))
+			createErrors = append(createErrors, BulkCreateError{
+				Row:   i + 1,
+				Error: err.Error(),
+			})
 			continue
 		}
 		residents = append(residents, resident)
 	}
 
-	return residents, errors
+	return residents, createErrors
 }
 
 func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, buildingID int64) (int, []error) {
@@ -160,10 +175,20 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 			continue
 		}
 
+		chatID := telegramID
+		if chatIDIdx, ok := headerMap["chat_id"]; ok {
+			chatIDStr := strings.TrimSpace(record[chatIDIdx])
+			if chatIDStr != "" {
+				if parsedChatID, err := strconv.ParseInt(chatIDStr, 10, 64); err == nil {
+					chatID = parsedChatID
+				}
+			}
+		}
+
 		req := CreateResidentRequest{
 			ApartmentID: apartmentID,
 			TelegramID:  telegramID,
-			ChatID:      telegramID,
+			ChatID:      &chatID,
 		}
 
 		if nameIdx, ok := headerMap["name"]; ok {
@@ -177,16 +202,6 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 			phone := strings.TrimSpace(record[phoneIdx])
 			if phone != "" {
 				req.Phone = &phone
-			}
-		}
-
-		if chatIDIdx, ok := headerMap["chat_id"]; ok {
-			chatIDStr := strings.TrimSpace(record[chatIDIdx])
-			if chatIDStr != "" {
-				chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-				if err == nil {
-					req.ChatID = chatID
-				}
 			}
 		}
 
@@ -204,10 +219,30 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 		zap.Int("errors", len(createErrors)),
 	)
 
-	return len(residents), createErrors
+	var errorList []error
+	for _, err := range createErrors {
+		errorList = append(errorList, fmt.Errorf("row %d: %s", err.Row, err.Error))
+	}
+
+	return len(residents), errorList
 }
 
 func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
 	return s.residentRepo.List(ctx, filters)
 }
 
+func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
+	resident, err := s.residentRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get resident: %w", err)
+	}
+	if resident == nil {
+		return errors.New("resident not found")
+	}
+
+	if err := s.residentRepo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("failed to delete resident: %w", err)
+	}
+
+	return nil
+}

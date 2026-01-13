@@ -60,10 +60,6 @@ const residentSchema = z.object({
     z.string().min(1, 'Telegram ID обязателен').transform((val) => parseInt(val, 10)),
     z.number().int().min(1, 'Telegram ID обязателен'),
   ]),
-  chat_id: z.union([
-    z.string().min(1, 'Chat ID обязателен').transform((val) => parseInt(val, 10)),
-    z.number().int().min(1, 'Chat ID обязателен'),
-  ]),
   name: z.string().optional(),
   phone: z.string()
     .optional()
@@ -122,7 +118,6 @@ export function AdminResidentsPage() {
     defaultValues: {
       apartment_id: '' as any, // Пустая строка для начального состояния
       telegram_id: '' as any,
-      chat_id: '' as any,
       name: '',
       phone: '',
     },
@@ -204,7 +199,7 @@ export function AdminResidentsPage() {
     const createData: CreateResidentRequest = {
       apartment_id: data.apartment_id as number,
       telegram_id: data.telegram_id as number,
-      chat_id: data.chat_id as number,
+      chat_id: data.telegram_id as number, // Chat ID равен Telegram ID
       name: data.name?.trim() || undefined,
       phone: data.phone?.trim() || undefined,
     };
@@ -344,7 +339,7 @@ export function AdminResidentsPage() {
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <Grid container spacing={3}>
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <Controller
                   name="apartment_id"
                   control={control}
@@ -362,7 +357,7 @@ export function AdminResidentsPage() {
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid item xs={12} sm={6}>
                 <Controller
                   name="telegram_id"
                   control={control}
@@ -374,24 +369,6 @@ export function AdminResidentsPage() {
                       fullWidth
                       error={!!errors.telegram_id}
                       helperText={errors.telegram_id?.message}
-                      onChange={(e) => field.onChange(e.target.value || '')}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={4}>
-                <Controller
-                  name="chat_id"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Chat ID *"
-                      type="number"
-                      fullWidth
-                      error={!!errors.chat_id}
-                      helperText={errors.chat_id?.message}
                       onChange={(e) => field.onChange(e.target.value || '')}
                     />
                   )}
@@ -600,7 +577,6 @@ export function AdminResidentsPage() {
                         <TableCell><strong>Имя</strong></TableCell>
                         <TableCell><strong>Телефон</strong></TableCell>
                         <TableCell><strong>Telegram ID</strong></TableCell>
-                        <TableCell><strong>Chat ID</strong></TableCell>
                         <TableCell><strong>Статус</strong></TableCell>
                         <TableCell><strong>Создан</strong></TableCell>
                         <TableCell align="right"><strong>Действия</strong></TableCell>
@@ -614,7 +590,6 @@ export function AdminResidentsPage() {
                           <TableCell>{resident.name || '—'}</TableCell>
                           <TableCell>{resident.phone || '—'}</TableCell>
                           <TableCell>{resident.telegram_id}</TableCell>
-                          <TableCell>{resident.chat_id}</TableCell>
                           <TableCell>
                             <Chip 
                               label={resident.status} 
@@ -665,14 +640,12 @@ export function AdminResidentsPage() {
   {
     "apartment_id": 101,
     "telegram_id": 123456789,
-    "chat_id": 987654321,
     "name": "Иван Петров",
     "phone": "+7 900 123 45 67"
   },
   {
     "apartment_id": 102,
     "telegram_id": 111222333,
-    "chat_id": 444555666,
     "name": "Мария Иванова",
     "phone": "89001234567"
   }
@@ -743,9 +716,9 @@ export function AdminResidentsPage() {
             </Typography>
             <Paper elevation={0} sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 3 }}>
               <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-{`apartment_id,telegram_id,chat_id,name,phone
-101,123456789,987654321,Иван Петров,+79001234567
-102,111222333,444555666,Мария Иванова,89001234567`}
+{`apartment_id,telegram_id,name,phone
+101,123456789,Иван Петров,+79001234567
+102,111222333,Мария Иванова,89001234567`}
               </Typography>
             </Paper>
 

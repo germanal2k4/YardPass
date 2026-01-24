@@ -1,4 +1,4 @@
-import { useRef, KeyboardEvent, ChangeEvent, FocusEvent } from 'react';
+import { useRef, KeyboardEvent, ChangeEvent } from 'react';
 import { Box, Typography, styled } from '@mui/material';
 
 interface CarPlateInputProps {
@@ -8,7 +8,7 @@ interface CarPlateInputProps {
   disabled?: boolean;
 }
 
-const PlateContainer = styled(Box)(({ theme }) => ({
+const PlateContainer = styled(Box)(() => ({
   display: 'inline-flex',
   alignItems: 'center',
   background: 'linear-gradient(180deg, #FFFFFF 0%, #F5F5F5 100%)',
@@ -54,7 +54,7 @@ const PlateInput = styled('input')<{ width?: string }>(({ width }) => ({
   },
 }));
 
-const RegionBadge = styled(Box)(({ theme }) => ({
+const RegionBadge = styled(Box)(() => ({
   marginLeft: '20px',
   paddingLeft: '20px',
   borderLeft: '3px solid #000000',

@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import React, { useState, FormEvent } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -38,10 +38,10 @@ export function LoginPage() {
     return 'Пользователь';
   };
 
-  const getRoleIcon = () => {
+  const getRoleIcon = (): React.ReactElement | undefined => {
     if (role === 'admin') return <AdminPanelSettingsIcon />;
     if (role === 'guard') return <SecurityIcon />;
-    return null;
+    return undefined;
   };
 
   const handleSubmit = async (e: FormEvent) => {

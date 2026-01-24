@@ -120,21 +120,25 @@ export function translateMessage(message: string): string {
  */
 export function formatBulkError(errorItem: { row?: number; error: string } | string): string {
   // Если передана строка, пытаемся распарсить как JSON
+  let item: { row?: number; error: string };
+  
   if (typeof errorItem === 'string') {
     try {
-      errorItem = JSON.parse(errorItem);
+      const parsed = JSON.parse(errorItem) as { row?: number; error: string };
+      if (typeof parsed === 'object' && parsed !== null && 'error' in parsed) {
+        item = parsed;
+      } else {
+        return translateMessage(errorItem);
+      }
     } catch {
       // Если не JSON, возвращаем как есть с переводом
       return translateMessage(errorItem);
     }
+  } else {
+    item = errorItem;
   }
 
-  // Проверяем, что это объект
-  if (typeof errorItem !== 'object' || errorItem === null) {
-    return String(errorItem);
-  }
-
-  const { row, error } = errorItem as { row?: number; error: string };
+  const { row, error } = item;
   
   // Переводим текст ошибки
   const translatedError = translateMessage(error);

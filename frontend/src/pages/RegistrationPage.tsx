@@ -81,10 +81,6 @@ export function RegistrationPage() {
     }
   };
 
-  const getRoleLabel = (roleValue: string) => {
-    return roleValue === 'admin' ? 'Администратор' : 'Охранник';
-  };
-
   return (
     <Container maxWidth="sm">
       <Box

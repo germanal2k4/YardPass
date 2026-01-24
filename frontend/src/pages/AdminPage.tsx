@@ -1,4 +1,4 @@
-import { Container, Paper, Typography, Grid, Button, Box } from '@mui/material';
+import { Container, Paper, Typography, Grid, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/shared/ui/Layout';
 import { APP_ROUTES } from '@/shared/config/constants';

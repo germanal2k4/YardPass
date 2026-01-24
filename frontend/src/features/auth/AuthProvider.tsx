@@ -1,5 +1,5 @@
 import { createContext, useState, useEffect, ReactNode } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/shared/api/auth';
 import { STORAGE_KEYS, APP_ROUTES } from '@/shared/config/constants';
 import type { MeResponse, LoginRequest } from '@/shared/types/api';
@@ -21,7 +21,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     const initAuth = async () => {

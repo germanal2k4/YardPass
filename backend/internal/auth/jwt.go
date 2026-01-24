@@ -6,32 +6,34 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	"yardpass/internal/config"
 	"yardpass/internal/domain"
+
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type JWTService struct {
-	secret      string
-	accessTTL   time.Duration
-	refreshTTL  time.Duration
-	userRepo    domain.UserRepository
+	secret     string
+	accessTTL  time.Duration
+	refreshTTL time.Duration
+	userRepo   domain.UserRepository
 }
 
-func NewJWTService(secret string, accessTTL, refreshTTL time.Duration, userRepo domain.UserRepository) *JWTService {
+func NewJWTService(cfg config.JWTConfig, userRepo domain.UserRepository) *JWTService {
 	return &JWTService{
-		secret:     secret,
-		accessTTL:  accessTTL,
-		refreshTTL: refreshTTL,
+		secret:     cfg.Secret,
+		accessTTL:  cfg.AccessTTL,
+		refreshTTL: cfg.RefreshTTL,
 		userRepo:   userRepo,
 	}
 }
 
 type Claims struct {
-	UserID     int64   `json:"user_id"`
-	Role       string  `json:"role"`
-	BuildingID *int64  `json:"building_id,omitempty"`
-	Type       string  `json:"type"`
+	UserID     int64  `json:"user_id"`
+	Role       string `json:"role"`
+	BuildingID *int64 `json:"building_id,omitempty"`
+	Type       string `json:"type"`
 	jwt.RegisteredClaims
 }
 
@@ -168,4 +170,3 @@ func HashPassword(password string) (string, error) {
 	}
 	return string(hash), nil
 }
-

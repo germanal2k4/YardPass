@@ -8,18 +8,17 @@ import (
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/repo"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
 )
 
 type ReportHandler struct {
-	scanEventRepo *repo.ScanEventRepo
-	passRepo      *repo.PassRepo
+	scanEventRepo domain.ScanEventRepository
+	passRepo      domain.PassRepository
 }
 
-func NewReportHandler(scanEventRepo *repo.ScanEventRepo, passRepo *repo.PassRepo) *ReportHandler {
+func NewReportHandler(scanEventRepo domain.ScanEventRepository, passRepo domain.PassRepository) *ReportHandler {
 	return &ReportHandler{
 		scanEventRepo: scanEventRepo,
 		passRepo:      passRepo,

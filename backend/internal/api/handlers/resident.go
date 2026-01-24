@@ -4,10 +4,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 	"yardpass/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ResidentHandler struct {
@@ -21,7 +22,7 @@ func NewResidentHandler(residentService *service.ResidentService) *ResidentHandl
 }
 
 func (h *ResidentHandler) CreateResident(c *gin.Context) {
-	var req service.CreateResidentRequest
+	var req domain.CreateResidentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
@@ -37,7 +38,7 @@ func (h *ResidentHandler) CreateResident(c *gin.Context) {
 }
 
 func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
-	var requests []service.CreateResidentRequest
+	var requests []domain.CreateResidentRequest
 	if err := c.ShouldBindJSON(&requests); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
@@ -153,4 +154,3 @@ func (h *ResidentHandler) ListResidents(c *gin.Context) {
 		"residents": residents,
 	})
 }
-

@@ -55,6 +55,30 @@ type ScanEventRepository interface {
 	Create(ctx context.Context, event *ScanEvent) error
 	List(ctx context.Context, filters ScanEventFilters) ([]*ScanEvent, error)
 	CountValidScansToday(ctx context.Context) (int, error)
+	GetEventsWithDetails(ctx context.Context, filters ScanEventFilters, buildingID *int64) ([]*ScanEventWithDetails, error)
+	GetStatistics(ctx context.Context, from *time.Time, to *time.Time, buildingID *int64) (*Statistics, error)
+}
+
+type Statistics struct {
+	TotalScans   int
+	ValidScans   int
+	InvalidScans int
+	UniquePasses int
+	UniqueGuards int
+}
+
+type ScanEventWithDetails struct {
+	ID              int64
+	PassID          uuid.UUID
+	GuardUserID     int64
+	GuardUsername   string
+	ScannedAt       time.Time
+	Result          string
+	Reason          *string
+	Meta            *string
+	CarPlate        string
+	ApartmentNumber string
+	BuildingID      int64
 }
 
 type ScanEventFilters struct {
@@ -89,17 +113,6 @@ type UserFilters struct {
 	Offset     int
 }
 
-type PassService interface {
-	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
-	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
-	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
-	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
-	GetActivePasses(ctx context.Context, apartmentID int64) ([]*Pass, error)
-	GetActivePassesByResident(ctx context.Context, residentID int64) ([]*Pass, error)
-	GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*Pass, error)
-	SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*Pass, error)
-}
-
 type CreatePassRequest struct {
 	ApartmentID int64
 	ResidentID  *int64
@@ -107,17 +120,6 @@ type CreatePassRequest struct {
 	GuestName   *string
 	ValidFrom   time.Time
 	ValidTo     time.Time
-}
-
-type QRService interface {
-	GenerateQR(ctx context.Context, passID uuid.UUID) ([]byte, error)
-	ParseQR(ctx context.Context, qrData string) (uuid.UUID, error)
-}
-
-type AuthService interface {
-	Login(ctx context.Context, username, password string) (*AuthTokens, error)
-	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
-	ValidateToken(ctx context.Context, token string) (*TokenClaims, error)
 }
 
 type AuthTokens struct {

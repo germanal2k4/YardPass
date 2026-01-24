@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"yardpass/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 

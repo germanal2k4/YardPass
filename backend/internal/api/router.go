@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"yardpass/internal/api/handlers"
@@ -10,9 +13,19 @@ import (
 	"yardpass/internal/redis"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
-func SetupRouter(
+type Router struct {
+	cfg    *config.Config
+	srv    *http.Server
+	logger *zap.Logger
+	router *gin.Engine
+}
+
+func NewRouter(
+	lf fx.Lifecycle,
 	cfg *config.Config,
 	authHandler *handlers.AuthHandler,
 	passHandler *handlers.PassHandler,
@@ -24,7 +37,8 @@ func SetupRouter(
 	parkingHandler *handlers.ParkingHandler,
 	jwtService *auth.JWTService,
 	redisClient *redis.Client,
-) *gin.Engine {
+	logger *zap.Logger,
+) *Router {
 	if cfg.Log.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -114,5 +128,51 @@ func SetupRouter(
 		service.GET("/passes/active", passHandler.GetActive)
 	}
 
-	return r
+	router := &Router{
+		cfg:    cfg,
+		logger: logger,
+		router: r,
+	}
+
+	lf.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			return router.Start(ctx)
+		},
+		OnStop: func(ctx context.Context) error {
+			return router.Stop(ctx)
+		},
+	})
+
+	return router
+}
+
+func (r *Router) Start(ctx context.Context) error {
+	addr := fmt.Sprintf("%s:%s", r.cfg.Server.Host, r.cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r.router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		r.logger.Info("API server listening", zap.String("address", addr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			r.logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	r.srv = srv
+
+	return nil
+}
+
+func (r *Router) Stop(ctx context.Context) error {
+	if err := r.srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown server: %w", err)
+	}
+
+	r.logger.Info("Server exited")
+	return nil
 }

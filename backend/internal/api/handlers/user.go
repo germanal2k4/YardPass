@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 	"yardpass/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
@@ -21,7 +22,7 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 }
 
 func (h *UserHandler) RegisterUser(c *gin.Context) {
-	var req service.RegisterUserRequest
+	var req domain.RegisterUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
@@ -79,4 +80,3 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		"users": users,
 	})
 }
-

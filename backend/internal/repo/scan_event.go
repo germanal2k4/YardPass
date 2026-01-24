@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"yardpass/internal/domain"
-
-	"github.com/google/uuid"
 )
 
 type ScanEventRepo struct {
@@ -128,7 +126,7 @@ func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
 	return count, err
 }
 
-func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*Statistics, error) {
+func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*domain.Statistics, error) {
 	query := `
 		SELECT
 			COUNT(*) as total_scans,
@@ -162,7 +160,7 @@ func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, 
 		argPos++
 	}
 
-	var stats Statistics
+	var stats domain.Statistics
 	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&stats.TotalScans,
 		&stats.ValidScans,
@@ -174,15 +172,7 @@ func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, 
 	return &stats, err
 }
 
-type Statistics struct {
-	TotalScans   int
-	ValidScans   int
-	InvalidScans int
-	UniquePasses int
-	UniqueGuards int
-}
-
-func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*ScanEventWithDetails, error) {
+func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*domain.ScanEventWithDetails, error) {
 	query := `
 		SELECT
 			se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,
@@ -252,9 +242,9 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 	}
 	defer rows.Close()
 
-	var events []*ScanEventWithDetails
+	var events []*domain.ScanEventWithDetails
 	for rows.Next() {
-		var event ScanEventWithDetails
+		var event domain.ScanEventWithDetails
 		var guardUsername *string
 		var carPlate *string
 		if err := rows.Scan(
@@ -284,18 +274,4 @@ func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain
 	}
 
 	return events, rows.Err()
-}
-
-type ScanEventWithDetails struct {
-	ID              int64
-	PassID          uuid.UUID
-	GuardUserID     int64
-	GuardUsername   string
-	ScannedAt       time.Time
-	Result          string
-	Reason          *string
-	Meta            *string
-	CarPlate        string
-	ApartmentNumber string
-	BuildingID      int64
 }

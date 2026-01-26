@@ -1,20 +1,24 @@
 package observability
 
 import (
-	"os"
+	"context"
+	"errors"
+	"syscall"
+	"yardpass/internal/config"
 
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-func NewLogger(level, format string) (*zap.Logger, error) {
+func NewLogger(lf fx.Lifecycle, cfg config.LogConfig) (*zap.Logger, error) {
 	var zapLevel zapcore.Level
-	if err := zapLevel.UnmarshalText([]byte(level)); err != nil {
+	if err := zapLevel.UnmarshalText([]byte(cfg.Level)); err != nil {
 		zapLevel = zapcore.InfoLevel
 	}
 
 	var config zap.Config
-	if format == "json" {
+	if cfg.Format == "json" {
 		config = zap.NewProductionConfig()
 	} else {
 		config = zap.NewDevelopmentConfig()
@@ -32,27 +36,19 @@ func NewLogger(level, format string) (*zap.Logger, error) {
 
 	zap.ReplaceGlobals(logger)
 
+	lf.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			err := logger.Sync()
+			if err != nil && !errors.Is(err, syscall.ENOTTY) {
+				return err
+			}
+			return nil
+		},
+	})
+
 	return logger, nil
 }
 
 func NewNopLogger() *zap.Logger {
 	return zap.NewNop()
-}
-
-func GetLogger() *zap.Logger {
-	if logger := zap.L(); logger != nil && logger != zap.NewNop() {
-		return logger
-	}
-
-	level := os.Getenv("LOG_LEVEL")
-	if level == "" {
-		level = "info"
-	}
-	format := os.Getenv("LOG_FORMAT")
-	if format == "" {
-		format = "json"
-	}
-
-	logger, _ := NewLogger(level, format)
-	return logger
 }

@@ -149,6 +149,16 @@ func (m *MockScanEventRepo) CountValidScansToday(ctx context.Context) (int, erro
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*domain.ScanEventWithDetails, error) {
+	args := m.Called(ctx, filters, buildingID)
+	return args.Get(0).([]*domain.ScanEventWithDetails), args.Error(1)
+}
+
+func (m *MockScanEventRepo) GetStatistics(ctx context.Context, from *time.Time, to *time.Time, buildingID *int64) (*domain.Statistics, error) {
+	args := m.Called(ctx, from, to, buildingID)
+	return args.Get(0).(*domain.Statistics), args.Error(1)
+}
+
 func TestPassService_CreatePass(t *testing.T) {
 	logger := zap.NewNop()
 	ctx := context.Background()

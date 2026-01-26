@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yardpass/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -71,4 +72,3 @@ func (r *BuildingRepo) List(ctx context.Context) ([]*domain.Building, error) {
 
 	return buildings, rows.Err()
 }
-

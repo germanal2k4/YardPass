@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yardpass/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -102,4 +103,3 @@ func (r *ApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegramID 
 
 	return &apartment, nil
 }
-

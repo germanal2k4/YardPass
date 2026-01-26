@@ -1,0 +1,39 @@
+# YardPass Configuration
+# Values can be overridden by environment variables (see env: tags in config.go)
+
+server:
+  host: localhost
+  port: "8080"
+  start_timeout: 15s
+  stop_timeout: 15s
+
+pg:
+  dsn: "postgres://yardpass:password@localhost:5432/yardpass?sslmode=disable"
+  max_conns: 25
+  min_conns: 5
+  max_conn_lifetime: 1h
+  max_conn_idle_time: 30m
+
+redis:
+  url: "redis://localhost:6379/0"
+
+jwt:
+  # secret: "" # Set via JWT_SECRET env var
+  access_ttl: 15m
+  refresh_ttl: 168h
+
+telegram:
+  # bot_token: "" # Set via TELEGRAM_BOT_TOKEN env var
+  # webhook_url: "" # Set via TELEGRAM_WEBHOOK_URL env var
+
+service:
+  # token: "" # Set via SERVICE_TOKEN env var
+
+rate_limit:
+  requests_per_minute: 60
+  create_pass_per_hour: 10
+  scan_per_minute: 100
+
+log:
+  level: "info"
+  format: "json"

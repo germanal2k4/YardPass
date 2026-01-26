@@ -89,3 +89,27 @@ type PassValidationResult struct {
 	Apartment string     `json:"apartment,omitempty"`
 	ValidTo   *time.Time `json:"valid_to,omitempty"`
 }
+
+// RegisterUserRequest is the request payload for user registration.
+type RegisterUserRequest struct {
+	Username   string  `json:"username" binding:"required"`
+	Email      *string `json:"email,omitempty"`
+	Password   string  `json:"password" binding:"required"`
+	Role       string  `json:"role" binding:"required"`
+	BuildingID *int64  `json:"building_id,omitempty"`
+}
+
+// CreateResidentRequest is the request payload for resident creation.
+type CreateResidentRequest struct {
+	ApartmentID int64   `json:"apartment_id" binding:"required"`
+	TelegramID  int64   `json:"telegram_id" binding:"required"`
+	ChatID      *int64  `json:"chat_id,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Phone       *string `json:"phone,omitempty"`
+}
+
+// BulkCreateError represents an error during bulk creation.
+type BulkCreateError struct {
+	Row   int    `json:"row"`
+	Error string `json:"error"`
+}

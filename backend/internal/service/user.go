@@ -24,15 +24,7 @@ func NewUserService(userRepo domain.UserRepository, buildingRepo domain.Building
 	}
 }
 
-type RegisterUserRequest struct {
-	Username   string  `json:"username" binding:"required"`
-	Email      *string `json:"email,omitempty"`
-	Password   string  `json:"password" binding:"required"`
-	Role       string  `json:"role" binding:"required"`
-	BuildingID *int64  `json:"building_id,omitempty"`
-}
-
-func (s *UserService) RegisterUser(ctx context.Context, req RegisterUserRequest, createdBy int64) (*domain.User, error) {
+func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserRequest, createdBy int64) (*domain.User, error) {
 	creator, err := s.userRepo.GetByID(ctx, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get creator: %w", err)

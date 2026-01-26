@@ -16,10 +16,10 @@ build:
 	@go build -o bin/bot ./cmd/bot
 
 run-api:
-	@go run ./cmd/api
+	@go run ./cmd/api -c config/config.yaml
 
 run-bot:
-	@go run ./cmd/bot
+	@go run ./cmd/bot -c config/config.yaml
 
 test:
 	@go test -v -race -coverprofile=coverage.out ./...

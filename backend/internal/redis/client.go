@@ -4,7 +4,10 @@ import (
 	"context"
 	"time"
 
+	"yardpass/internal/config"
+
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
@@ -13,20 +16,22 @@ type Client struct {
 	logger *zap.Logger
 }
 
-func NewClient(url string, logger *zap.Logger) (*Client, error) {
-	opt, err := redis.ParseURL(url)
+func NewClient(lf fx.Lifecycle, cfg config.RedisConfig, logger *zap.Logger) (*Client, error) {
+	opt, err := redis.ParseURL(cfg.URL)
 	if err != nil {
 		return nil, err
 	}
 
 	rdb := redis.NewClient(opt)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, err
-	}
+	lf.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			return rdb.Ping(ctx).Err()
+		},
+		OnStop: func(ctx context.Context) error {
+			return rdb.Close()
+		},
+	})
 
 	return &Client{
 		rdb:    rdb,
@@ -69,4 +74,3 @@ func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
 	count, err := c.rdb.Exists(ctx, key).Result()
 	return count > 0, err
 }
-

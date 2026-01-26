@@ -28,15 +28,7 @@ func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo do
 	}
 }
 
-type CreateResidentRequest struct {
-	ApartmentID int64   `json:"apartment_id" binding:"required"`
-	TelegramID  int64   `json:"telegram_id" binding:"required"`
-	ChatID      *int64  `json:"chat_id,omitempty"`
-	Name        *string `json:"name,omitempty"`
-	Phone       *string `json:"phone,omitempty"`
-}
-
-func (s *ResidentService) CreateResident(ctx context.Context, req CreateResidentRequest) (*domain.Resident, error) {
+func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateResidentRequest) (*domain.Resident, error) {
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get apartment: %w", err)
@@ -82,19 +74,14 @@ func (s *ResidentService) CreateResident(ctx context.Context, req CreateResident
 	return resident, nil
 }
 
-type BulkCreateError struct {
-	Row   int    `json:"row"`
-	Error string `json:"error"`
-}
-
-func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []CreateResidentRequest) ([]*domain.Resident, []BulkCreateError) {
+func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]*domain.Resident, []domain.BulkCreateError) {
 	var residents []*domain.Resident
-	var createErrors []BulkCreateError
+	var createErrors []domain.BulkCreateError
 
 	for i, req := range requests {
 		resident, err := s.CreateResident(ctx, req)
 		if err != nil {
-			createErrors = append(createErrors, BulkCreateError{
+			createErrors = append(createErrors, domain.BulkCreateError{
 				Row:   i + 1,
 				Error: err.Error(),
 			})
@@ -132,7 +119,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 		}
 	}
 
-	var requests []CreateResidentRequest
+	var requests []domain.CreateResidentRequest
 	var parseErrors []error
 
 	for i, record := range records[1:] {
@@ -185,7 +172,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 			}
 		}
 
-		req := CreateResidentRequest{
+		req := domain.CreateResidentRequest{
 			ApartmentID: apartmentID,
 			TelegramID:  telegramID,
 			ChatID:      &chatID,

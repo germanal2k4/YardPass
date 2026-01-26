@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"yardpass/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -181,4 +182,3 @@ func (r *UserRepo) List(ctx context.Context, filters domain.UserFilters) ([]*dom
 
 	return users, rows.Err()
 }
-

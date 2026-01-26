@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yardpass/internal/domain"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -81,4 +82,3 @@ func (r *RuleRepo) Update(ctx context.Context, rule *domain.Rule) error {
 		rule.MaxPassDurationHours,
 	).Scan(&rule.UpdatedAt)
 }
-

@@ -7,16 +7,15 @@ import (
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/repo"
 
 	"github.com/gin-gonic/gin"
 )
 
 type ScanEventHandler struct {
-	scanEventRepo *repo.ScanEventRepo
+	scanEventRepo domain.ScanEventRepository
 }
 
-func NewScanEventHandler(scanEventRepo *repo.ScanEventRepo) *ScanEventHandler {
+func NewScanEventHandler(scanEventRepo domain.ScanEventRepository) *ScanEventHandler {
 	return &ScanEventHandler{
 		scanEventRepo: scanEventRepo,
 	}

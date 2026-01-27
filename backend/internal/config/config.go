@@ -71,8 +71,22 @@ type RateLimitConfig struct {
 }
 
 type LogConfig struct {
-	Level  string `yaml:"level"  env:"LOG_LEVEL"  default:"info"`
-	Format string `yaml:"format" env:"LOG_FORMAT" default:"json"`
+	Disabled       bool           `yaml:"disabled"         default:"false"`
+	Level          string         `yaml:"level"            default:"info"`
+	Format         string         `yaml:"format"           default:"json"`
+	Buffered       bool           `yaml:"buffered"         default:"false"`
+	Transport      string         `yaml:"transport"        default:""`
+	FilePath       string         `yaml:"file_path"        default:""`
+	ElasticConfig  *ElasticConfig `yaml:"elastic_config"   default:""`
+	MaskHeaders    []string       `yaml:"mask_headers"     env:"LOG_MASK_HEADERS"     default:"Authorization,X-Service-Token,Cookie"`
+	MaskBodyFields []string       `yaml:"mask_body_fields" env:"LOG_MASK_BODY_FIELDS" default:"password,token,secret,api_key,apiKey,refresh_token,access_token"`
+}
+
+type ElasticConfig struct {
+	Url             string        `yaml:"url" default:""`
+	Index           string        `yaml:"index" default:""`
+	FlushInterval   time.Duration `yaml:"flush_interval" default:"1s"`
+	WriteBufferSize int           `yaml:"write_buffer_size" default:"1024"`
 }
 
 func Load(configPath string) (*Config, error) {

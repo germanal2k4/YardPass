@@ -47,10 +47,6 @@ func TestLoad_Defaults(t *testing.T) {
 	assertEqual(t, "RateLimit.RequestsPerMinute", 60, cfg.RateLimit.RequestsPerMinute)
 	assertEqual(t, "RateLimit.CreatePassPerHour", 10, cfg.RateLimit.CreatePassPerHour)
 	assertEqual(t, "RateLimit.ScanPerMinute", 100, cfg.RateLimit.ScanPerMinute)
-
-	// Log defaults
-	assertEqual(t, "Log.Level", "info", cfg.Log.Level)
-	assertEqual(t, "Log.Format", "json", cfg.Log.Format)
 }
 
 func TestLoad_FromYAML(t *testing.T) {
@@ -126,10 +122,6 @@ log:
 	assertEqual(t, "RateLimit.CreatePassPerHour", 20, cfg.RateLimit.CreatePassPerHour)
 	// Default since not in YAML
 	assertEqual(t, "RateLimit.ScanPerMinute", 100, cfg.RateLimit.ScanPerMinute)
-
-	// Log from YAML
-	assertEqual(t, "Log.Level", "debug", cfg.Log.Level)
-	assertEqual(t, "Log.Format", "text", cfg.Log.Format)
 }
 
 func TestLoad_EnvOverridesYAML(t *testing.T) {
@@ -160,7 +152,6 @@ log:
 	t.Setenv("PG_MAX_CONNS", "99")
 	t.Setenv("JWT_SECRET", "env-secret")
 	t.Setenv("JWT_ACCESS_TTL", "1h")
-	t.Setenv("LOG_LEVEL", "error")
 
 	cfg, err := Load(configPath)
 	if err != nil {
@@ -174,7 +165,6 @@ log:
 	assertEqual(t, "PG.MaxConns", 99, cfg.PG.MaxConns)
 	assertEqual(t, "JWT.Secret", "env-secret", cfg.JWT.Secret)
 	assertEqual(t, "JWT.AccessTTL", time.Hour, cfg.JWT.AccessTTL)
-	assertEqual(t, "Log.Level", "error", cfg.Log.Level)
 }
 
 func TestLoad_EnvOverridesDefaults(t *testing.T) {
@@ -189,8 +179,6 @@ func TestLoad_EnvOverridesDefaults(t *testing.T) {
 	t.Setenv("JWT_ACCESS_TTL", "2h")
 	t.Setenv("JWT_REFRESH_TTL", "336h")
 	t.Setenv("TELEGRAM_BOT_TOKEN", "bot-token-123")
-	t.Setenv("LOG_LEVEL", "debug")
-	t.Setenv("LOG_FORMAT", "text")
 
 	cfg, err := Load("")
 	if err != nil {
@@ -206,8 +194,6 @@ func TestLoad_EnvOverridesDefaults(t *testing.T) {
 	assertEqual(t, "JWT.AccessTTL", 2*time.Hour, cfg.JWT.AccessTTL)
 	assertEqual(t, "JWT.RefreshTTL", 336*time.Hour, cfg.JWT.RefreshTTL)
 	assertEqual(t, "Telegram.BotToken", "bot-token-123", cfg.Telegram.BotToken)
-	assertEqual(t, "Log.Level", "debug", cfg.Log.Level)
-	assertEqual(t, "Log.Format", "text", cfg.Log.Format)
 }
 
 func TestLoad_InvalidYAML(t *testing.T) {

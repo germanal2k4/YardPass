@@ -12,26 +12,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func RateLimitMiddleware(redisClient *redis.Client, limit int, window time.Duration) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		key := "rate_limit:" + c.ClientIP()
-
-		allowed, err := redisClient.CheckRateLimit(c.Request.Context(), key, limit, window)
-		if err != nil {
-			c.Next()
-			return
-		}
-
-		if !allowed {
-			errors.ErrorResponseJSON(c, http.StatusTooManyRequests, "RATE_LIMIT_EXCEEDED", "Too many requests")
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
 func InMemoryRateLimit(requestsPerSecond int, burst int) gin.HandlerFunc {
 	limiter := rate.NewLimiter(rate.Limit(requestsPerSecond), burst)
 

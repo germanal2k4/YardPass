@@ -46,9 +46,10 @@ func NewRouter(
 	}
 
 	r := gin.New()
-	r.Use(gin.Recovery())
 	r.Use(middleware.CORSMiddleware())
+	r.Use(middleware.RecoveryMiddleware(logger))
 	r.Use(middleware.InMemoryRateLimit(100, 200))
+	r.Use(middleware.LoggingMiddleware(logger, cfg.Log))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

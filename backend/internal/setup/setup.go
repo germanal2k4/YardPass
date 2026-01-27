@@ -12,7 +12,7 @@ import (
 	"yardpass/internal/auth"
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
-	"yardpass/internal/observability"
+	"yardpass/internal/observability/logger"
 	"yardpass/internal/qr"
 	"yardpass/internal/redis"
 	"yardpass/internal/repo"
@@ -34,7 +34,7 @@ func SetupApi(configPath string) (*fx.App, error) {
 		fx.StartTimeout(cfg.Server.StartTimeout),
 		fx.StopTimeout(cfg.Server.StopTimeout),
 		fx.Provide(
-			observability.NewLogger,
+			logger.NewLogger,
 
 			repo.NewPostgresRepo,
 			fx.Annotate(repo.NewPassRepo, fx.As(new(domain.PassRepository))),
@@ -91,7 +91,7 @@ func SetupBot(configPath string) (*fx.App, error) {
 		fx.StartTimeout(cfg.Server.StartTimeout),
 		fx.StopTimeout(cfg.Server.StopTimeout),
 		fx.Provide(
-			observability.NewLogger,
+			logger.NewLogger,
 
 			repo.NewPostgresRepo,
 			fx.Annotate(repo.NewPassRepo, fx.As(new(domain.PassRepository))),

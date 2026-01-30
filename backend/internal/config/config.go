@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -26,6 +24,7 @@ type Config struct {
 	Service   ServiceConfig   `yaml:"service"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 	Log       LogConfig       `yaml:"log"`
+	Tracer    TracerConfig    `yaml:"tracer"`
 }
 
 type ServerConfig struct {
@@ -83,10 +82,15 @@ type LogConfig struct {
 }
 
 type ElasticConfig struct {
-	Url             string        `yaml:"url" default:""`
-	Index           string        `yaml:"index" default:""`
+	Url             string        `yaml:"url" default:"http://localhost:9200"`
+	Index           string        `yaml:"index" default:"yardpass-logs"`
 	FlushInterval   time.Duration `yaml:"flush_interval" default:"1s"`
 	WriteBufferSize int           `yaml:"write_buffer_size" default:"1024"`
+}
+
+type TracerConfig struct {
+	Enabled bool   `yaml:"enabled" default:"true"`
+	Url     string `yaml:"url" default:"localhost:4317"`
 }
 
 func Load(configPath string) (*Config, error) {
@@ -117,130 +121,27 @@ func processConfig(cfg any) error {
 	return processValue(reflect.ValueOf(cfg))
 }
 
-func processValue(v reflect.Value) error {
-	for v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil
-		}
-		v = v.Elem()
-	}
-
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-
-	t := v.Type()
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		fieldType := t.Field(i)
-
-		if !field.CanSet() {
-			continue
-		}
-
-		if field.Kind() == reflect.Struct && fieldType.Type != reflect.TypeOf(time.Duration(0)) {
-			if err := processValue(field); err != nil {
-				return err
-			}
-			continue
-		}
-
-		envKey := fieldType.Tag.Get("env")
-		defaultVal := fieldType.Tag.Get("default")
-
-		if isZero(field) && defaultVal != "" {
-			if err := setFieldValue(field, defaultVal); err != nil {
-				return fmt.Errorf("set default for %s: %w", fieldType.Name, err)
-			}
-		}
-
-		if envKey != "" {
-			if envVal := os.Getenv(envKey); envVal != "" {
-				if err := setFieldValue(field, envVal); err != nil {
-					return fmt.Errorf("set env %s for %s: %w", envKey, fieldType.Name, err)
-				}
-			}
+func ApplyDefaults(configPath string) error {
+	existing := make(map[string]any)
+	if data, err := os.ReadFile(configPath); err == nil && len(data) > 0 {
+		if err := yaml.Unmarshal(data, &existing); err != nil {
+			return fmt.Errorf("unmarshal existing config: %w", err)
 		}
 	}
 
-	return nil
-}
+	defaults := buildDefaultsMap(reflect.TypeOf(Config{}), reflect.ValueOf(Config{}))
 
-func isZero(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.String:
-		return v.String() == ""
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Slice, reflect.Map:
-		return v.IsNil() || v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
-		return v.IsNil()
-	default:
-		return reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
+	merged := mergeMaps(defaults, existing)
+
+	output, err := yaml.MarshalWithOptions(merged, yaml.IndentSequence(true), yaml.UseLiteralStyleIfMultiline(true))
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
 	}
-}
 
-func setFieldValue(field reflect.Value, value string) error {
-	switch field.Kind() {
-	case reflect.String:
-		field.SetString(value)
+	header := "# YardPass Configuration\n# Auto-generated with default values. Override as needed.\n# Environment variables take precedence over these values.\n\n"
 
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if field.Type() == reflect.TypeOf(time.Duration(0)) {
-			d, err := time.ParseDuration(value)
-			if err != nil {
-				return fmt.Errorf("parse duration %q: %w", value, err)
-			}
-			field.SetInt(int64(d))
-			return nil
-		}
-		i, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("parse int %q: %w", value, err)
-		}
-		field.SetInt(i)
-
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		u, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			return fmt.Errorf("parse uint %q: %w", value, err)
-		}
-		field.SetUint(u)
-
-	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			return fmt.Errorf("parse float %q: %w", value, err)
-		}
-		field.SetFloat(f)
-
-	case reflect.Bool:
-		b, err := strconv.ParseBool(value)
-		if err != nil {
-			return fmt.Errorf("parse bool %q: %w", value, err)
-		}
-		field.SetBool(b)
-
-	case reflect.Slice:
-		if field.Type().Elem().Kind() == reflect.String {
-			parts := strings.Split(value, ",")
-			for i := range parts {
-				parts[i] = strings.TrimSpace(parts[i])
-			}
-			field.Set(reflect.ValueOf(parts))
-		} else {
-			return fmt.Errorf("unsupported slice type: %s", field.Type())
-		}
-
-	default:
-		return fmt.Errorf("unsupported type: %s", field.Kind())
+	if err := os.WriteFile(configPath, []byte(header+string(output)), 0644); err != nil {
+		return fmt.Errorf("write config file: %w", err)
 	}
 
 	return nil

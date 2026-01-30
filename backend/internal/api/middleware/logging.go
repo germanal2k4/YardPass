@@ -6,21 +6,29 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"yardpass/internal/config"
 	"yardpass/internal/observability/logger"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
 const (
-	RequestIDHeader = "X-Request-ID"
-	maxBodyLogSize  = 4096
-	maskedValue     = "***MASKED***"
+	maxBodyLogSize = 4096
+	maskedValue    = "***MASKED***"
 )
+
+var bufferPool = sync.Pool{
+	New: func() any {
+		return &bytes.Buffer{}
+	},
+}
 
 type responseWriter struct {
 	gin.ResponseWriter
@@ -31,7 +39,7 @@ type responseWriter struct {
 func newResponseWriter(w gin.ResponseWriter) *responseWriter {
 	return &responseWriter{
 		ResponseWriter: w,
-		body:           &bytes.Buffer{},
+		body:           bufferPool.Get().(*bytes.Buffer),
 		statusCode:     http.StatusOK,
 	}
 }
@@ -58,17 +66,6 @@ func LoggingMiddleware(lgr *zap.Logger, cfg config.LogConfig) gin.HandlerFunc {
 
 		start := time.Now()
 
-		requestID := c.GetHeader(RequestIDHeader)
-		if requestID == "" {
-			requestID = uuid.New().String()
-		}
-		c.Header(RequestIDHeader, requestID)
-
-		reqLogger := lgr.With(
-			zap.String("request_id", requestID),
-			zap.String("component", "http"),
-		)
-
 		var requestBody string
 		if c.Request.Body != nil && c.Request.ContentLength > 0 && c.Request.ContentLength <= maxBodyLogSize {
 			bodyBytes, err := io.ReadAll(c.Request.Body)
@@ -80,6 +77,21 @@ func LoggingMiddleware(lgr *zap.Logger, cfg config.LogConfig) gin.HandlerFunc {
 
 		maskedHeaders := maskHeaders(c.Request.Header, maskHeadersSet)
 		maskedBody := maskBodyFields(requestBody, maskBodyFieldsSet)
+
+		span := trace.SpanFromContext(c.Request.Context())
+		span.SetAttributes(
+			semconv.HTTPRequestMethodKey.String(c.Request.Method),
+			semconv.HTTPRequestBodySize(int(c.Request.ContentLength)),
+			attribute.String("http.request.url", c.Request.URL.String()),
+			attribute.String("http.request.headers", headersMapToString(maskedHeaders)),
+			attribute.String("http.request.body", maskedBody),
+		)
+
+		reqLogger := lgr.With(
+			zap.String("component", "http"),
+			zap.String("trace_id", span.SpanContext().TraceID().String()),
+			zap.String("span_id", span.SpanContext().SpanID().String()),
+		)
 
 		reqLogger.Info("Incoming request",
 			zap.String("method", c.Request.Method),
@@ -94,8 +106,6 @@ func LoggingMiddleware(lgr *zap.Logger, cfg config.LogConfig) gin.HandlerFunc {
 
 		ctx := logger.ToContext(c.Request.Context(), reqLogger.Sugar())
 		c.Request = c.Request.WithContext(ctx)
-
-		c.Set("request_id", requestID)
 
 		rw := newResponseWriter(c.Writer)
 		c.Writer = rw
@@ -133,6 +143,14 @@ func LoggingMiddleware(lgr *zap.Logger, cfg config.LogConfig) gin.HandlerFunc {
 		default:
 			reqLogger.Info("Request completed", logFields...)
 		}
+
+		span.SetAttributes(
+			semconv.HTTPResponseBodySizeKey.Int(int(c.Writer.Size())),
+			semconv.HTTPResponseStatusCodeKey.Int(rw.statusCode),
+			attribute.String("http.response.body", rw.body.String()),
+		)
+		rw.body.Reset()
+		bufferPool.Put(rw.body)
 	}
 }
 
@@ -206,4 +224,20 @@ func maskSliceFields(slice []any, maskSet map[string]struct{}) {
 			maskMapFields(m, maskSet)
 		}
 	}
+}
+
+func headersMapToString(headers map[string]string) string {
+	out := bufferPool.Get().(*bytes.Buffer)
+
+	for key, value := range headers {
+		out.WriteString(key)
+		out.WriteString(": ")
+		out.WriteString(value)
+		out.WriteString("\n")
+	}
+
+	res := out.String()
+	out.Reset()
+	bufferPool.Put(out)
+	return res
 }

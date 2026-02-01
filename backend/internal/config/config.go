@@ -40,6 +40,7 @@ type PGConfig struct {
 	MinConns        int           `yaml:"min_conns"          env:"PG_MIN_CONNS"            default:"5"`
 	MaxConnLifetime time.Duration `yaml:"max_conn_lifetime"  env:"PG_MAX_CONN_LIFETIME"    default:"1h"`
 	MaxConnIdleTime time.Duration `yaml:"max_conn_idle_time" env:"PG_MAX_CONN_IDLE_TIME"  default:"30m"`
+	QueriesToHide   []string      `yaml:"queries_to_hide"    env:"PG_QUERIES_TO_HIDE"     default:""`
 }
 
 type RedisConfig struct {

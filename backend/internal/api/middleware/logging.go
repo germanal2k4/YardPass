@@ -104,7 +104,7 @@ func LoggingMiddleware(lgr *zap.Logger, cfg config.LogConfig) gin.HandlerFunc {
 			zap.String("body", maskedBody),
 		)
 
-		ctx := logger.ToContext(c.Request.Context(), reqLogger.Sugar())
+		ctx := logger.ToContext(c.Request.Context(), reqLogger)
 		c.Request = c.Request.WithContext(ctx)
 
 		rw := newResponseWriter(c.Writer)

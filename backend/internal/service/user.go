@@ -7,20 +7,22 @@ import (
 
 	"yardpass/internal/auth"
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
+
 	"go.uber.org/zap"
 )
 
 type UserService struct {
-	userRepo     domain.UserRepository
-	buildingRepo domain.BuildingRepository
-	logger       *zap.Logger
+	userRepo       domain.UserRepository
+	buildingRepo   domain.BuildingRepository
+	fallbackLogger *zap.Logger
 }
 
 func NewUserService(userRepo domain.UserRepository, buildingRepo domain.BuildingRepository, logger *zap.Logger) *UserService {
 	return &UserService{
-		userRepo:     userRepo,
-		buildingRepo: buildingRepo,
-		logger:       logger,
+		userRepo:       userRepo,
+		buildingRepo:   buildingRepo,
+		fallbackLogger: logger,
 	}
 }
 
@@ -87,7 +89,11 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	s.logger.Info("user registered",
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+	lgr.Info("User registered",
 		zap.String("username", user.Username),
 		zap.String("role", user.Role),
 		zap.Int64("created_by", createdBy),
@@ -99,4 +105,3 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 func (s *UserService) ListUsers(ctx context.Context, filters domain.UserFilters) ([]*domain.User, error) {
 	return s.userRepo.List(ctx, filters)
 }
-

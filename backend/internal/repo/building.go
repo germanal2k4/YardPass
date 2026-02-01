@@ -17,6 +17,7 @@ func NewBuildingRepo(repo *PostgresRepo) *BuildingRepo {
 }
 
 func (r *BuildingRepo) GetByID(ctx context.Context, id int64) (*domain.Building, error) {
+	ctx = queryNameToContext(ctx, "BuildingRepo.GetByID")
 	query := `
 		SELECT id, name, address, created_at, updated_at
 		FROM buildings
@@ -43,6 +44,7 @@ func (r *BuildingRepo) GetByID(ctx context.Context, id int64) (*domain.Building,
 }
 
 func (r *BuildingRepo) List(ctx context.Context) ([]*domain.Building, error) {
+	ctx = queryNameToContext(ctx, "BuildingRepo.List")
 	query := `
 		SELECT id, name, address, created_at, updated_at
 		FROM buildings

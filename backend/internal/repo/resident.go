@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
 
 	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
 type ResidentRepo struct {
@@ -18,6 +20,7 @@ func NewResidentRepo(repo *PostgresRepo) *ResidentRepo {
 }
 
 func (r *ResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.GetByID")
 	query := `
 		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
 		FROM residents
@@ -48,6 +51,7 @@ func (r *ResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident,
 }
 
 func (r *ResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Resident, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.GetByTelegramID")
 	query := `
 		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
 		FROM residents
@@ -78,6 +82,7 @@ func (r *ResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*
 }
 
 func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.Create")
 	query := `
 		INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -97,6 +102,7 @@ func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) er
 }
 
 func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.Update")
 	query := `
 		UPDATE residents
 		SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, status = $7
@@ -116,6 +122,7 @@ func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) er
 }
 
 func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []*domain.Resident) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.BulkCreate")
 	if len(residents) == 0 {
 		return nil
 	}
@@ -124,7 +131,11 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []*domain.Resid
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			logger.FromContext(ctx).Error("Failed to rollback transaction", zap.Error(err))
+		}
+	}()
 
 	query := `
 		INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
@@ -156,6 +167,7 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []*domain.Resid
 }
 
 func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.List")
 	query := `
 		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
 		FROM residents
@@ -224,6 +236,7 @@ func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters)
 }
 
 func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.Delete")
 	query := `DELETE FROM residents WHERE id = $1`
 	_, err := r.pool.Exec(ctx, query, id)
 	return err

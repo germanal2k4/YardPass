@@ -18,6 +18,7 @@ func NewUserRepo(repo *PostgresRepo) *UserRepo {
 }
 
 func (r *UserRepo) GetByID(ctx context.Context, id int64) (*domain.User, error) {
+	ctx = queryNameToContext(ctx, "UserRepo.GetByID")
 	query := `
 		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
 		FROM users
@@ -48,6 +49,7 @@ func (r *UserRepo) GetByID(ctx context.Context, id int64) (*domain.User, error) 
 }
 
 func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
+	ctx = queryNameToContext(ctx, "UserRepo.GetByUsername")
 	query := `
 		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
 		FROM users
@@ -78,6 +80,7 @@ func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*domain.
 }
 
 func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
+	ctx = queryNameToContext(ctx, "UserRepo.Create")
 	query := `
 		INSERT INTO users (username, email, password_hash, role, building_id, status)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -97,6 +100,7 @@ func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
 }
 
 func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
+	ctx = queryNameToContext(ctx, "UserRepo.Update")
 	query := `
 		UPDATE users
 		SET username = $2, email = $3, password_hash = $4, role = $5, building_id = $6, status = $7
@@ -116,6 +120,7 @@ func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
 }
 
 func (r *UserRepo) List(ctx context.Context, filters domain.UserFilters) ([]*domain.User, error) {
+	ctx = queryNameToContext(ctx, "UserRepo.List")
 	query := `
 		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
 		FROM users

@@ -17,6 +17,7 @@ func NewApartmentRepo(repo *PostgresRepo) *ApartmentRepo {
 }
 
 func (r *ApartmentRepo) GetByID(ctx context.Context, id int64) (*domain.Apartment, error) {
+	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByID")
 	query := `
 		SELECT id, building_id, number, floor, created_at, updated_at
 		FROM apartments
@@ -44,6 +45,7 @@ func (r *ApartmentRepo) GetByID(ctx context.Context, id int64) (*domain.Apartmen
 }
 
 func (r *ApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Apartment, error) {
+	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByBuildingID")
 	query := `
 		SELECT id, building_id, number, floor, created_at, updated_at
 		FROM apartments
@@ -77,6 +79,7 @@ func (r *ApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) (
 }
 
 func (r *ApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegramID int64) (*domain.Apartment, error) {
+	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByResidentTelegramID")
 	query := `
 		SELECT a.id, a.building_id, a.number, a.floor, a.created_at, a.updated_at
 		FROM apartments a

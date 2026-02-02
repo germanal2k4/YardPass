@@ -321,10 +321,9 @@ func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate s
 			AND p.valid_to >= $2
 	`
 	args := []interface{}{normalizedCarPlate, now}
-	argPos := 3
 
 	if buildingID != nil {
-		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
+		query += ` AND a.building_id = $3`
 		args = append(args, *buildingID)
 	}
 

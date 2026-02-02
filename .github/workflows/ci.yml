@@ -29,7 +29,6 @@ jobs:
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
-        continue-on-error: true
         with:
           version: latest
           working-directory: backend

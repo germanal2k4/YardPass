@@ -10,21 +10,22 @@ import (
 	"strings"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
 
 	"go.uber.org/zap"
 )
 
 type ResidentService struct {
-	residentRepo  domain.ResidentRepository
-	apartmentRepo domain.ApartmentRepository
-	logger        *zap.Logger
+	residentRepo   domain.ResidentRepository
+	apartmentRepo  domain.ApartmentRepository
+	fallbackLogger *zap.Logger
 }
 
 func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo domain.ApartmentRepository, logger *zap.Logger) *ResidentService {
 	return &ResidentService{
-		residentRepo:  residentRepo,
-		apartmentRepo: apartmentRepo,
-		logger:        logger,
+		residentRepo:   residentRepo,
+		apartmentRepo:  apartmentRepo,
+		fallbackLogger: logger,
 	}
 }
 
@@ -200,7 +201,11 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	}
 
 	residents, createErrors := s.BulkCreateResidents(ctx, requests)
-	s.logger.Info("bulk import completed",
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+	lgr.Info("Bulk import completed",
 		zap.Int("total", len(requests)),
 		zap.Int("success", len(residents)),
 		zap.Int("errors", len(createErrors)),

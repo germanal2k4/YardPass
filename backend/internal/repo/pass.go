@@ -20,6 +20,7 @@ func NewPassRepo(repo *PostgresRepo) *PassRepo {
 }
 
 func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetByID")
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
@@ -51,6 +52,7 @@ func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, err
 }
 
 func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetByApartmentID")
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
@@ -88,6 +90,7 @@ func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, stat
 }
 
 func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByApartmentID")
 	now := time.Now()
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
@@ -129,6 +132,7 @@ func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64
 }
 
 func (r *PassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByResidentID")
 	now := time.Now()
 	query := `
 		SELECT id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
@@ -170,6 +174,7 @@ func (r *PassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) 
 }
 
 func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByApartmentID")
 	today := time.Now().Truncate(24 * time.Hour)
 	query := `
 		SELECT COUNT(*)
@@ -185,6 +190,7 @@ func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentI
 }
 
 func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByResidentID")
 	today := time.Now().Truncate(24 * time.Hour)
 	query := `
 		SELECT COUNT(*)
@@ -200,6 +206,7 @@ func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID 
 }
 
 func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
+	ctx = queryNameToContext(ctx, "PassRepo.Create")
 	query := `
 		INSERT INTO passes (id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -221,6 +228,7 @@ func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 }
 
 func (r *PassRepo) Update(ctx context.Context, pass *domain.Pass) error {
+	ctx = queryNameToContext(ctx, "PassRepo.Update")
 	query := `
 		UPDATE passes
 		SET apartment_id = $2, car_plate = $3, guest_name = $4, valid_from = $5, valid_to = $6, status = $7
@@ -240,6 +248,7 @@ func (r *PassRepo) Update(ctx context.Context, pass *domain.Pass) error {
 }
 
 func (r *PassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
+	ctx = queryNameToContext(ctx, "PassRepo.Revoke")
 	query := `
 		UPDATE passes
 		SET status = 'revoked'
@@ -251,6 +260,7 @@ func (r *PassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 }
 
 func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.SearchByCarPlate")
 	query := `
 		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 		FROM passes p
@@ -299,6 +309,7 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 }
 
 func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByCarPlate")
 	now := time.Now()
 	query := `
 		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
@@ -310,12 +321,10 @@ func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate s
 			AND p.valid_to >= $2
 	`
 	args := []interface{}{normalizedCarPlate, now}
-	argPos := 3
 
 	if buildingID != nil {
-		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
+		query += ` AND a.building_id = $3`
 		args = append(args, *buildingID)
-		argPos++
 	}
 
 	query += ` ORDER BY p.created_at DESC LIMIT 1`
@@ -345,6 +354,7 @@ func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate s
 }
 
 func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByBuildingID")
 	now := time.Now()
 	query := `
 		SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at

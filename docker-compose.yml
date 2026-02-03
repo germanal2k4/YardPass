@@ -94,6 +94,21 @@ services:
       - backend
     restart: unless-stopped
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # jaeger Web UI
+      - "4317:4317" # otel gRPC collector
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+
 volumes:
   postgres_data:
   redis_data:

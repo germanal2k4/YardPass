@@ -17,6 +17,7 @@ func NewScanEventRepo(repo *PostgresRepo) *ScanEventRepo {
 }
 
 func (r *ScanEventRepo) Create(ctx context.Context, event *domain.ScanEvent) error {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.Create")
 	query := `
 		INSERT INTO scan_events (pass_id, guard_user_id, scanned_at, result, reason, meta)
 		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
@@ -36,6 +37,7 @@ func (r *ScanEventRepo) Create(ctx context.Context, event *domain.ScanEvent) err
 }
 
 func (r *ScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]*domain.ScanEvent, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.List")
 	query := `
 		SELECT id, pass_id, guard_user_id, scanned_at, result, reason, meta
 		FROM scan_events
@@ -114,6 +116,7 @@ func (r *ScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilter
 }
 
 func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.CountValidScansToday")
 	today := time.Now().Truncate(24 * time.Hour)
 	query := `
 		SELECT COUNT(*)
@@ -127,6 +130,7 @@ func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
 }
 
 func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*domain.Statistics, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.GetStatistics")
 	query := `
 		SELECT
 			COUNT(*) as total_scans,
@@ -157,7 +161,6 @@ func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, 
 	if buildingID != nil {
 		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
 		args = append(args, *buildingID)
-		argPos++
 	}
 
 	var stats domain.Statistics
@@ -173,6 +176,7 @@ func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, 
 }
 
 func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*domain.ScanEventWithDetails, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.GetEventsWithDetails")
 	query := `
 		SELECT
 			se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,

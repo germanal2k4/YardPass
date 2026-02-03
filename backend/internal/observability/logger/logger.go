@@ -114,15 +114,15 @@ func enrichLoggerInfo(cfg config.LogConfig) *loggerInfo {
 
 type loggerKey string
 
-func ToContext(ctx context.Context, lgr *zap.SugaredLogger) context.Context {
+func ToContext(ctx context.Context, lgr *zap.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey("logger"), lgr)
 }
 
-func FromContext(ctx context.Context) *zap.SugaredLogger {
+func FromContext(ctx context.Context) *zap.Logger {
 	if ctx == nil {
 		return nil
 	}
-	lgr, ok := ctx.Value(loggerKey("logger")).(*zap.SugaredLogger)
+	lgr, ok := ctx.Value(loggerKey("logger")).(*zap.Logger)
 	if !ok {
 		return nil
 	}

@@ -169,23 +169,50 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	headers := []string{"ID", "Дата/Время", "Результат", "Номер авто", "Квартира", "Охранник", "Причина"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%c1", 'A'+i)
-		file.SetCellValue(sheetName, cell, header)
+		if err := file.SetCellValue(sheetName, cell, header); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
 	}
 
 	for i, event := range events {
 		row := i + 2
-		file.SetCellValue(sheetName, fmt.Sprintf("A%d", row), event.ID)
-		file.SetCellValue(sheetName, fmt.Sprintf("B%d", row), event.ScannedAt.Format("2006-01-02 15:04:05"))
-		file.SetCellValue(sheetName, fmt.Sprintf("C%d", row), event.Result)
-		file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), event.CarPlate)
-		file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber)
-		file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), event.GuardUsername)
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("A%d", row), event.ID); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("B%d", row), event.ScannedAt.Format("2006-01-02 15:04:05")); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("C%d", row), event.Result); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), event.CarPlate); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), event.GuardUsername); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
 		if event.Reason != nil {
-			file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason)
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 	}
 
-	file.DeleteSheet("Sheet1")
+	if err := file.DeleteSheet("Sheet1"); err != nil {
+		errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+		return
+	}
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=report_%s.xlsx", time.Now().Format("20060102_150405")))

@@ -96,13 +96,13 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 
 	state := b.getState(userID)
 	if state == nil {
-		b.sendMessage(ctx, msg.Chat.ID, "Используйте /start для начала работы")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Используйте /start для начала работы")
 		return
 	}
 
 	switch state.Step {
 	case StateWaitingGuestType:
-		b.sendMessage(ctx, msg.Chat.ID, "Используйте кнопки для выбора типа гостя")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Используйте кнопки для выбора типа гостя")
 	case StateWaitingCarPlate:
 		b.handleCarPlate(ctx, msg, state)
 	case StateWaitingDuration:
@@ -112,7 +112,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	case StateWaitingGuestName:
 		b.handleGuestName(ctx, msg, state)
 	default:
-		b.sendMessage(ctx, msg.Chat.ID, "Неизвестное состояние. Используйте /start")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Неизвестное состояние. Используйте /start")
 		b.clearState(userID)
 	}
 }
@@ -122,7 +122,7 @@ func (b *Bot) handleStart(ctx context.Context, msg Message) {
 
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
-		b.sendMessage(ctx, msg.Chat.ID, "Вы не зарегистрированы как житель. Обратитесь к администратору.")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Вы не зарегистрированы как житель. Обратитесь к администратору.")
 		return
 	}
 
@@ -140,7 +140,7 @@ func (b *Bot) handleStart(ctx context.Context, msg Message) {
 		},
 	}
 
-	b.sendMessageWithKeyboard(ctx, msg.Chat.ID, "Добро пожаловать в YardPass!\n\nВыберите действие:", keyboard)
+	_ = b.sendMessageWithKeyboard(ctx, msg.Chat.ID, "Добро пожаловать в YardPass!\n\nВыберите действие:", keyboard)
 }
 
 func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
@@ -164,34 +164,34 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 			Data:      make(map[string]interface{}),
 			ExpiresAt: time.Now().Add(10 * time.Minute),
 		})
-		b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите тип гостя:", keyboard)
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите тип гостя:", keyboard)
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "list_active":
 		b.listActivePasses(ctx, cb.Message.Chat.ID, userID)
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "revoke_pass":
 		b.showPassesForRevoke(ctx, cb.Message.Chat.ID, userID)
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "guest_car":
 		state := b.getState(userID)
 		if state == nil {
-			b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
-			b.answerCallbackQuery(ctx, cb.ID, "")
+			_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
+			_ = b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 		state.Step = StateWaitingCarPlate
 		b.setState(userID, state)
-		b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля (на английском, например: A123BC77):")
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля (на английском, например: A123BC77):")
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "guest_pedestrian":
 		state := b.getState(userID)
 		if state == nil {
-			b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
-			b.answerCallbackQuery(ctx, cb.ID, "")
+			_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
+			_ = b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 		state.Data["is_pedestrian"] = true
@@ -209,14 +209,14 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 				},
 			},
 		}
-		b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите срок действия пропуска:", keyboard)
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.sendMessageWithKeyboard(ctx, cb.Message.Chat.ID, "Выберите срок действия пропуска:", keyboard)
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "duration_1h", "duration_2h", "duration_4h", "duration_custom":
 		state := b.getState(userID)
 		if state == nil {
-			b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
-			b.answerCallbackQuery(ctx, cb.ID, "")
+			_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Сессия истекла. Начните заново с /start")
+			_ = b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 
@@ -230,27 +230,27 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 		case "duration_custom":
 			state.Step = StateWaitingCustomTime
 			b.setState(userID, state)
-			b.sendMessage(ctx, cb.Message.Chat.ID, "Введите время окончания действия пропуска в формате ЧЧ:ММ (например, 22:00):")
-			b.answerCallbackQuery(ctx, cb.ID, "")
+			_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите время окончания действия пропуска в формате ЧЧ:ММ (например, 22:00):")
+			_ = b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 
 		state.Step = StateWaitingGuestName
 		b.setState(userID, state)
-		b.sendMessage(ctx, cb.Message.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
-		b.answerCallbackQuery(ctx, cb.ID, "")
+		_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	default:
 		if strings.HasPrefix(data, "revoke_pass_") {
 			passIDStr := strings.TrimPrefix(data, "revoke_pass_")
 			passID, err := uuid.Parse(passIDStr)
 			if err != nil {
-				b.sendMessage(ctx, cb.Message.Chat.ID, "Ошибка: неверный ID пропуска")
-				b.answerCallbackQuery(ctx, cb.ID, "")
+				_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Ошибка: неверный ID пропуска")
+				_ = b.answerCallbackQuery(ctx, cb.ID, "")
 				return
 			}
 			b.revokePass(ctx, cb.Message.Chat.ID, userID, passID)
-			b.answerCallbackQuery(ctx, cb.ID, "")
+			_ = b.answerCallbackQuery(ctx, cb.ID, "")
 			return
 		}
 	}
@@ -275,11 +275,11 @@ func (b *Bot) handleCarPlate(ctx context.Context, msg Message, state *UserState)
 
 	state.Step = StateWaitingDuration
 	b.setState(msg.From.ID, state)
-	b.sendMessageWithKeyboard(ctx, msg.Chat.ID, "Выберите срок действия пропуска:", keyboard)
+	_ = b.sendMessageWithKeyboard(ctx, msg.Chat.ID, "Выберите срок действия пропуска:", keyboard)
 }
 
 func (b *Bot) handleDuration(ctx context.Context, msg Message, state *UserState) {
-	b.sendMessage(ctx, msg.Chat.ID, "Используйте кнопки для выбора")
+	_ = b.sendMessage(ctx, msg.Chat.ID, "Используйте кнопки для выбора")
 }
 
 func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserState) {
@@ -288,7 +288,7 @@ func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserStat
 
 	parsedTime, err := time.Parse("15:04", timeStr)
 	if err != nil {
-		b.sendMessage(ctx, msg.Chat.ID, "Неверный формат времени. Введите в формате ЧЧ:ММ (например, 22:00)")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Неверный формат времени. Введите в формате ЧЧ:ММ (например, 22:00)")
 		return
 	}
 
@@ -302,7 +302,7 @@ func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserStat
 	state.Data["valid_to"] = targetTime
 	state.Step = StateWaitingGuestName
 	b.setState(msg.From.ID, state)
-	b.sendMessage(ctx, msg.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
+	_ = b.sendMessage(ctx, msg.Chat.ID, "Введите имя гостя (или отправьте '-' чтобы пропустить):")
 }
 
 func (b *Bot) handleGuestName(ctx context.Context, msg Message, state *UserState) {
@@ -318,7 +318,7 @@ func (b *Bot) handleGuestName(ctx context.Context, msg Message, state *UserState
 func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int64, state *UserState) {
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
-		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
 		return
 	}
 
@@ -327,7 +327,7 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 	if !isPedestrian {
 		carPlateStr, ok := state.Data["car_plate"].(string)
 		if !ok || carPlateStr == "" {
-			b.sendMessage(ctx, chatID, "Ошибка: номер автомобиля не указан")
+			_ = b.sendMessage(ctx, chatID, "Ошибка: номер автомобиля не указан")
 			return
 		}
 		carPlate = &carPlateStr
@@ -357,12 +357,12 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		if parsedTime, err := time.Parse(time.RFC3339, validToStr); err == nil {
 			validTo = parsedTime.UTC()
 		} else {
-			b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
+			_ = b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
 			b.logger.Error("failed to parse valid_to", zap.String("valid_to_str", validToStr), zap.Error(err))
 			return
 		}
 	} else {
-		b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: время действия не указано")
 		b.logger.Error("duration not found in state", zap.Any("state_data", state.Data))
 		return
 	}
@@ -386,14 +386,14 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 
 	pass, err := b.passService.CreatePass(ctx, req)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при создании пропуска: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при создании пропуска: %s", err.Error()))
 		b.logger.Error("failed to create pass", zap.Error(err), zap.Int64("user_id", userID))
 		return
 	}
 
 	qrPNG, err := b.qrGen.GenerateQR(ctx, pass.ID)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Пропуск создан, но не удалось сгенерировать QR: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Пропуск создан, но не удалось сгенерировать QR: %s", err.Error()))
 		b.logger.Error("failed to generate QR", zap.Error(err), zap.String("pass_id", pass.ID.String()))
 		return
 	}
@@ -433,19 +433,19 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) {
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
-		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
 		return
 	}
 
 	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
 		b.logger.Error("failed to get active passes", zap.Error(err), zap.Int64("user_id", userID))
 		return
 	}
 
 	if len(passes) == 0 {
-		b.sendMessage(ctx, chatID, "У вас нет активных пропусков")
+		_ = b.sendMessage(ctx, chatID, "У вас нет активных пропусков")
 		return
 	}
 
@@ -475,7 +475,7 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 		)
 	}
 
-	b.sendMessage(ctx, chatID, text)
+	_ = b.sendMessage(ctx, chatID, text)
 }
 
 func (b *Bot) formatLocalTime(t time.Time) string {
@@ -485,19 +485,19 @@ func (b *Bot) formatLocalTime(t time.Time) string {
 func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int64) {
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
-		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
 		return
 	}
 
 	passes, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при получении пропусков: %s", err.Error()))
 		b.logger.Error("failed to get active passes for revoke", zap.Error(err), zap.Int64("user_id", userID))
 		return
 	}
 
 	if len(passes) == 0 {
-		b.sendMessage(ctx, chatID, "У вас нет активных пропусков для отзыва")
+		_ = b.sendMessage(ctx, chatID, "У вас нет активных пропусков для отзыва")
 		return
 	}
 
@@ -540,19 +540,19 @@ func (b *Bot) showPassesForRevoke(ctx context.Context, chatID int64, userID int6
 		"inline_keyboard": keyboardRows,
 	}
 
-	b.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
+	_ = b.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
 }
 
 func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID uuid.UUID) {
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
-		b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
 		return
 	}
 
 	activePasses, err := b.passService.GetActivePassesByResident(ctx, resident.ID)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при проверке пропуска: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при проверке пропуска: %s", err.Error()))
 		return
 	}
 
@@ -574,18 +574,18 @@ func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID
 	}
 
 	if !found {
-		b.sendMessage(ctx, chatID, "Ошибка: пропуск не найден или не принадлежит вам")
+		_ = b.sendMessage(ctx, chatID, "Ошибка: пропуск не найден или не принадлежит вам")
 		return
 	}
 
 	err = b.passService.RevokePass(ctx, passID, 0)
 	if err != nil {
-		b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при отзыве пропуска: %s", err.Error()))
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при отзыве пропуска: %s", err.Error()))
 		b.logger.Error("failed to revoke pass", zap.Error(err), zap.String("pass_id", passID.String()), zap.Int64("user_id", userID))
 		return
 	}
 
-	b.sendMessage(ctx, chatID, fmt.Sprintf("✅ Пропуск отозван:\n%s\n\nID: %s", passInfo, passID.String()[:8]))
+	_ = b.sendMessage(ctx, chatID, fmt.Sprintf("✅ Пропуск отозван:\n%s\n\nID: %s", passInfo, passID.String()[:8]))
 }
 
 func (b *Bot) getState(userID int64) *UserState {
@@ -638,14 +638,14 @@ func (b *Bot) setState(userID int64, state *UserState) {
 	stateCopy.Data = stateCopyData
 
 	stateJSON, _ := json.Marshal(stateCopy)
-	b.redis.Set(context.Background(), key, stateJSON, 10*time.Minute)
+	_ = b.redis.Set(context.Background(), key, stateJSON, 10*time.Minute)
 
 	b.states[userID] = state
 }
 
 func (b *Bot) clearState(userID int64) {
 	key := fmt.Sprintf("bot_state:%d", userID)
-	b.redis.Delete(context.Background(), key)
+	_ = b.redis.Delete(context.Background(), key)
 	delete(b.states, userID)
 }
 
@@ -672,8 +672,12 @@ func (b *Bot) sendPhoto(ctx context.Context, chatID int64, photo []byte, caption
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	writer.WriteField("chat_id", strconv.FormatInt(chatID, 10))
-	writer.WriteField("caption", caption)
+	if err := writer.WriteField("chat_id", strconv.FormatInt(chatID, 10)); err != nil {
+		return fmt.Errorf("failed to write chat_id field: %w", err)
+	}
+	if err := writer.WriteField("caption", caption); err != nil {
+		return fmt.Errorf("failed to write caption field: %w", err)
+	}
 
 	part, err := writer.CreateFormFile("photo", "qr.png")
 	if err != nil {

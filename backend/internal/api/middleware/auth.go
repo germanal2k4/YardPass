@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"strings"
 
 	"yardpass/internal/auth"
@@ -37,10 +36,7 @@ func AuthMiddleware(jwtService *auth.JWTService) gin.HandlerFunc {
 		c.Set("role", claims.Role)
 		if claims.BuildingID != nil {
 			c.Set("building_id", *claims.BuildingID)
-			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "building_id", *claims.BuildingID))
 		}
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "user_id", claims.UserID))
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "role", claims.Role))
 
 		c.Next()
 	}

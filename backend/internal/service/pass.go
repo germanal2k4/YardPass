@@ -8,17 +8,18 @@ import (
 	"time"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 type PassService struct {
-	passRepo      domain.PassRepository
-	apartmentRepo domain.ApartmentRepository
-	ruleRepo      domain.RuleRepository
-	scanEventRepo domain.ScanEventRepository
-	logger        *zap.Logger
+	passRepo       domain.PassRepository
+	apartmentRepo  domain.ApartmentRepository
+	ruleRepo       domain.RuleRepository
+	scanEventRepo  domain.ScanEventRepository
+	fallbackLogger *zap.Logger
 }
 
 func NewPassService(
@@ -29,11 +30,11 @@ func NewPassService(
 	logger *zap.Logger,
 ) *PassService {
 	return &PassService{
-		passRepo:      passRepo,
-		apartmentRepo: apartmentRepo,
-		ruleRepo:      ruleRepo,
-		scanEventRepo: scanEventRepo,
-		logger:        logger,
+		passRepo:       passRepo,
+		apartmentRepo:  apartmentRepo,
+		ruleRepo:       ruleRepo,
+		scanEventRepo:  scanEventRepo,
+		fallbackLogger: logger,
 	}
 }
 
@@ -113,7 +114,12 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	} else {
 		logFields = append(logFields, zap.String("type", "pedestrian"))
 	}
-	s.logger.Info("pass created", logFields...)
+
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+	lgr.Info("Pass created", logFields...)
 
 	return pass, nil
 }
@@ -237,7 +243,12 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 		return fmt.Errorf("failed to revoke pass: %w", err)
 	}
 
-	s.logger.Info("pass revoked",
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+
+	lgr.Info("Pass revoked",
 		zap.String("pass_id", passID.String()),
 		zap.Int64("revoked_by", revokedBy),
 	)
@@ -272,8 +283,12 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	}
 
 	if err := s.scanEventRepo.Create(ctx, event); err != nil {
+		lgr := logger.FromContext(ctx)
+		if lgr == nil {
+			lgr = s.fallbackLogger
+		}
 
-		s.logger.Error("failed to log scan event",
+		lgr.Error("Failed to log scan event",
 			zap.Error(err),
 			zap.String("pass_id", passID.String()),
 			zap.String("result", result),

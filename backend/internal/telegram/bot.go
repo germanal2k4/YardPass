@@ -10,6 +10,8 @@ import (
 
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
+	"yardpass/internal/observability/tracer"
 	"yardpass/internal/qr"
 	"yardpass/internal/redis"
 	"yardpass/internal/service"
@@ -31,6 +33,8 @@ type Bot struct {
 	qrGen         *qr.Generator
 	redis         *redis.Client
 	logger        *zap.Logger
+	tracer        *tracer.Tracer
+	metrics       *metrics.Metrics
 	states        map[int64]*UserState
 	location      *time.Location
 
@@ -62,6 +66,8 @@ func NewBot(
 	qrGen *qr.Generator,
 	redisClient *redis.Client,
 	logger *zap.Logger,
+	tracer *tracer.Tracer,
+	metrics *metrics.Metrics,
 ) *Bot {
 	location, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -81,6 +87,8 @@ func NewBot(
 		qrGen:         qrGen,
 		redis:         redisClient,
 		logger:        logger,
+		tracer:        tracer,
+		metrics:       metrics,
 		states:        make(map[int64]*UserState),
 		location:      location,
 	}

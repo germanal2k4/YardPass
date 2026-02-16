@@ -10,6 +10,7 @@ import (
 	"yardpass/internal/api/middleware"
 	"yardpass/internal/auth"
 	"yardpass/internal/config"
+	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
 	"yardpass/internal/redis"
 
@@ -40,6 +41,7 @@ func NewRouter(
 	redisClient *redis.Client,
 	logger *zap.Logger,
 	tracer *tracer.Tracer,
+	metrics *metrics.Metrics,
 ) *Router {
 	if cfg.Log.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -49,10 +51,11 @@ func NewRouter(
 
 	r := gin.New()
 	r.Use(middleware.CORSMiddleware())
-	r.Use(middleware.RecoveryMiddleware(logger))
 	r.Use(middleware.InMemoryRateLimit(100, 200))
 	r.Use(middleware.TracingMiddleware(tracer))
 	r.Use(middleware.LoggingMiddleware(logger, cfg.Log))
+	r.Use(middleware.MetricsMiddleware(metrics))
+	r.Use(middleware.RecoveryMiddleware(logger))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})

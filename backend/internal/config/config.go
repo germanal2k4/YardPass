@@ -25,6 +25,7 @@ type Config struct {
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 	Log       LogConfig       `yaml:"log"`
 	Tracer    TracerConfig    `yaml:"tracer"`
+	Metrics   MetricsConfig   `yaml:"metrics"`
 }
 
 type ServerConfig struct {
@@ -92,6 +93,11 @@ type ElasticConfig struct {
 type TracerConfig struct {
 	Enabled bool   `yaml:"enabled" default:"true"`
 	Url     string `yaml:"url" default:"localhost:4317"`
+}
+
+type MetricsConfig struct {
+	Enabled bool `yaml:"enabled" default:"true"`
+	Port    int  `yaml:"port" default:"9090"`
 }
 
 func Load(configPath string) (*Config, error) {

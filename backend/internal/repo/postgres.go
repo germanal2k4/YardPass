@@ -8,10 +8,12 @@ import (
 
 	"yardpass/internal/config"
 	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -20,17 +22,19 @@ import (
 )
 
 type PostgresRepo struct {
-	cfg    config.PGConfig
-	pool   *pgxpool.Pool
-	logger *zap.Logger
-	t      *tracer.Tracer
+	cfg     config.PGConfig
+	pool    *pgxpool.Pool
+	logger  *zap.Logger
+	t       *tracer.Tracer
+	metrics *metrics.Metrics
 }
 
-func NewPostgresRepo(lf fx.Lifecycle, cfg config.PGConfig, logger *zap.Logger, t *tracer.Tracer) *PostgresRepo {
+func NewPostgresRepo(lf fx.Lifecycle, cfg config.PGConfig, logger *zap.Logger, t *tracer.Tracer, m *metrics.Metrics) *PostgresRepo {
 	repo := PostgresRepo{
-		logger: logger,
-		cfg:    cfg,
-		t:      t,
+		logger:  logger,
+		cfg:     cfg,
+		t:       t,
+		metrics: m,
 	}
 
 	lf.Append(fx.Hook{
@@ -61,10 +65,33 @@ func (r *PostgresRepo) Start(ctx context.Context) error {
 		queriesToHide[query] = struct{}{}
 	}
 
+	queryDuration := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: "yardpass_db",
+			Name:      "query_duration_seconds",
+			Help:      "Duration of database queries",
+		},
+		[]string{"query_name"},
+	)
+
+	queryErrors := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_db",
+			Name:      "query_errors_total",
+			Help:      "Total number of database query errors",
+		},
+		[]string{"query_name"},
+	)
+
+	registry := r.metrics.GetRegistry()
+	registry.MustRegister(queryDuration, queryErrors)
+
 	config.ConnConfig.Tracer = &connTracerWrapper{
 		t:              r.t,
 		queriesToHide:  queriesToHide,
 		fallbackLogger: r.logger,
+		queryDuration:  queryDuration,
+		queryErrors:    queryErrors,
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
@@ -78,6 +105,19 @@ func (r *PostgresRepo) Start(ctx context.Context) error {
 
 	r.pool = pool
 
+	registry.MustRegister(
+		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: "yardpass_db",
+			Name:      "pool_total_conns",
+			Help:      "Total number of connections in the pool",
+		}, func() float64 { return float64(r.pool.Stat().TotalConns()) }),
+		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Namespace: "yardpass_db",
+			Name:      "pool_idle_conns",
+			Help:      "Number of idle connections in the pool",
+		}, func() float64 { return float64(r.pool.Stat().IdleConns()) }),
+	)
+
 	return nil
 }
 
@@ -90,6 +130,8 @@ type connTracerWrapper struct {
 	t              *tracer.Tracer
 	queriesToHide  map[string]struct{}
 	fallbackLogger *zap.Logger
+	queryDuration  *prometheus.HistogramVec
+	queryErrors    *prometheus.CounterVec
 }
 
 type queryNameKeyType string
@@ -134,11 +176,22 @@ func (tw *connTracerWrapper) TraceQueryStart(ctx context.Context, conn *pgx.Conn
 }
 
 func (tw *connTracerWrapper) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	startTime, ok := ctx.Value(startTimeKey).(time.Time)
+	if !ok {
+		return
+	}
+
 	span := trace.SpanFromContext(ctx)
 	defer span.End()
 
-	duration := time.Since(ctx.Value(startTimeKey).(time.Time))
+	duration := time.Since(startTime)
 	span.SetAttributes(attribute.Int64("duration_ms", duration.Milliseconds()))
+
+	queryName := queryNameFromContext(ctx)
+	tw.queryDuration.WithLabelValues(queryName).Observe(duration.Seconds())
+	if data.Err != nil {
+		tw.queryErrors.WithLabelValues(queryName).Inc()
+	}
 
 	lgr := logger.FromContext(ctx)
 	if lgr == nil {

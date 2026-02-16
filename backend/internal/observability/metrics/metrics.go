@@ -32,7 +32,8 @@ func NewMetrics(lc fx.Lifecycle, c *config.MetricsConfig, lgr *zap.Logger) (*Met
 	}
 
 	metrics := &Metrics{
-		r: prometheus.NewRegistry(),
+		enabled: c.Enabled,
+		r:       prometheus.NewRegistry(),
 		metricsLgr: &metricsErrorLogger{
 			lgr.Sugar().With("component", "metrics"),
 		},
@@ -110,7 +111,6 @@ func (m *metricsErrorLogger) Println(v ...interface{}) {
 }
 
 func (n *NoopRegisterer) MustRegister(c ...prometheus.Collector) {
-	return
 }
 
 func (n *NoopRegisterer) Register(c prometheus.Collector) error {

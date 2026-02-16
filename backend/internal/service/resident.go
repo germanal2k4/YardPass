@@ -11,7 +11,9 @@ import (
 
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -19,13 +21,37 @@ type ResidentService struct {
 	residentRepo   domain.ResidentRepository
 	apartmentRepo  domain.ApartmentRepository
 	fallbackLogger *zap.Logger
+	opsTotal       *prometheus.CounterVec
+	importTotal    *prometheus.CounterVec
 }
 
-func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo domain.ApartmentRepository, logger *zap.Logger) *ResidentService {
+func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo domain.ApartmentRepository, logger *zap.Logger, m *metrics.Metrics) *ResidentService {
+	opsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_resident",
+			Name:      "operations_total",
+			Help:      "Total number of resident operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	importTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_resident",
+			Name:      "import_rows_total",
+			Help:      "Total number of rows processed during CSV import",
+		},
+		[]string{"result"},
+	)
+
+	m.GetRegistry().MustRegister(opsTotal, importTotal)
+
 	return &ResidentService{
 		residentRepo:   residentRepo,
 		apartmentRepo:  apartmentRepo,
 		fallbackLogger: logger,
+		opsTotal:       opsTotal,
+		importTotal:    importTotal,
 	}
 }
 
@@ -54,8 +80,10 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 		existing.Name = req.Name
 		existing.Phone = req.Phone
 		if err := s.residentRepo.Update(ctx, existing); err != nil {
+			s.opsTotal.WithLabelValues("update", "error").Inc()
 			return nil, fmt.Errorf("failed to update resident: %w", err)
 		}
+		s.opsTotal.WithLabelValues("update", "success").Inc()
 		return existing, nil
 	}
 
@@ -69,9 +97,11 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 	}
 
 	if err := s.residentRepo.Create(ctx, resident); err != nil {
+		s.opsTotal.WithLabelValues("create", "error").Inc()
 		return nil, fmt.Errorf("failed to create resident: %w", err)
 	}
 
+	s.opsTotal.WithLabelValues("create", "success").Inc()
 	return resident, nil
 }
 
@@ -201,6 +231,10 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	}
 
 	residents, createErrors := s.BulkCreateResidents(ctx, requests)
+
+	s.importTotal.WithLabelValues("success").Add(float64(len(residents)))
+	s.importTotal.WithLabelValues("error").Add(float64(len(createErrors)))
+
 	lgr := logger.FromContext(ctx)
 	if lgr == nil {
 		lgr = s.fallbackLogger
@@ -233,8 +267,10 @@ func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
 	}
 
 	if err := s.residentRepo.Delete(ctx, id); err != nil {
+		s.opsTotal.WithLabelValues("delete", "error").Inc()
 		return fmt.Errorf("failed to delete resident: %w", err)
 	}
 
+	s.opsTotal.WithLabelValues("delete", "success").Inc()
 	return nil
 }

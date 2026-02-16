@@ -73,6 +73,7 @@ func SetupApi(configPath string) (*fx.App, error) {
 			func() config.JWTConfig { return cfg.JWT },
 			func() config.LogConfig { return cfg.Log },
 			func() config.TracerConfig { return cfg.Tracer },
+			func() *config.MetricsConfig { return &cfg.Metrics },
 		),
 
 		fx.Invoke(func(logger *zap.Logger) {}),
@@ -118,6 +119,7 @@ func SetupBot(configPath string) (*fx.App, error) {
 			func() config.PGConfig { return cfg.PG },
 			func() config.RedisConfig { return cfg.Redis },
 			func() config.LogConfig { return cfg.Log },
+			func() *config.MetricsConfig { return &cfg.Metrics },
 		),
 
 		fx.Invoke(func(logger *zap.Logger) {}),

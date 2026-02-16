@@ -9,17 +9,22 @@ import (
 
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
 type PassService struct {
-	passRepo       domain.PassRepository
-	apartmentRepo  domain.ApartmentRepository
-	ruleRepo       domain.RuleRepository
-	scanEventRepo  domain.ScanEventRepository
-	fallbackLogger *zap.Logger
+	passRepo        domain.PassRepository
+	apartmentRepo   domain.ApartmentRepository
+	ruleRepo        domain.RuleRepository
+	scanEventRepo   domain.ScanEventRepository
+	fallbackLogger  *zap.Logger
+	opsTotal        *prometheus.CounterVec
+	createdByType   *prometheus.CounterVec
+	rejectionsTotal *prometheus.CounterVec
 }
 
 func NewPassService(
@@ -28,13 +33,46 @@ func NewPassService(
 	ruleRepo domain.RuleRepository,
 	scanEventRepo domain.ScanEventRepository,
 	logger *zap.Logger,
+	m *metrics.Metrics,
 ) *PassService {
+	opsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "operations_total",
+			Help:      "Total number of pass operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	createdByType := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "created_by_type_total",
+			Help:      "Total number of passes created by guest type",
+		},
+		[]string{"type"},
+	)
+
+	rejectionsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "rejections_total",
+			Help:      "Total number of pass creation rejections by reason",
+		},
+		[]string{"reason"},
+	)
+
+	m.GetRegistry().MustRegister(opsTotal, createdByType, rejectionsTotal)
+
 	return &PassService{
-		passRepo:       passRepo,
-		apartmentRepo:  apartmentRepo,
-		ruleRepo:       ruleRepo,
-		scanEventRepo:  scanEventRepo,
-		fallbackLogger: logger,
+		passRepo:        passRepo,
+		apartmentRepo:   apartmentRepo,
+		ruleRepo:        ruleRepo,
+		scanEventRepo:   scanEventRepo,
+		fallbackLogger:  logger,
+		opsTotal:        opsTotal,
+		createdByType:   createdByType,
+		rejectionsTotal: rejectionsTotal,
 	}
 }
 
@@ -43,6 +81,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	if req.CarPlate != nil && *req.CarPlate != "" {
 		normalized := normalizeCarPlate(*req.CarPlate)
 		if normalized == "" {
+			s.rejectionsTotal.WithLabelValues("invalid_car_plate").Inc()
 			return nil, errors.New("invalid car plate number")
 		}
 		carPlate = &normalized
@@ -69,6 +108,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
 	if req.ValidTo.Sub(req.ValidFrom) > maxDuration {
+		s.rejectionsTotal.WithLabelValues("max_duration_exceeded").Inc()
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
 
@@ -81,11 +121,13 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, fmt.Errorf("failed to check daily limit: %w", err)
 	}
 	if count >= rule.DailyPassLimitPerApartment {
+		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
 		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
 	}
 
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
 		if err := s.validateQuietHours(req.ValidFrom, req.ValidTo, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+			s.rejectionsTotal.WithLabelValues("quiet_hours").Inc()
 			return nil, err
 		}
 	}
@@ -102,7 +144,15 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	}
 
 	if err := s.passRepo.Create(ctx, pass); err != nil {
+		s.opsTotal.WithLabelValues("create", "error").Inc()
 		return nil, fmt.Errorf("failed to create pass: %w", err)
+	}
+
+	s.opsTotal.WithLabelValues("create", "success").Inc()
+	if carPlate != nil {
+		s.createdByType.WithLabelValues("car").Inc()
+	} else {
+		s.createdByType.WithLabelValues("pedestrian").Inc()
 	}
 
 	logFields := []zap.Field{
@@ -175,6 +225,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 
 	if pass.Status == "revoked" {
 		result.Reason = "PASS_REVOKED"
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
@@ -185,6 +236,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 
 	if now.Before(validFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
@@ -193,6 +245,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		result.Reason = "PASS_EXPIRED"
 		pass.Status = "expired"
 		_ = s.passRepo.Update(ctx, pass)
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
@@ -204,6 +257,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
 				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
+					s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 					s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 					return result, nil
 				}
@@ -222,6 +276,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		result.Apartment = apartment.Number
 	}
 
+	s.opsTotal.WithLabelValues("validate", "valid").Inc()
 	s.logScanEvent(ctx, pass.ID, guardUserID, "valid", "")
 	return result, nil
 }
@@ -240,8 +295,11 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 	}
 
 	if err := s.passRepo.Revoke(ctx, passID); err != nil {
+		s.opsTotal.WithLabelValues("revoke", "error").Inc()
 		return fmt.Errorf("failed to revoke pass: %w", err)
 	}
+
+	s.opsTotal.WithLabelValues("revoke", "success").Inc()
 
 	lgr := logger.FromContext(ctx)
 	if lgr == nil {

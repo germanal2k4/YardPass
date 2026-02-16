@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -168,7 +169,8 @@ func TestPassService_CreatePass(t *testing.T) {
 	ruleRepo := new(MockRuleRepo)
 	scanEventRepo := new(MockScanEventRepo)
 
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger)
+	noopMetrics := &metrics.Metrics{}
+	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger, noopMetrics)
 
 	t.Run("successful creation", func(t *testing.T) {
 		apartmentID := int64(1)
@@ -218,7 +220,7 @@ func TestPassService_CreatePass(t *testing.T) {
 		apartmentRepo2 := new(MockApartmentRepo)
 		ruleRepo2 := new(MockRuleRepo)
 		scanEventRepo2 := new(MockScanEventRepo)
-		service2 := NewPassService(passRepo2, apartmentRepo2, ruleRepo2, scanEventRepo2, logger)
+		service2 := NewPassService(passRepo2, apartmentRepo2, ruleRepo2, scanEventRepo2, logger, noopMetrics)
 
 		apartmentID := int64(1)
 		buildingID := int64(1)
@@ -269,8 +271,9 @@ func TestPassService_ValidatePass(t *testing.T) {
 	apartmentRepo := new(MockApartmentRepo)
 	ruleRepo := new(MockRuleRepo)
 	scanEventRepo := new(MockScanEventRepo)
+	noopMetrics := &metrics.Metrics{}
 
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger)
+	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger, noopMetrics)
 
 	t.Run("valid pass", func(t *testing.T) {
 		passID := uuid.New()

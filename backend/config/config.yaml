@@ -7,7 +7,7 @@ jwt:
     refresh_ttl: 168h
 
 log:
-    buffered: false
+    buffered: true
     disabled: false
     elastic_config:
         url: http://localhost:9200
@@ -56,4 +56,4 @@ tracer:
 
 metrics:
     enabled: true
-    port: 9090
+    port: 3000

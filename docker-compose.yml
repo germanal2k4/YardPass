@@ -49,13 +49,20 @@ services:
       - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
       - LOG_LEVEL=info
       - LOG_FORMAT=json
+      - ELASTIC_URL=http://elasticsearch:9200
+      - TRACER_URL=jaeger:4317
     ports:
       - "8080:8080"
+      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
     restart: unless-stopped
 
   bot:
@@ -115,7 +122,7 @@ services:
     restart: unless-stopped
     depends_on:
       - jaeger
-      - service
+      - backend
     volumes:
       - ./backend/deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     command:

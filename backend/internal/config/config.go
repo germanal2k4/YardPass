@@ -84,7 +84,7 @@ type LogConfig struct {
 }
 
 type ElasticConfig struct {
-	Url             string        `yaml:"url" default:"http://localhost:9200"`
+	Url             string        `yaml:"url" env:"ELASTIC_URL" default:"http://localhost:9200"`
 	Index           string        `yaml:"index" default:"yardpass-logs"`
 	FlushInterval   time.Duration `yaml:"flush_interval" default:"1s"`
 	WriteBufferSize int           `yaml:"write_buffer_size" default:"1024"`
@@ -92,12 +92,12 @@ type ElasticConfig struct {
 
 type TracerConfig struct {
 	Enabled bool   `yaml:"enabled" default:"true"`
-	Url     string `yaml:"url" default:"localhost:4317"`
+	Url     string `yaml:"url" env:"TRACER_URL" default:"localhost:4317"`
 }
 
 type MetricsConfig struct {
 	Enabled bool `yaml:"enabled" default:"true"`
-	Port    int  `yaml:"port" default:"9090"`
+	Port    int  `yaml:"port" default:"3000"`
 }
 
 func Load(configPath string) (*Config, error) {

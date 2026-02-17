@@ -97,7 +97,7 @@ type TracerConfig struct {
 
 type MetricsConfig struct {
 	Enabled bool `yaml:"enabled" default:"true"`
-	Port    int  `yaml:"port" default:"3000"`
+	Port    int  `yaml:"port" default:"5050"`
 }
 
 func Load(configPath string) (*Config, error) {

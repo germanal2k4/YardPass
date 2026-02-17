@@ -4,4 +4,4 @@ global:
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:
-      - targets: ['backend:3000']
+      - targets: ['backend:5050']

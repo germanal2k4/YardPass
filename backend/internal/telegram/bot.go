@@ -10,10 +10,13 @@ import (
 
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
+	"yardpass/internal/observability/tracer"
 	"yardpass/internal/qr"
 	"yardpass/internal/redis"
 	"yardpass/internal/service"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -31,8 +34,14 @@ type Bot struct {
 	qrGen         *qr.Generator
 	redis         *redis.Client
 	logger        *zap.Logger
+	tracer        *tracer.Tracer
+	metrics       *metrics.Metrics
 	states        map[int64]*UserState
 	location      *time.Location
+
+	updatesTotal   *prometheus.CounterVec
+	commandsTotal  *prometheus.CounterVec
+	apiErrorsTotal *prometheus.CounterVec
 
 	wg     sync.WaitGroup
 	ctx    context.Context
@@ -62,6 +71,8 @@ func NewBot(
 	qrGen *qr.Generator,
 	redisClient *redis.Client,
 	logger *zap.Logger,
+	tracer *tracer.Tracer,
+	metrics *metrics.Metrics,
 ) *Bot {
 	location, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
@@ -69,20 +80,54 @@ func NewBot(
 		location = time.UTC
 	}
 
+	updatesTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_bot",
+			Name:      "updates_total",
+			Help:      "Total number of Telegram updates processed",
+		},
+		[]string{"type"},
+	)
+
+	commandsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_bot",
+			Name:      "commands_total",
+			Help:      "Total number of bot commands received",
+		},
+		[]string{"command"},
+	)
+
+	apiErrorsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_bot",
+			Name:      "api_errors_total",
+			Help:      "Total number of Telegram API errors",
+		},
+		[]string{"method", "status"},
+	)
+
+	metrics.GetRegistry().MustRegister(updatesTotal, commandsTotal, apiErrorsTotal)
+
 	bot := &Bot{
-		token:         cfg.Telegram.BotToken,
-		apiURL:        fmt.Sprintf("https://api.telegram.org/bot%s", cfg.Telegram.BotToken),
-		webhookURL:    cfg.Telegram.WebhookURL,
-		serverHost:    cfg.Telegram.ServerHost,
-		serverPort:    cfg.Telegram.ServerPort,
-		passService:   passService,
-		residentRepo:  residentRepo,
-		apartmentRepo: apartmentRepo,
-		qrGen:         qrGen,
-		redis:         redisClient,
-		logger:        logger,
-		states:        make(map[int64]*UserState),
-		location:      location,
+		token:          cfg.Telegram.BotToken,
+		apiURL:         fmt.Sprintf("https://api.telegram.org/bot%s", cfg.Telegram.BotToken),
+		webhookURL:     cfg.Telegram.WebhookURL,
+		serverHost:     cfg.Telegram.ServerHost,
+		serverPort:     cfg.Telegram.ServerPort,
+		passService:    passService,
+		residentRepo:   residentRepo,
+		apartmentRepo:  apartmentRepo,
+		qrGen:          qrGen,
+		redis:          redisClient,
+		logger:         logger,
+		tracer:         tracer,
+		metrics:        metrics,
+		states:         make(map[int64]*UserState),
+		location:       location,
+		updatesTotal:   updatesTotal,
+		commandsTotal:  commandsTotal,
+		apiErrorsTotal: apiErrorsTotal,
 	}
 
 	lf.Append(fx.Hook{

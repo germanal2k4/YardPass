@@ -52,8 +52,10 @@ type CallbackQuery struct {
 
 func (b *Bot) ProcessUpdate(ctx context.Context, update Update) {
 	if update.Message != nil {
+		b.updatesTotal.WithLabelValues("message").Inc()
 		b.handleMessage(ctx, *update.Message)
 	} else if update.CallbackQuery != nil {
+		b.updatesTotal.WithLabelValues("callback_query").Inc()
 		b.handleCallbackQuery(ctx, *update.CallbackQuery)
 	}
 }
@@ -65,8 +67,10 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" {
 		switch text {
 		case "/start":
+			b.commandsTotal.WithLabelValues("start").Inc()
 			b.handleStart(ctx, msg)
 		case "/create":
+			b.commandsTotal.WithLabelValues("create").Inc()
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -75,6 +79,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 			}
 			b.handleCallbackQuery(ctx, cb)
 		case "/list":
+			b.commandsTotal.WithLabelValues("list").Inc()
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -83,6 +88,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 			}
 			b.handleCallbackQuery(ctx, cb)
 		case "/revoke":
+			b.commandsTotal.WithLabelValues("revoke").Inc()
 			cb := CallbackQuery{
 				ID:      "",
 				From:    msg.From,
@@ -739,11 +745,13 @@ func (b *Bot) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		b.apiErrorsTotal.WithLabelValues("getUpdates", "500").Inc()
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		b.apiErrorsTotal.WithLabelValues("getUpdates", strconv.Itoa(resp.StatusCode)).Inc()
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("telegram API error (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}
@@ -758,6 +766,7 @@ func (b *Bot) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
 	}
 
 	if !result.OK {
+		b.apiErrorsTotal.WithLabelValues("getUpdates", "500").Inc()
 		return nil, fmt.Errorf("telegram API returned not ok")
 	}
 
@@ -795,11 +804,13 @@ func (b *Bot) callAPI(ctx context.Context, method string, payload map[string]int
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		b.apiErrorsTotal.WithLabelValues(method, "500").Inc()
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		b.apiErrorsTotal.WithLabelValues(method, strconv.Itoa(resp.StatusCode)).Inc()
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("telegram API error (status %d): %s", resp.StatusCode, string(bodyBytes))
 	}

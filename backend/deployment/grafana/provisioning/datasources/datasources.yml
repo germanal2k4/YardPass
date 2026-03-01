@@ -1,0 +1,39 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: yardpass-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+
+  - name: Elasticsearch
+    type: elasticsearch
+    uid: yardpass-elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    editable: true
+    jsonData:
+      index: "yardpass-logs"
+      timeField: "@timestamp"
+      logMessageField: "msg"
+      logLevelField: "level"
+      esVersion: "7.17.0"
+
+  - name: Jaeger
+    type: jaeger
+    uid: yardpass-jaeger
+    access: proxy
+    url: http://jaeger:16686
+    editable: true
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: yardpass-elasticsearch
+        customQuery: true
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+        query: 'trace_id:"${__trace.traceId}"'

@@ -8,7 +8,9 @@ import (
 	"yardpass/internal/auth"
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -16,13 +18,26 @@ type UserService struct {
 	userRepo       domain.UserRepository
 	buildingRepo   domain.BuildingRepository
 	fallbackLogger *zap.Logger
+	opsTotal       *prometheus.CounterVec
 }
 
-func NewUserService(userRepo domain.UserRepository, buildingRepo domain.BuildingRepository, logger *zap.Logger) *UserService {
+func NewUserService(userRepo domain.UserRepository, buildingRepo domain.BuildingRepository, logger *zap.Logger, m *metrics.Metrics) *UserService {
+	opsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_user",
+			Name:      "operations_total",
+			Help:      "Total number of user operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	m.GetRegistry().MustRegister(opsTotal)
+
 	return &UserService{
 		userRepo:       userRepo,
 		buildingRepo:   buildingRepo,
 		fallbackLogger: logger,
+		opsTotal:       opsTotal,
 	}
 }
 
@@ -86,8 +101,11 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
+
+	s.opsTotal.WithLabelValues("register", "success").Inc()
 
 	lgr := logger.FromContext(ctx)
 	if lgr == nil {

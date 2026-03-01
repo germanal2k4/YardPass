@@ -37,6 +37,15 @@ func processValue(v reflect.Value) error {
 			continue
 		}
 
+		if field.Kind() == reflect.Ptr && field.Type().Elem().Kind() == reflect.Struct {
+			if !field.IsNil() {
+				if err := processValue(field); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
 		envKey := fieldType.Tag.Get("env")
 		defaultVal := fieldType.Tag.Get("default")
 

@@ -8,8 +8,10 @@ import (
 
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -18,14 +20,27 @@ type JWTService struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 	userRepo   domain.UserRepository
+	authOps    *prometheus.CounterVec
 }
 
-func NewJWTService(cfg config.JWTConfig, userRepo domain.UserRepository) *JWTService {
+func NewJWTService(cfg config.JWTConfig, userRepo domain.UserRepository, m *metrics.Metrics) *JWTService {
+	authOps := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_auth",
+			Name:      "operations_total",
+			Help:      "Total number of authentication operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	m.GetRegistry().MustRegister(authOps)
+
 	return &JWTService{
 		secret:     cfg.Secret,
 		accessTTL:  cfg.AccessTTL,
 		refreshTTL: cfg.RefreshTTL,
 		userRepo:   userRepo,
+		authOps:    authOps,
 	}
 }
 
@@ -40,30 +55,38 @@ type Claims struct {
 func (s *JWTService) Login(ctx context.Context, username, password string) (*domain.AuthTokens, error) {
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
 	if user == nil {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, errors.New("invalid credentials")
 	}
 
 	if user.Status != "active" {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, errors.New("user account is inactive")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, errors.New("invalid credentials")
 	}
 
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	refreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
+		s.authOps.WithLabelValues("login", "failure").Inc()
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
+
+	s.authOps.WithLabelValues("login", "success").Inc()
 
 	return &domain.AuthTokens{
 		AccessToken:  accessToken,
@@ -75,31 +98,39 @@ func (s *JWTService) Login(ctx context.Context, username, password string) (*dom
 func (s *JWTService) RefreshToken(ctx context.Context, refreshToken string) (*domain.AuthTokens, error) {
 	claims, err := s.validateToken(refreshToken)
 	if err != nil {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, fmt.Errorf("invalid refresh token: %w", err)
 	}
 
 	if claims.Type != "refresh" {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, errors.New("token is not a refresh token")
 	}
 
 	user, err := s.userRepo.GetByID(ctx, claims.UserID)
 	if err != nil || user == nil {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, errors.New("user not found")
 	}
 
 	if user.Status != "active" {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, errors.New("user account is inactive")
 	}
 
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	newRefreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
+
+	s.authOps.WithLabelValues("refresh", "success").Inc()
 
 	return &domain.AuthTokens{
 		AccessToken:  accessToken,

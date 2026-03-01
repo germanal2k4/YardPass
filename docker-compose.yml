@@ -49,13 +49,20 @@ services:
       - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
       - LOG_LEVEL=info
       - LOG_FORMAT=json
+      - ELASTIC_URL=http://elasticsearch:9200
+      - TRACER_URL=jaeger:4317
     ports:
       - "8080:8080"
+      - "5050:5050"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
     restart: unless-stopped
 
   bot:
@@ -109,7 +116,43 @@ services:
     ports:
       - "9200:9200"
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    depends_on:
+      - jaeger
+      - backend
+    volumes:
+      - ./backend/deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: yardpass-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - elasticsearch
+      - jaeger
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./backend/deployment/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3030:3000"
+
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 

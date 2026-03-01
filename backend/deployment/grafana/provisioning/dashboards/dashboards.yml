@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: YardPass
+    orgId: 1
+    folder: YardPass
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

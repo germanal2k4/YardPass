@@ -28,10 +28,10 @@ lint:
 	@golangci-lint run
 
 migrate-up:
-	@./scripts/migrate.sh
+	@go run ./cmd/migrate up
 
 migrate-down:
-	@./scripts/rollback.sh
+	@go run ./cmd/migrate down-to 0
 
 clean:
 	@rm -rf bin/

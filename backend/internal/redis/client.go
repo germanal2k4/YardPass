@@ -111,9 +111,10 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	start := time.Now()
 	result, err := c.rdb.Get(ctx, key).Result()
 	c.observe("get", start, err)
-	if err == redis.Nil {
+	switch err {
+	case redis.Nil:
 		c.cacheTotal.WithLabelValues("miss").Inc()
-	} else if err == nil {
+	case nil:
 		c.cacheTotal.WithLabelValues("hit").Inc()
 	}
 	return result, err

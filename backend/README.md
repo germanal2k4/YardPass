@@ -8,12 +8,14 @@ YardPass позволяет жителям создавать временные
 
 ## Технологии
 
-- **Go 1.22+**
+- **Go 1.25+**
 - **Gin** - HTTP framework
 - **PostgreSQL 15+** - основная БД
 - **Redis** - кеш, rate limiting, состояния бота
 - **JWT** - аутентификация для веб-пользователей
 - **Telegram Bot API** - бот для жителей
+- **goose** (pressly/goose) - версионирование и применение миграций БД
+- **sqlc** - генерация типобезопасного Go-кода из SQL-запросов
 
 ## Структура проекта
 
@@ -21,27 +23,31 @@ YardPass позволяет жителям создавать временные
 /cmd
   /api      - точка входа для HTTP API
   /bot      - точка входа для Telegram бота
+  /migrate  - CLI для управления миграциями (goose)
 /internal
   /auth     - JWT аутентификация
   /config   - конфигурация
-  /domain   - модели и интерфейсы
+  /db       - сгенерированный sqlc-код (модели, запросы, интерфейс Querier)
+  /db/queries - .sql файлы с аннотированными SQL-запросами для sqlc
+  /domain   - доменные модели и интерфейсы репозиториев
   /http     - HTTP handlers, middleware, роуты
-  /observability - логирование
+  /observability - логирование, трейсинг, метрики
   /qr       - генерация QR кодов
   /redis    - Redis клиент
-  /repo     - репозитории для PostgreSQL
+  /repo     - реализации репозиториев (обёртки над sqlc)
   /service  - бизнес-логика
   /telegram - Telegram бот
-/migrations - SQL миграции
+/migrations - SQL миграции (формат goose: up + down в одном файле)
 ```
 
 ## Установка и запуск
 
 ### Требования
 
-- Go 1.22+
+- Go 1.25+
 - PostgreSQL 15+
 - Redis 6+
+- sqlc (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
 
 ### Настройка
 
@@ -72,19 +78,19 @@ SERVICE_TOKEN=your-service-token
 
 5. Создайте базу данных и выполните миграции:
 ```bash
-# Создайте БД
 createdb yardpass
 
-# Выполните миграции (инфраструктурная команда)
-psql -d yardpass -f migrations/001_initial_schema.sql
+# Применить все миграции (goose)
+go run ./cmd/migrate up
+
+# Посмотреть статус
+go run ./cmd/migrate status
 ```
 
-6. Создайте начального пользователя (опционально):
-```sql
-INSERT INTO users (username, password_hash, role) 
-VALUES ('admin', '$2a$10$...', 'admin');
--- Используйте bcrypt для хеширования пароля
-```
+Тестовые пользователи создаются автоматически миграцией 005:
+- `superadmin` / `admin123` (superuser)
+- `admin` / `admin123` (admin)
+- `guard` / `guard123` (guard)
 
 ### Запуск
 
@@ -228,10 +234,39 @@ make lint
 
 ## Разработка
 
+### Миграции БД
+
+Миграции управляются через [goose](https://github.com/pressly/goose).
+Каждый файл в `migrations/` содержит секции `-- +goose Up` и `-- +goose Down`.
+
+```bash
+# Создать новую миграцию
+go run ./cmd/migrate create add_new_feature sql
+
+# Применить все миграции
+go run ./cmd/migrate up
+
+# Откатить последнюю
+go run ./cmd/migrate down
+
+# Статус
+go run ./cmd/migrate status
+```
+
+### Изменение SQL-запросов или схемы
+
+1. Измените/добавьте миграцию в `migrations/`
+2. Обновите SQL-запросы в `internal/db/queries/*.sql`
+3. Перегенерируйте код: `sqlc generate`
+4. При необходимости обновите маппинг в `internal/repo/`
+5. Закоммитьте сгенерированный код вместе с изменениями
+
+CI автоматически проверяет, что `sqlc generate && git diff --exit-code` проходит.
+
 ### Добавление нового endpoint
 
-1. Добавьте handler в `internal/http/handlers/`
-2. Зарегистрируйте роут в `internal/http/router.go`
+1. Добавьте handler в `internal/api/handlers/`
+2. Зарегистрируйте роут в `internal/api/router.go`
 3. Добавьте тесты
 
 ### Добавление новой бизнес-логики

@@ -72,13 +72,14 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 
 	var bID *int64
 
-	if roleStr == "superuser" {
+	switch roleStr {
+	case "superuser":
 		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
 				bID = &id
 			}
 		}
-	} else if roleStr == "admin" || roleStr == "guard" {
+	case "admin", "guard":
 		if buildingID != nil {
 			if id, ok := buildingID.(int64); ok {
 				bID = &id

@@ -60,13 +60,13 @@ func (m *sink) listenToSignal() {
 func (m *sink) reopen() error {
 	file, err := os.OpenFile(m.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to open log file on %s: %w", m.path, err)
+		return fmt.Errorf("open log file on %s: %w", m.path, err)
 	}
 	old := (*os.File)(m.file)
 	atomic.StorePointer(&m.file, unsafe.Pointer(file))
 	if old != nil {
 		if err := old.Close(); err != nil {
-			return fmt.Errorf("failed to close old file: %w", err)
+			return fmt.Errorf("close old file: %w", err)
 		}
 	}
 	return nil

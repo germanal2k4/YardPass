@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/repo/db"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,59 +19,34 @@ func NewBuildingRepo(repo *PostgresRepo) *BuildingRepo {
 
 func (r *BuildingRepo) GetByID(ctx context.Context, id int64) (*domain.Building, error) {
 	ctx = queryNameToContext(ctx, "BuildingRepo.GetByID")
-	query := `
-		SELECT id, name, address, created_at, updated_at
-		FROM buildings
-		WHERE id = $1
-	`
-
-	var building domain.Building
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&building.ID,
-		&building.Name,
-		&building.Address,
-		&building.CreatedAt,
-		&building.UpdatedAt,
-	)
-
+	row, err := r.queries.GetBuildingByID(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &building, nil
+	return buildingFromDB(row), nil
 }
 
-func (r *BuildingRepo) List(ctx context.Context) ([]*domain.Building, error) {
+func (r *BuildingRepo) List(ctx context.Context) ([]domain.Building, error) {
 	ctx = queryNameToContext(ctx, "BuildingRepo.List")
-	query := `
-		SELECT id, name, address, created_at, updated_at
-		FROM buildings
-		ORDER BY name
-	`
-
-	rows, err := r.pool.Query(ctx, query)
+	rows, err := r.queries.ListBuildings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return buildingsFromDB(rows), nil
+}
 
-	var buildings []*domain.Building
-	for rows.Next() {
-		var building domain.Building
-		if err := rows.Scan(
-			&building.ID,
-			&building.Name,
-			&building.Address,
-			&building.CreatedAt,
-			&building.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		buildings = append(buildings, &building)
+func buildingFromDB(b db.Building) *domain.Building {
+	res := domain.Building(b)
+	return &res
+}
+
+func buildingsFromDB(rows []db.Building) []domain.Building {
+	result := make([]domain.Building, len(rows))
+	for i, b := range rows {
+		result[i] = domain.Building(b)
 	}
-
-	return buildings, rows.Err()
+	return result
 }

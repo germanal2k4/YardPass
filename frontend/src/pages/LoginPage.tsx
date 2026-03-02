@@ -164,7 +164,7 @@ export function LoginPage() {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} data-testid="login-form">
             <TextField
               label="Имя пользователя"
               type="text"
@@ -174,6 +174,7 @@ export function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               sx={{ mb: 2 }}
               autoFocus
+              inputProps={{ 'data-testid': 'login-username' }}
             />
 
             <TextField
@@ -184,6 +185,7 @@ export function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               sx={{ mb: 3 }}
+              inputProps={{ 'data-testid': 'login-password' }}
             />
 
             <Button
@@ -193,6 +195,7 @@ export function LoginPage() {
               size="large"
               disabled={isLoading}
               color={role === 'admin' ? 'primary' : 'secondary'}
+              data-testid="login-submit"
               sx={{
                 py: 1.5,
                 fontSize: '1.1rem',

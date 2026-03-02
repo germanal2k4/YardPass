@@ -53,10 +53,10 @@ LIMIT 1;
 SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 FROM passes p
 INNER JOIN apartments a ON p.apartment_id = a.id
-WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE UPPER(REPLACE($1, ' ', ''))
+WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE sqlc.arg('car_plate_pattern')::varchar
   AND (sqlc.narg('filter_building_id')::bigint IS NULL OR a.building_id = sqlc.narg('filter_building_id'))
 ORDER BY p.created_at DESC
-LIMIT $2;
+LIMIT sqlc.arg('max_results')::int;
 
 -- name: CountActiveTodayByApartmentID :one
 SELECT COUNT(*)

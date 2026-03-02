@@ -219,6 +219,7 @@ export function RegistrationPage() {
               sx={{ mb: 2 }}
               helperText="Минимум 6 символов"
               disabled={isLoading || success}
+              inputProps={{ 'data-testid': 'password-input' }}
             />
 
             <TextField
@@ -230,6 +231,7 @@ export function RegistrationPage() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               sx={{ mb: 2 }}
               disabled={isLoading || success}
+              inputProps={{ 'data-testid': 'confirm-password-input' }}
             />
 
             <FormControl fullWidth sx={{ mb: 3 }}>

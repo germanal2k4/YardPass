@@ -426,16 +426,16 @@ const searchPassesByCarPlate = `-- name: SearchPassesByCarPlate :many
 SELECT p.id, p.apartment_id, p.resident_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 FROM passes p
 INNER JOIN apartments a ON p.apartment_id = a.id
-WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE UPPER(REPLACE($1, ' ', ''))
-  AND ($3::bigint IS NULL OR a.building_id = $3)
+WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE $1::varchar
+  AND ($2::bigint IS NULL OR a.building_id = $2)
 ORDER BY p.created_at DESC
-LIMIT $2
+LIMIT $3::int
 `
 
 type SearchPassesByCarPlateParams struct {
-	Replace          string
-	Limit            int32
+	CarPlatePattern  string
 	FilterBuildingID *int64
+	MaxResults       int32
 }
 
 type SearchPassesByCarPlateRow struct {
@@ -452,7 +452,7 @@ type SearchPassesByCarPlateRow struct {
 }
 
 func (q *Queries) SearchPassesByCarPlate(ctx context.Context, arg SearchPassesByCarPlateParams) ([]SearchPassesByCarPlateRow, error) {
-	rows, err := q.db.Query(ctx, searchPassesByCarPlate, arg.Replace, arg.Limit, arg.FilterBuildingID)
+	rows, err := q.db.Query(ctx, searchPassesByCarPlate, arg.CarPlatePattern, arg.FilterBuildingID, arg.MaxResults)
 	if err != nil {
 		return nil, err
 	}

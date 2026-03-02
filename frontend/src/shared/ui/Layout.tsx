@@ -105,6 +105,7 @@ export function Layout({ children, title }: LayoutProps) {
                       color="inherit" 
                       onClick={() => navigate(APP_ROUTES.ADMIN_RULES)}
                       startIcon={<SettingsIcon />}
+                      data-testid="nav-rules"
                       sx={{ 
                         fontWeight: 700,
                         '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
@@ -120,6 +121,7 @@ export function Layout({ children, title }: LayoutProps) {
                       color="inherit" 
                       onClick={() => navigate(APP_ROUTES.ADMIN_RESIDENTS)}
                       startIcon={<PeopleIcon />}
+                      data-testid="nav-residents"
                       sx={{ 
                         fontWeight: 700,
                         '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
@@ -135,6 +137,7 @@ export function Layout({ children, title }: LayoutProps) {
                       color="inherit" 
                       onClick={() => navigate(APP_ROUTES.ADMIN_REPORTS)}
                       startIcon={<AssessmentIcon />}
+                      data-testid="nav-reports"
                       sx={{ 
                         fontWeight: 700,
                         '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
@@ -154,6 +157,7 @@ export function Layout({ children, title }: LayoutProps) {
                   color="inherit" 
                   onClick={logout} 
                   startIcon={<LogoutIcon />}
+                  data-testid="logout-button"
                   sx={{ 
                     fontWeight: 700,
                     '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },

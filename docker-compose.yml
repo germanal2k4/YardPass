@@ -3,14 +3,12 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: yardpass-postgres
     environment:
       POSTGRES_DB: yardpass
       POSTGRES_USER: yardpass
       POSTGRES_PASSWORD: password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     healthcheck:
@@ -21,7 +19,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: yardpass-redis
     volumes:
       - redis_data:/data
     ports:
@@ -32,11 +29,36 @@ services:
       timeout: 3s
       retries: 5
 
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "16686:16686" # jaeger Web UI
+      - "4317:4317" # otel gRPC collector
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+
+  migrate:
+    build:
+      context: ./backend
+      target: migrate
+    environment:
+      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build: 
       context: ./backend
       target: api
-    container_name: yardpass-backend
     environment:
       - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
@@ -55,8 +77,8 @@ services:
       - "8080:8080"
       - "5050:5050"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       jaeger:
@@ -71,7 +93,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: bot
-    container_name: yardpass-bot
     environment:
       - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
@@ -91,7 +112,6 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: yardpass-frontend
     ports:
       - "3000:80"
     environment:
@@ -101,24 +121,8 @@ services:
       - backend
     restart: unless-stopped
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    restart: unless-stopped
-    ports:
-      - "16686:16686" # jaeger Web UI
-      - "4317:4317" # otel gRPC collector
-
-  elasticsearch:
-    image: elasticsearch:7.17.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    ports:
-      - "9200:9200"
-
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus
     restart: unless-stopped
     depends_on:
       - jaeger
@@ -134,7 +138,6 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
-    container_name: yardpass-grafana
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -155,4 +158,3 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
-

@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/helpers';
 import { AdminReportsPage } from '../AdminReportsPage';
+import { reportsApi } from '@/shared/api/reports';
 
 const adminUser = { user_id: 1, role: 'admin' as const, building_id: 1 };
 
@@ -91,6 +92,7 @@ describe('AdminReportsPage', () => {
 
   it('triggers export and creates download link', async () => {
     const user = userEvent.setup();
+    const exportSpy = vi.spyOn(reportsApi, 'exportReport').mockResolvedValueOnce(new Blob(['fake']));
     const appendChildSpy = vi.spyOn(document.body, 'appendChild');
     const removeChildSpy = vi.spyOn(document.body, 'removeChild');
 
@@ -112,6 +114,7 @@ describe('AdminReportsPage', () => {
 
     appendChildSpy.mockRestore();
     removeChildSpy.mockRestore();
+    exportSpy.mockRestore();
   });
 
   it('renders page sections', async () => {
@@ -180,14 +183,7 @@ describe('AdminReportsPage', () => {
 
   it('shows export error on failure', async () => {
     const user = userEvent.setup();
-    const { server } = await import('@/test/msw/server');
-    const { http, HttpResponse } = await import('msw');
-
-    server.use(
-      http.get('http://localhost:8080/api/v1/reports/export', () => {
-        return HttpResponse.json({ error: 'fail' }, { status: 500 });
-      }),
-    );
+    const exportSpy = vi.spyOn(reportsApi, 'exportReport').mockRejectedValueOnce(new Error('Network error'));
 
     renderWithProviders(<AdminReportsPage />, {
       auth: { user: adminUser },
@@ -202,6 +198,8 @@ describe('AdminReportsPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Ошибка при экспорте отчета/)).toBeInTheDocument();
     });
+
+    exportSpy.mockRestore();
   });
 
   it('clicking invalid filter chip switches active filter', async () => {

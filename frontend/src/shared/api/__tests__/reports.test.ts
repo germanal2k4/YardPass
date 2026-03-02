@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { reportsApi } from '../reports';
+import { apiClient } from '../client';
 import { server } from '@/test/msw/server';
 import { http, HttpResponse } from 'msw';
 
@@ -90,20 +91,18 @@ describe('reportsApi', () => {
 
   describe('exportReport', () => {
     it('returns blob for xlsx export', async () => {
+      const fakeBlob = new Blob(['fake-xlsx-data']);
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({ data: fakeBlob });
+
       const result = await reportsApi.exportReport({ format: 'xlsx' });
       expect(result).toBeInstanceOf(Blob);
+
+      getSpy.mockRestore();
     });
 
     it('builds correct URL with format and date params', async () => {
-      let capturedUrl = '';
-      server.use(
-        http.get(`${API_BASE}/api/v1/reports/export`, ({ request }) => {
-          capturedUrl = request.url;
-          return new HttpResponse(new Blob(['data']), {
-            headers: { 'Content-Type': 'application/octet-stream' },
-          });
-        }),
-      );
+      const fakeBlob = new Blob(['fake-xlsx-data']);
+      const getSpy = vi.spyOn(apiClient, 'get').mockResolvedValueOnce({ data: fakeBlob });
 
       await reportsApi.exportReport({
         format: 'xlsx',
@@ -111,8 +110,12 @@ describe('reportsApi', () => {
         to: '2026-12-31T23:59:59Z',
       });
 
-      expect(capturedUrl).toContain('format=xlsx');
-      expect(capturedUrl).toContain('from=2026-01-01T00%3A00%3A00Z');
+      const calledUrl = getSpy.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('format=xlsx');
+      expect(calledUrl).toContain('from=2026-01-01T00%3A00%3A00Z');
+      expect(getSpy.mock.calls[0][1]).toEqual({ responseType: 'blob' });
+
+      getSpy.mockRestore();
     });
   });
 });

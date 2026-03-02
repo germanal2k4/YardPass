@@ -103,7 +103,11 @@ func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {
 		errors.BadRequest(c, "FILE_OPEN_ERROR", err.Error())
 		return
 	}
-	defer src.Close()
+	defer func() {
+		if errClose := src.Close(); errClose != nil {
+			errors.InternalServerError(c, "FILE_OPEN_ERROR", errClose.Error())
+		}
+	}()
 
 	created, importErrors := h.residentService.ImportFromCSV(c.Request.Context(), src, buildingID)
 

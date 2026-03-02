@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 
@@ -40,7 +41,7 @@ Commands passed as arguments:
   version              Print the current migration version
   create NAME sql      Create a new SQL migration file`,
 	Args: cobra.MinimumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		_ = godotenv.Load()
 
 		dsn := rootParams.DSN
@@ -55,12 +56,16 @@ Commands passed as arguments:
 
 		db, err := sql.Open("pgx", dsn)
 		if err != nil {
-			return fmt.Errorf("failed to open database: %w", err)
+			return fmt.Errorf("open database: %w", err)
 		}
-		defer db.Close()
+		defer func() {
+			if errClose := db.Close(); errClose != nil {
+				err = errors.Join(err, fmt.Errorf("close database: %w", errClose))
+			}
+		}()
 
 		if err := db.Ping(); err != nil {
-			return fmt.Errorf("failed to connect to database: %w", err)
+			return fmt.Errorf("connect to database: %w", err)
 		}
 
 		goose.SetTableName("goose_db_version")

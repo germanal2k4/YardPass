@@ -679,32 +679,38 @@ func (b *Bot) sendPhoto(ctx context.Context, chatID int64, photo []byte, caption
 	writer := multipart.NewWriter(body)
 
 	if err := writer.WriteField("chat_id", strconv.FormatInt(chatID, 10)); err != nil {
-		return fmt.Errorf("failed to write chat_id field: %w", err)
+		return fmt.Errorf("write chat_id field: %w", err)
 	}
 	if err := writer.WriteField("caption", caption); err != nil {
-		return fmt.Errorf("failed to write caption field: %w", err)
+		return fmt.Errorf("write caption field: %w", err)
 	}
 
 	part, err := writer.CreateFormFile("photo", "qr.png")
 	if err != nil {
-		return fmt.Errorf("failed to create form file: %w", err)
+		return fmt.Errorf("create form file: %w", err)
 	}
 	if _, err := part.Write(photo); err != nil {
-		return fmt.Errorf("failed to write photo: %w", err)
+		return fmt.Errorf("write photo: %w", err)
 	}
-	writer.Close()
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close multipart writer: %w", err)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			b.logger.Error("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
@@ -734,21 +740,25 @@ func (b *Bot) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
 	url := fmt.Sprintf("%s/getUpdates", b.apiURL)
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+		return nil, fmt.Errorf("marshal payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.apiErrorsTotal.WithLabelValues("getUpdates", "500").Inc()
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			b.logger.Error("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		b.apiErrorsTotal.WithLabelValues("getUpdates", strconv.Itoa(resp.StatusCode)).Inc()
@@ -762,7 +772,7 @@ func (b *Bot) GetUpdates(ctx context.Context, offset int64) ([]Update, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
 	if !result.OK {
@@ -793,21 +803,25 @@ func (b *Bot) callAPI(ctx context.Context, method string, payload map[string]int
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return fmt.Errorf("marshal payload: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		b.apiErrorsTotal.WithLabelValues(method, "500").Inc()
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			b.logger.Error("Failed to close response body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		b.apiErrorsTotal.WithLabelValues(method, strconv.Itoa(resp.StatusCode)).Inc()

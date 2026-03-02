@@ -38,7 +38,7 @@ func NewLogger(lf fx.Lifecycle, cfg config.LogConfig) (*zap.Logger, error) {
 	if cfg.Transport == fileTransport {
 		fileTransport, err := getFileTransport(info)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get file transport for logger: %w", err)
+			return nil, fmt.Errorf("get file transport for logger: %w", err)
 		}
 
 		cores = append(cores, fileTransport.core)
@@ -48,7 +48,7 @@ func NewLogger(lf fx.Lifecycle, cfg config.LogConfig) (*zap.Logger, error) {
 	if cfg.Transport == elasticTransport {
 		elasticTransport, err := getElasticTransport(info)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get elastic transport for logger: %w", err)
+			return nil, fmt.Errorf("get elastic transport for logger: %w", err)
 		}
 
 		cores = append(cores, elasticTransport.core)

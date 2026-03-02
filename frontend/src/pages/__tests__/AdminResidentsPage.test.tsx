@@ -113,7 +113,9 @@ describe('AdminResidentsPage', () => {
       });
 
       const textarea = screen.getByRole('textbox');
-      await user.type(textarea, 'not valid json');
+      await user.clear(textarea);
+      await user.click(textarea);
+      await user.paste('not valid json');
       await user.click(screen.getByRole('button', { name: /^Создать$/i }));
 
       await waitFor(() => {

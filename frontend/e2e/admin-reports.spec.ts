@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Admin Reports Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,14 +8,14 @@ test.describe('Admin Reports Page', () => {
     await page.getByRole('button', { name: /Войти/i }).click();
     await expect(page).toHaveURL(/\/admin/);
 
-    await page.getByText('Отчеты').click();
+    await page.getByTestId('nav-reports').click();
     await expect(page).toHaveURL(/\/admin\/reports/);
   });
 
   test('displays statistics cards', async ({ page }) => {
     await expect(page.getByText('Всего сканирований')).toBeVisible();
-    await expect(page.getByText('Действительных')).toBeVisible();
-    await expect(page.getByText('Недействительных')).toBeVisible();
+    await expect(page.getByText('Действительных', { exact: true })).toBeVisible();
+    await expect(page.getByText('Недействительных', { exact: true })).toBeVisible();
     await expect(page.getByText('Уникальных пропусков')).toBeVisible();
   });
 
@@ -34,9 +34,9 @@ test.describe('Admin Reports Page', () => {
   });
 
   test('has result filter chips', async ({ page }) => {
-    await expect(page.getByText('Все')).toBeVisible();
-    await expect(page.getByText('Действительные')).toBeVisible();
-    await expect(page.getByText('Недействительные')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Все' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Действительные', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Недействительные' })).toBeVisible();
   });
 
   test('shows refresh and export buttons', async ({ page }) => {
@@ -54,10 +54,9 @@ test.describe('Admin Reports Page', () => {
   });
 
   test('filter chips change active state', async ({ page }) => {
-    const validChip = page.getByText('Действительные');
+    const validChip = page.getByRole('button', { name: 'Действительные', exact: true });
     await validChip.click();
 
-    // Chip should visually change (MUI gives it a color class)
     await expect(validChip).toBeVisible();
   });
 

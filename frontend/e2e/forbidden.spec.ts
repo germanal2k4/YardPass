@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Access control', () => {
   test('unauthenticated user is redirected to login from /security', async ({ page }) => {

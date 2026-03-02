@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Admin Residents Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -8,7 +8,7 @@ test.describe('Admin Residents Page', () => {
     await page.getByRole('button', { name: /Войти/i }).click();
     await expect(page).toHaveURL(/\/admin/);
 
-    await page.getByText('Жители').click();
+    await page.getByTestId('nav-residents').click();
     await expect(page).toHaveURL(/\/admin\/residents/);
   });
 

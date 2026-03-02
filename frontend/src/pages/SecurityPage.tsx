@@ -155,6 +155,7 @@ export function SecurityPage() {
             size="medium"
             autoComplete="off"
             disabled={validateMutation.isPending}
+            inputProps={{ 'data-testid': 'qr-input' }}
             InputProps={{
               endAdornment: validateMutation.isPending && <CircularProgress size={24} sx={{ color: '#FF6D00' }} />,
               style: { fontSize: '1.1rem', padding: '16px' },

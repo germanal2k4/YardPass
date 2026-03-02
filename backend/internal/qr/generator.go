@@ -19,7 +19,7 @@ func (g *Generator) GenerateQR(ctx context.Context, passID uuid.UUID) ([]byte, e
 
 	png, err := qrcode.Encode(qrData, qrcode.Medium, 256)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate QR code: %w", err)
+		return nil, fmt.Errorf("generate QR code: %w", err)
 	}
 
 	return png, nil

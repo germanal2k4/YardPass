@@ -77,13 +77,13 @@ func (s *JWTService) Login(ctx context.Context, username, password string) (*dom
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
 	refreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
 	s.authOps.WithLabelValues("login", "success").Inc()
@@ -121,13 +121,13 @@ func (s *JWTService) RefreshToken(ctx context.Context, refreshToken string) (*do
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, fmt.Errorf("failed to generate access token: %w", err)
+		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
 	newRefreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+		return nil, fmt.Errorf("generate refresh token: %w", err)
 	}
 
 	s.authOps.WithLabelValues("refresh", "success").Inc()

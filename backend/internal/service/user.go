@@ -44,7 +44,7 @@ func NewUserService(userRepo domain.UserRepository, buildingRepo domain.Building
 func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserRequest, createdBy int64) (*domain.User, error) {
 	creator, err := s.userRepo.GetByID(ctx, createdBy)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get creator: %w", err)
+		return nil, fmt.Errorf("get creator: %w", err)
 	}
 	if creator == nil {
 		return nil, errors.New("creator not found")
@@ -65,7 +65,7 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 		building, err := s.buildingRepo.GetByID(ctx, *req.BuildingID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get building: %w", err)
+			return nil, fmt.Errorf("get building: %w", err)
 		}
 		if building == nil {
 			return nil, errors.New("building not found")
@@ -80,7 +80,7 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check username: %w", err)
+		return nil, fmt.Errorf("check username: %w", err)
 	}
 	if existing != nil {
 		return nil, errors.New("username already exists")
@@ -88,7 +88,7 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
 	user := &domain.User{
@@ -102,7 +102,7 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		s.opsTotal.WithLabelValues("register", "error").Inc()
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	s.opsTotal.WithLabelValues("register", "success").Inc()

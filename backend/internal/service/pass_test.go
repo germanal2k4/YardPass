@@ -26,9 +26,9 @@ func (m *MockPassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPla
 	return args.Get(0).(*domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]domain.Pass, error) {
 	args := m.Called(ctx, residentID)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 func (m *MockPassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
@@ -39,14 +39,14 @@ func (m *MockPassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass,
 	return args.Get(0).(*domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]domain.Pass, error) {
 	args := m.Called(ctx, apartmentID, status)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
 	args := m.Called(ctx, apartmentID)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 func (m *MockPassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
@@ -74,14 +74,14 @@ func (m *MockPassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
-func (m *MockPassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
 	args := m.Called(ctx, buildingID)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
+func (m *MockPassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]domain.Pass, error) {
 	args := m.Called(ctx, carPlate, buildingID, limit)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 type MockApartmentRepo struct {
@@ -96,9 +96,9 @@ func (m *MockApartmentRepo) GetByID(ctx context.Context, id int64) (*domain.Apar
 	return args.Get(0).(*domain.Apartment), args.Error(1)
 }
 
-func (m *MockApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Apartment, error) {
+func (m *MockApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]domain.Apartment, error) {
 	args := m.Called(ctx, buildingID)
-	return args.Get(0).([]*domain.Apartment), args.Error(1)
+	return args.Get(0).([]domain.Apartment), args.Error(1)
 }
 
 func (m *MockApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegramID int64) (*domain.Apartment, error) {
@@ -140,9 +140,9 @@ func (m *MockScanEventRepo) Create(ctx context.Context, event *domain.ScanEvent)
 	return args.Error(0)
 }
 
-func (m *MockScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]*domain.ScanEvent, error) {
+func (m *MockScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]domain.ScanEvent, error) {
 	args := m.Called(ctx, filters)
-	return args.Get(0).([]*domain.ScanEvent), args.Error(1)
+	return args.Get(0).([]domain.ScanEvent), args.Error(1)
 }
 
 func (m *MockScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
@@ -150,9 +150,9 @@ func (m *MockScanEventRepo) CountValidScansToday(ctx context.Context) (int, erro
 	return args.Int(0), args.Error(1)
 }
 
-func (m *MockScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*domain.ScanEventWithDetails, error) {
+func (m *MockScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]domain.ScanEventWithDetails, error) {
 	args := m.Called(ctx, filters, buildingID)
-	return args.Get(0).([]*domain.ScanEventWithDetails), args.Error(1)
+	return args.Get(0).([]domain.ScanEventWithDetails), args.Error(1)
 }
 
 func (m *MockScanEventRepo) GetStatistics(ctx context.Context, from *time.Time, to *time.Time, buildingID *int64) (*domain.Statistics, error) {

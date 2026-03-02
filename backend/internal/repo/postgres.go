@@ -10,8 +10,10 @@ import (
 	"yardpass/internal/observability/logger"
 	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
+	"yardpass/internal/repo/db"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
@@ -19,11 +21,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+
+	"github.com/google/uuid"
 )
 
 type PostgresRepo struct {
 	cfg     config.PGConfig
 	pool    *pgxpool.Pool
+	queries *db.Queries
 	logger  *zap.Logger
 	t       *tracer.Tracer
 	metrics *metrics.Metrics
@@ -104,6 +109,7 @@ func (r *PostgresRepo) Start(ctx context.Context) error {
 	}
 
 	r.pool = pool
+	r.queries = db.New(pool)
 
 	registry.MustRegister(
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{
@@ -220,4 +226,26 @@ func queryNameFromContext(ctx context.Context) string {
 	}
 
 	return ""
+}
+
+func uuidToPgtype(id *uuid.UUID) pgtype.UUID {
+	if id == nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: *id, Valid: true}
+}
+
+func timeToPgtypeTimestamp(t *time.Time) pgtype.Timestamp {
+	if t == nil {
+		return pgtype.Timestamp{}
+	}
+	return pgtype.Timestamp{Time: *t, Valid: true}
+}
+
+func intToInt32Ptr(v int) *int32 {
+	if v == 0 {
+		return nil
+	}
+	i := int32(v)
+	return &i
 }

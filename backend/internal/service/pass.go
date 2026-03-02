@@ -89,7 +89,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get apartment: %w", err)
+		return nil, fmt.Errorf("get apartment: %w", err)
 	}
 	if apartment == nil {
 		return nil, errors.New("apartment not found")
@@ -97,7 +97,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rules: %w", err)
+		return nil, fmt.Errorf("get rules: %w", err)
 	}
 	if rule == nil {
 		rule = &domain.Rule{
@@ -118,9 +118,9 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	count, err := s.passRepo.CountActiveTodayByResidentID(ctx, *req.ResidentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check daily limit: %w", err)
+		return nil, fmt.Errorf("check daily limit: %w", err)
 	}
-	if count >= rule.DailyPassLimitPerApartment {
+	if count >= int(rule.DailyPassLimitPerApartment) {
 		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
 		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
 	}
@@ -145,7 +145,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	if err := s.passRepo.Create(ctx, pass); err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
-		return nil, fmt.Errorf("failed to create pass: %w", err)
+		return nil, fmt.Errorf("create pass: %w", err)
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
@@ -177,7 +177,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pass: %w", err)
+		return nil, fmt.Errorf("get pass: %w", err)
 	}
 
 	if pass == nil {
@@ -203,7 +203,7 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 
 	pass, err := s.passRepo.GetActiveByCarPlate(ctx, normalizedCarPlate, buildingID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pass by car plate: %w", err)
+		return nil, fmt.Errorf("get pass by car plate: %w", err)
 	}
 
 	result := &domain.PassValidationResult{
@@ -284,7 +284,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return fmt.Errorf("failed to get pass: %w", err)
+		return fmt.Errorf("get pass: %w", err)
 	}
 	if pass == nil {
 		return errors.New("pass not found")
@@ -296,7 +296,7 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 
 	if err := s.passRepo.Revoke(ctx, passID); err != nil {
 		s.opsTotal.WithLabelValues("revoke", "error").Inc()
-		return fmt.Errorf("failed to revoke pass: %w", err)
+		return fmt.Errorf("revoke pass: %w", err)
 	}
 
 	s.opsTotal.WithLabelValues("revoke", "success").Inc()
@@ -314,19 +314,19 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 	return nil
 }
 
-func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByApartmentID(ctx, apartmentID)
 }
 
-func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByResidentID(ctx, residentID)
 }
 
-func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByBuildingID(ctx, buildingID)
 }
 
-func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*domain.Pass, error) {
+func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]domain.Pass, error) {
 	return s.passRepo.SearchByCarPlate(ctx, carPlate, buildingID, 50)
 }
 

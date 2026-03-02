@@ -58,7 +58,7 @@ func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo do
 func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateResidentRequest) (*domain.Resident, error) {
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get apartment: %w", err)
+		return nil, fmt.Errorf("get apartment: %w", err)
 	}
 	if apartment == nil {
 		return nil, errors.New("apartment not found")
@@ -66,7 +66,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 
 	existing, err := s.residentRepo.GetByTelegramID(ctx, req.TelegramID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check telegram_id: %w", err)
+		return nil, fmt.Errorf("check telegram_id: %w", err)
 	}
 
 	chatID := req.TelegramID
@@ -81,7 +81,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 		existing.Phone = req.Phone
 		if err := s.residentRepo.Update(ctx, existing); err != nil {
 			s.opsTotal.WithLabelValues("update", "error").Inc()
-			return nil, fmt.Errorf("failed to update resident: %w", err)
+			return nil, fmt.Errorf("update resident: %w", err)
 		}
 		s.opsTotal.WithLabelValues("update", "success").Inc()
 		return existing, nil
@@ -98,15 +98,15 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 
 	if err := s.residentRepo.Create(ctx, resident); err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
-		return nil, fmt.Errorf("failed to create resident: %w", err)
+		return nil, fmt.Errorf("create resident: %w", err)
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
 	return resident, nil
 }
 
-func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]*domain.Resident, []domain.BulkCreateError) {
-	var residents []*domain.Resident
+func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]domain.Resident, []domain.BulkCreateError) {
+	var residents []domain.Resident
 	var createErrors []domain.BulkCreateError
 
 	for i, req := range requests {
@@ -118,7 +118,7 @@ func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []do
 			})
 			continue
 		}
-		residents = append(residents, resident)
+		residents = append(residents, *resident)
 	}
 
 	return residents, createErrors
@@ -130,7 +130,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	records, err := csvReader.ReadAll()
 	if err != nil {
-		return 0, []error{fmt.Errorf("failed to read CSV: %w", err)}
+		return 0, []error{fmt.Errorf("read CSV: %w", err)}
 	}
 
 	if len(records) < 2 {
@@ -253,14 +253,14 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	return len(residents), errorList
 }
 
-func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
+func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	return s.residentRepo.List(ctx, filters)
 }
 
 func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
 	resident, err := s.residentRepo.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("failed to get resident: %w", err)
+		return fmt.Errorf("get resident: %w", err)
 	}
 	if resident == nil {
 		return errors.New("resident not found")
@@ -268,7 +268,7 @@ func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
 
 	if err := s.residentRepo.Delete(ctx, id); err != nil {
 		s.opsTotal.WithLabelValues("delete", "error").Inc()
-		return fmt.Errorf("failed to delete resident: %w", err)
+		return fmt.Errorf("delete resident: %w", err)
 	}
 
 	s.opsTotal.WithLabelValues("delete", "success").Inc()

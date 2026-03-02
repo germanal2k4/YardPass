@@ -56,13 +56,14 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 
 	var bID *int64
 
-	if roleStr == "superuser" {
+	switch roleStr {
+	case "superuser":
 		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
 				bID = &id
 			}
 		}
-	} else if roleStr == "admin" || roleStr == "guard" {
+	case "admin", "guard":
 		if buildingID != nil {
 			if id, ok := buildingID.(int64); ok {
 				bID = &id
@@ -125,13 +126,14 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 
 	var bID *int64
 
-	if roleStr == "superuser" {
+	switch roleStr {
+	case "superuser":
 		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
 				bID = &id
 			}
 		}
-	} else if roleStr == "admin" || roleStr == "guard" {
+	case "admin", "guard":
 		if buildingID != nil {
 			if id, ok := buildingID.(int64); ok {
 				bID = &id
@@ -189,17 +191,21 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
 			return
 		}
-		if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), event.CarPlate); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
-			return
+		if event.CarPlate != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), *event.CarPlate); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber); err != nil {
 			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
 			return
 		}
-		if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), event.GuardUsername); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
-			return
+		if event.GuardUsername != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuardUsername); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 		if event.Reason != nil {
 			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {

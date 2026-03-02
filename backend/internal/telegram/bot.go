@@ -144,7 +144,7 @@ func NewBot(
 
 func (b *Bot) Start(ctx context.Context) error {
 	if err := b.SetMyCommands(ctx); err != nil {
-		return fmt.Errorf("failed to set bot commands: %w", err)
+		return fmt.Errorf("set bot commands: %w", err)
 	}
 
 	b.logger.Info("Bot commands menu set successfully")

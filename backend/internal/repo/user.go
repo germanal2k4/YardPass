@@ -2,9 +2,9 @@ package repo
 
 import (
 	"context"
-	"fmt"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/repo/db"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -19,171 +19,91 @@ func NewUserRepo(repo *PostgresRepo) *UserRepo {
 
 func (r *UserRepo) GetByID(ctx context.Context, id int64) (*domain.User, error) {
 	ctx = queryNameToContext(ctx, "UserRepo.GetByID")
-	query := `
-		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
-		FROM users
-		WHERE id = $1
-	`
-
-	var user domain.User
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&user.ID,
-		&user.Username,
-		&user.Email,
-		&user.PasswordHash,
-		&user.Role,
-		&user.BuildingID,
-		&user.Status,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
+	row, err := r.queries.GetUserByID(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &user, nil
+	return userFromGetByIDRow(row), nil
 }
 
 func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*domain.User, error) {
 	ctx = queryNameToContext(ctx, "UserRepo.GetByUsername")
-	query := `
-		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
-		FROM users
-		WHERE username = $1
-	`
-
-	var user domain.User
-	err := r.pool.QueryRow(ctx, query, username).Scan(
-		&user.ID,
-		&user.Username,
-		&user.Email,
-		&user.PasswordHash,
-		&user.Role,
-		&user.BuildingID,
-		&user.Status,
-		&user.CreatedAt,
-		&user.UpdatedAt,
-	)
-
+	row, err := r.queries.GetUserByUsername(ctx, username)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &user, nil
+	return userFromGetByUsernameRow(row), nil
 }
 
 func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
 	ctx = queryNameToContext(ctx, "UserRepo.Create")
-	query := `
-		INSERT INTO users (username, email, password_hash, role, building_id, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at, updated_at
-	`
-
-	err := r.pool.QueryRow(ctx, query,
-		user.Username,
-		user.Email,
-		user.PasswordHash,
-		user.Role,
-		user.BuildingID,
-		user.Status,
-	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
-
-	return err
+	row, err := r.queries.CreateUser(ctx, db.CreateUserParams{
+		Username:     user.Username,
+		Email:        user.Email,
+		PasswordHash: user.PasswordHash,
+		Role:         user.Role,
+		BuildingID:   user.BuildingID,
+		Status:       user.Status,
+	})
+	if err != nil {
+		return err
+	}
+	user.ID = row.ID
+	user.CreatedAt = row.CreatedAt
+	user.UpdatedAt = row.UpdatedAt
+	return nil
 }
 
 func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
 	ctx = queryNameToContext(ctx, "UserRepo.Update")
-	query := `
-		UPDATE users
-		SET username = $2, email = $3, password_hash = $4, role = $5, building_id = $6, status = $7
-		WHERE id = $1
-		RETURNING updated_at
-	`
-
-	return r.pool.QueryRow(ctx, query,
-		user.ID,
-		user.Username,
-		user.Email,
-		user.PasswordHash,
-		user.Role,
-		user.BuildingID,
-		user.Status,
-	).Scan(&user.UpdatedAt)
+	updatedAt, err := r.queries.UpdateUser(ctx, db.UpdateUserParams{
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        user.Email,
+		PasswordHash: user.PasswordHash,
+		Role:         user.Role,
+		BuildingID:   user.BuildingID,
+		Status:       user.Status,
+	})
+	if err != nil {
+		return err
+	}
+	user.UpdatedAt = updatedAt
+	return nil
 }
 
-func (r *UserRepo) List(ctx context.Context, filters domain.UserFilters) ([]*domain.User, error) {
+func (r *UserRepo) List(ctx context.Context, filters domain.UserFilters) ([]domain.User, error) {
 	ctx = queryNameToContext(ctx, "UserRepo.List")
-	query := `
-		SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
-		FROM users
-		WHERE 1=1
-	`
-	args := []interface{}{}
-	argPos := 1
-
-	if filters.Role != nil {
-		query += fmt.Sprintf(` AND role = $%d`, argPos)
-		args = append(args, *filters.Role)
-		argPos++
-	}
-
-	if filters.BuildingID != nil {
-		query += fmt.Sprintf(` AND building_id = $%d`, argPos)
-		args = append(args, *filters.BuildingID)
-		argPos++
-	}
-
-	if filters.Status != nil {
-		query += fmt.Sprintf(` AND status = $%d`, argPos)
-		args = append(args, *filters.Status)
-		argPos++
-	}
-
-	query += ` ORDER BY created_at DESC`
-
-	if filters.Limit > 0 {
-		query += fmt.Sprintf(` LIMIT $%d`, argPos)
-		args = append(args, filters.Limit)
-		argPos++
-	}
-
-	if filters.Offset > 0 {
-		query += fmt.Sprintf(` OFFSET $%d`, argPos)
-		args = append(args, filters.Offset)
-	}
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.queries.ListUsers(ctx, db.ListUsersParams{
+		FilterRole:       filters.Role,
+		FilterBuildingID: filters.BuildingID,
+		FilterStatus:     filters.Status,
+		MaxResults:       intToInt32Ptr(filters.Limit),
+		ResultsOffset:    intToInt32Ptr(filters.Offset),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var users []*domain.User
-	for rows.Next() {
-		var user domain.User
-		if err := rows.Scan(
-			&user.ID,
-			&user.Username,
-			&user.Email,
-			&user.PasswordHash,
-			&user.Role,
-			&user.BuildingID,
-			&user.Status,
-			&user.CreatedAt,
-			&user.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		users = append(users, &user)
+	users := make([]domain.User, len(rows))
+	for i, row := range rows {
+		users[i] = domain.User(row)
 	}
+	return users, nil
+}
 
-	return users, rows.Err()
+func userFromGetByIDRow(row db.GetUserByIDRow) *domain.User {
+	res := domain.User(row)
+	return &res
+}
+
+func userFromGetByUsernameRow(row db.GetUserByUsernameRow) *domain.User {
+	res := domain.User(row)
+	return &res
 }

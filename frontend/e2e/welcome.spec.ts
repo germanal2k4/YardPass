@@ -1,12 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Welcome Page – Role Selection', () => {
   test('displays branding and role selection cards', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('YardPass')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'YardPass' })).toBeVisible();
     await expect(page.getByText('Система управления пропусками')).toBeVisible();
     await expect(page.getByText('Охрана')).toBeVisible();
-    await expect(page.getByText('Администратор')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Администратор' })).toBeVisible();
   });
 
   test('guard card navigates to login with role=guard', async ({ page }) => {

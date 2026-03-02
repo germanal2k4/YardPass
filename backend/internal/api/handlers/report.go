@@ -189,17 +189,21 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
 			return
 		}
-		if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), event.CarPlate); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
-			return
+		if event.CarPlate != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), *event.CarPlate); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber); err != nil {
 			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
 			return
 		}
-		if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), event.GuardUsername); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
-			return
+		if event.GuardUsername != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuardUsername); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 		if event.Reason != nil {
 			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {

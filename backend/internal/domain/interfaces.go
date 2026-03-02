@@ -9,12 +9,12 @@ import (
 
 type BuildingRepository interface {
 	GetByID(ctx context.Context, id int64) (*Building, error)
-	List(ctx context.Context) ([]*Building, error)
+	List(ctx context.Context) ([]Building, error)
 }
 
 type ApartmentRepository interface {
 	GetByID(ctx context.Context, id int64) (*Apartment, error)
-	GetByBuildingID(ctx context.Context, buildingID int64) ([]*Apartment, error)
+	GetByBuildingID(ctx context.Context, buildingID int64) ([]Apartment, error)
 	GetByResidentTelegramID(ctx context.Context, telegramID int64) (*Apartment, error)
 }
 
@@ -24,8 +24,8 @@ type ResidentRepository interface {
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
 	Delete(ctx context.Context, id int64) error
-	BulkCreate(ctx context.Context, residents []*Resident) error
-	List(ctx context.Context, filters ResidentFilters) ([]*Resident, error)
+	BulkCreate(ctx context.Context, residents []Resident) error
+	List(ctx context.Context, filters ResidentFilters) ([]Resident, error)
 }
 
 type ResidentFilters struct {
@@ -38,12 +38,12 @@ type ResidentFilters struct {
 
 type PassRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Pass, error)
-	GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*Pass, error)
-	GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*Pass, error)
-	GetActiveByResidentID(ctx context.Context, residentID int64) ([]*Pass, error)
-	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*Pass, error)
+	GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]Pass, error)
+	GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]Pass, error)
+	GetActiveByResidentID(ctx context.Context, residentID int64) ([]Pass, error)
+	GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]Pass, error)
 	GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*Pass, error)
-	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
+	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
 	CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error)
 	Create(ctx context.Context, pass *Pass) error
@@ -53,9 +53,9 @@ type PassRepository interface {
 
 type ScanEventRepository interface {
 	Create(ctx context.Context, event *ScanEvent) error
-	List(ctx context.Context, filters ScanEventFilters) ([]*ScanEvent, error)
+	List(ctx context.Context, filters ScanEventFilters) ([]ScanEvent, error)
 	CountValidScansToday(ctx context.Context) (int, error)
-	GetEventsWithDetails(ctx context.Context, filters ScanEventFilters, buildingID *int64) ([]*ScanEventWithDetails, error)
+	GetEventsWithDetails(ctx context.Context, filters ScanEventFilters, buildingID *int64) ([]ScanEventWithDetails, error)
 	GetStatistics(ctx context.Context, from *time.Time, to *time.Time, buildingID *int64) (*Statistics, error)
 }
 
@@ -71,12 +71,12 @@ type ScanEventWithDetails struct {
 	ID              int64
 	PassID          uuid.UUID
 	GuardUserID     int64
-	GuardUsername   string
+	GuardUsername   *string
 	ScannedAt       time.Time
 	Result          string
 	Reason          *string
-	Meta            *string
-	CarPlate        string
+	Meta            []byte
+	CarPlate        *string
 	ApartmentNumber string
 	BuildingID      int64
 }
@@ -102,7 +102,7 @@ type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, user *User) error
-	List(ctx context.Context, filters UserFilters) ([]*User, error)
+	List(ctx context.Context, filters UserFilters) ([]User, error)
 }
 
 type UserFilters struct {

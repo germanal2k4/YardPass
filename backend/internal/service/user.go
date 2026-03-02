@@ -120,6 +120,6 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 	return user, nil
 }
 
-func (s *UserService) ListUsers(ctx context.Context, filters domain.UserFilters) ([]*domain.User, error) {
+func (s *UserService) ListUsers(ctx context.Context, filters domain.UserFilters) ([]domain.User, error) {
 	return s.userRepo.List(ctx, filters)
 }

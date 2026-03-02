@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/repo/db"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,91 +19,46 @@ func NewApartmentRepo(repo *PostgresRepo) *ApartmentRepo {
 
 func (r *ApartmentRepo) GetByID(ctx context.Context, id int64) (*domain.Apartment, error) {
 	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByID")
-	query := `
-		SELECT id, building_id, number, floor, created_at, updated_at
-		FROM apartments
-		WHERE id = $1
-	`
-
-	var apartment domain.Apartment
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&apartment.ID,
-		&apartment.BuildingID,
-		&apartment.Number,
-		&apartment.Floor,
-		&apartment.CreatedAt,
-		&apartment.UpdatedAt,
-	)
-
+	row, err := r.queries.GetApartmentByID(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &apartment, nil
+	return apartmentFromDB(row), nil
 }
 
-func (r *ApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Apartment, error) {
+func (r *ApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]domain.Apartment, error) {
 	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByBuildingID")
-	query := `
-		SELECT id, building_id, number, floor, created_at, updated_at
-		FROM apartments
-		WHERE building_id = $1
-		ORDER BY number
-	`
-
-	rows, err := r.pool.Query(ctx, query, buildingID)
+	rows, err := r.queries.GetApartmentsByBuildingID(ctx, buildingID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var apartments []*domain.Apartment
-	for rows.Next() {
-		var apartment domain.Apartment
-		if err := rows.Scan(
-			&apartment.ID,
-			&apartment.BuildingID,
-			&apartment.Number,
-			&apartment.Floor,
-			&apartment.CreatedAt,
-			&apartment.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		apartments = append(apartments, &apartment)
-	}
-
-	return apartments, rows.Err()
+	return apartmentsFromDB(rows), nil
 }
 
 func (r *ApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegramID int64) (*domain.Apartment, error) {
 	ctx = queryNameToContext(ctx, "ApartmentRepo.GetByResidentTelegramID")
-	query := `
-		SELECT a.id, a.building_id, a.number, a.floor, a.created_at, a.updated_at
-		FROM apartments a
-		INNER JOIN residents r ON a.id = r.apartment_id
-		WHERE r.telegram_id = $1
-	`
-
-	var apartment domain.Apartment
-	err := r.pool.QueryRow(ctx, query, telegramID).Scan(
-		&apartment.ID,
-		&apartment.BuildingID,
-		&apartment.Number,
-		&apartment.Floor,
-		&apartment.CreatedAt,
-		&apartment.UpdatedAt,
-	)
-
+	row, err := r.queries.GetApartmentByResidentTelegramID(ctx, telegramID)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	return apartmentFromDB(row), nil
+}
 
-	return &apartment, nil
+func apartmentFromDB(a db.Apartment) *domain.Apartment {
+	res := domain.Apartment(a)
+	return &res
+}
+
+func apartmentsFromDB(rows []db.Apartment) []domain.Apartment {
+	result := make([]domain.Apartment, len(rows))
+	for i, a := range rows {
+		result[i] = domain.Apartment(a)
+	}
+	return result
 }

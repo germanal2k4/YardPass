@@ -160,7 +160,7 @@ func (h *PassHandler) GetActive(c *gin.Context) {
 	role, _ := c.Get("role")
 	buildingID, _ := c.Get("building_id")
 
-	var passes []*domain.Pass
+	var passes []domain.Pass
 	var err error
 
 	if role == "guard" && buildingID != nil {

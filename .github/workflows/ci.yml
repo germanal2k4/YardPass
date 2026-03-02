@@ -21,11 +21,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache-dependency-path: backend/go.sum
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Install sqlc
+        run: go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
+      - name: Validate sqlc (schema ↔ code consistency)
+        run: |
+          sqlc generate
+          git diff --exit-code -- backend/internal/repo/db/
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6

@@ -9,7 +9,7 @@ import (
 type Building struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
-	Address   string    `json:"address"`
+	Address   *string   `json:"address,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -18,7 +18,7 @@ type Apartment struct {
 	ID         int64     `json:"id"`
 	BuildingID int64     `json:"building_id"`
 	Number     string    `json:"number"`
-	Floor      *int      `json:"floor,omitempty"`
+	Floor      *int32    `json:"floor,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
@@ -55,7 +55,7 @@ type ScanEvent struct {
 	ScannedAt   time.Time `json:"scanned_at"`
 	Result      string    `json:"result"`
 	Reason      *string   `json:"reason,omitempty"`
-	Meta        *string   `json:"meta,omitempty"`
+	Meta        []byte    `json:"meta,omitempty"`
 }
 
 type Rule struct {
@@ -63,8 +63,8 @@ type Rule struct {
 	BuildingID                 int64     `json:"building_id"`
 	QuietHoursStart            *string   `json:"quiet_hours_start,omitempty"`
 	QuietHoursEnd              *string   `json:"quiet_hours_end,omitempty"`
-	DailyPassLimitPerApartment int       `json:"daily_pass_limit_per_apartment"`
-	MaxPassDurationHours       int       `json:"max_pass_duration_hours"`
+	DailyPassLimitPerApartment int32     `json:"daily_pass_limit_per_apartment"`
+	MaxPassDurationHours       int32     `json:"max_pass_duration_hours"`
 	CreatedAt                  time.Time `json:"created_at"`
 	UpdatedAt                  time.Time `json:"updated_at"`
 }

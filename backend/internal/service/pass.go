@@ -120,7 +120,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	if err != nil {
 		return nil, fmt.Errorf("failed to check daily limit: %w", err)
 	}
-	if count >= rule.DailyPassLimitPerApartment {
+	if count >= int(rule.DailyPassLimitPerApartment) {
 		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
 		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
 	}
@@ -314,19 +314,19 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 	return nil
 }
 
-func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByApartmentID(ctx, apartmentID)
 }
 
-func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByResidentID(ctx, residentID)
 }
 
-func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByBuildingID(ctx, buildingID)
 }
 
-func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*domain.Pass, error) {
+func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]domain.Pass, error) {
 	return s.passRepo.SearchByCarPlate(ctx, carPlate, buildingID, 50)
 }
 

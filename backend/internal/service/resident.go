@@ -105,8 +105,8 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 	return resident, nil
 }
 
-func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]*domain.Resident, []domain.BulkCreateError) {
-	var residents []*domain.Resident
+func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]domain.Resident, []domain.BulkCreateError) {
+	var residents []domain.Resident
 	var createErrors []domain.BulkCreateError
 
 	for i, req := range requests {
@@ -118,7 +118,7 @@ func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []do
 			})
 			continue
 		}
-		residents = append(residents, resident)
+		residents = append(residents, *resident)
 	}
 
 	return residents, createErrors
@@ -253,7 +253,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	return len(residents), errorList
 }
 
-func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
+func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	return s.residentRepo.List(ctx, filters)
 }
 

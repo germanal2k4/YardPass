@@ -204,8 +204,6 @@ export const handlers = [
   }),
 
   http.get(`${API_BASE}/api/v1/reports/export`, () => {
-    return new HttpResponse(new Blob(['fake-xlsx-data']), {
-      headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
-    });
+    return HttpResponse.json({ stub: true });
   }),
 ];

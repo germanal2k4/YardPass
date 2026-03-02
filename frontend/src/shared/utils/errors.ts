@@ -56,31 +56,24 @@ const MESSAGE_TRANSLATIONS: Record<string, string> = {
  * @returns Отформатированное сообщение на русском языке
  */
 export function formatErrorMessage(error: AxiosError<ErrorResponse>): string {
-  // Получаем код и сообщение ошибки от сервера
-  const errorCode = error.response?.data?.error?.code || 'UNKNOWN_ERROR';
-  const serverMessage = error.response?.data?.error?.message;
+  if (error.code === 'ERR_NETWORK' || !error.response) {
+    return ERROR_MESSAGES.NETWORK_ERROR;
+  }
+
+  const errorCode = error.response.data?.error?.code || 'UNKNOWN_ERROR';
+  const serverMessage = error.response.data?.error?.message;
   
-  // Базовое сообщение из словаря кодов ошибок
   let errorMessage = ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.UNKNOWN_ERROR;
   
-  // Если есть сообщение от сервера, добавляем его
   if (serverMessage) {
-    // Пытаемся найти перевод
     const translatedMessage = MESSAGE_TRANSLATIONS[serverMessage] || serverMessage;
     
-    // Если перевод отличается от базового сообщения, добавляем детали
     if (translatedMessage !== errorMessage) {
       errorMessage = `${errorMessage}: ${translatedMessage}`;
     }
   }
   
-  // Обработка сетевых ошибок
-  if (error.code === 'ERR_NETWORK' || !error.response) {
-    return ERROR_MESSAGES.NETWORK_ERROR;
-  }
-  
-  // Добавляем HTTP статус для отладки (только в dev режиме)
-  if (import.meta.env.DEV && error.response) {
+  if (import.meta.env.DEV) {
     errorMessage += ` (HTTP ${error.response.status})`;
   }
   

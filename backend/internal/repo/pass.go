@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"yardpass/internal/domain"
@@ -101,9 +102,10 @@ func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate s
 
 func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]domain.Pass, error) {
 	ctx = queryNameToContext(ctx, "PassRepo.SearchByCarPlate")
+	pattern := "%" + strings.ToUpper(strings.ReplaceAll(carPlate, " ", "")) + "%"
 	rows, err := r.queries.SearchPassesByCarPlate(ctx, db.SearchPassesByCarPlateParams{
-		Replace:          "%" + carPlate + "%",
-		Limit:            int32(limit),
+		CarPlatePattern:  pattern,
+		MaxResults:       int32(limit),
 		FilterBuildingID: buildingID,
 	})
 	if err != nil {

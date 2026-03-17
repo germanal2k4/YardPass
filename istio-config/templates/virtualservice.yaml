@@ -1,0 +1,49 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: yardpass
+  namespace: yardpass
+spec:
+  hosts:
+    - {{ .Values.gateway.host }}
+  gateways:
+    - yardpass-gateway
+  http:
+    {{- if .Values.virtualServices.api.enabled }}
+    - match:
+        - uri:
+            prefix: /api
+        - uri:
+            prefix: /auth
+        - uri:
+            prefix: /service
+        - uri:
+            exact: /health
+      route:
+        - destination:
+            host: yardpass-backend
+            port:
+              number: 8080
+          weight: 100
+      timeout: 30s
+      retries:
+        attempts: 2
+        perTryTimeout: 10s
+        retryOn: 5xx,reset,connect-failure
+    {{- end }}
+    {{- if .Values.virtualServices.frontend.enabled }}
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: yardpass-frontend
+            port:
+              number: 80
+          weight: 100
+      timeout: 30s
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+    {{- end }}

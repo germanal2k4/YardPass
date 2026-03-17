@@ -1,0 +1,40 @@
+replicaCount: 1
+version: v1
+
+image:
+  repository: yardpass/backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+appLabel: yardpass-backend
+
+env:
+  JWT_SECRET: your-secret-key-change-me
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 168h
+  SERVICE_TOKEN: your-service-token
+  RATE_LIMIT_CREATE_PASS_PER_HOUR: "10"
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  metricsPort: 5050
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5

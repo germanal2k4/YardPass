@@ -4,17 +4,17 @@ import (
 	"net/http"
 	"strconv"
 
+	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type ParkingHandler struct {
-	passService *service.PassService
+	passService domain.PassService
 }
 
-func NewParkingHandler(passService *service.PassService) *ParkingHandler {
+func NewParkingHandler(passService domain.PassService) *ParkingHandler {
 	return &ParkingHandler{
 		passService: passService,
 	}

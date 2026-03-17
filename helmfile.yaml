@@ -1,0 +1,137 @@
+repositories:
+  - name: istio
+    url: https://istio-release.storage.googleapis.com/charts
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: kiali
+    url: https://kiali.org/helm-charts
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+
+releases:
+  - name: istio-base
+    namespace: istio-system
+    createNamespace: true
+    chart: istio/base
+    version: 1.20.0
+    wait: true
+
+  - name: istiod
+    namespace: istio-system
+    chart: istio/istiod
+    version: 1.20.0
+    needs:
+      - istio-system/istio-base
+    wait: true
+    values:
+      - istio/istiod-values.yaml
+
+  - name: istio-ingress
+    namespace: istio-system
+    chart: istio/gateway
+    version: 1.20.0
+    needs:
+      - istio-system/istiod
+    wait: false
+    set:
+      - name: labels.istio
+        value: ingressgateway
+      - name: labels.app
+        value: istio-ingressgateway
+      - name: service.type
+        value: LoadBalancer
+
+  - name: kiali
+    namespace: istio-system
+    chart: kiali/kiali-server
+    version: 1.78.0
+    needs:
+      - istio-system/istiod
+    wait: false
+    values:
+      - istio/kiali-values.yaml
+
+  - name: prometheus
+    namespace: istio-system
+    chart: prometheus-community/kube-prometheus-stack
+    needs:
+      - istio-system/istiod
+    wait: false
+    values:
+      - istio/prometheus-values.yaml
+
+  - name: cert-manager
+    namespace: istio-system
+    chart: jetstack/cert-manager
+    wait: true
+    values:
+      - istio/cert-manager-values.yaml
+
+  - name: yardpass-namespace
+    namespace: default
+    chart: ./yardpass-namespace
+    wait: false
+
+  - name: postgres
+    namespace: yardpass
+    createNamespace: true
+    chart: bitnami/postgresql
+    needs:
+      - default/yardpass-namespace
+    wait: false
+    values:
+      - istio/postgres-values.yaml
+
+  - name: redis
+    namespace: yardpass
+    createNamespace: false
+    chart: bitnami/redis
+    wait: false
+    values:
+      - istio/redis-values.yaml
+
+  - name: istio-config
+    namespace: yardpass
+    createNamespace: false
+    chart: ./istio-config
+    needs:
+      - istio-system/istiod
+      - istio-system/prometheus
+    values:
+      - istio-config/values.yaml
+
+  - name: yardpass-backend
+    namespace: yardpass
+    createNamespace: false
+    chart: ./yardpass-backend
+    needs:
+      - istio-system/istiod
+      - yardpass/istio-config
+      - yardpass/postgres
+      - yardpass/redis
+    values:
+      - yardpass-backend/values.yaml
+
+  - name: yardpass-frontend
+    namespace: yardpass
+    createNamespace: false
+    chart: ./yardpass-frontend
+    needs:
+      - yardpass/yardpass-backend
+      - yardpass/istio-config
+    values:
+      - yardpass-frontend/values.yaml
+
+  - name: yardpass-bot
+    namespace: yardpass
+    createNamespace: false
+    chart: ./yardpass-bot
+    needs:
+      - yardpass/yardpass-backend
+      - yardpass/postgres
+      - yardpass/redis
+    values:
+      - yardpass-bot/values.yaml
+    installed: false

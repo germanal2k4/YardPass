@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "yardpass-backend.resource-name" . }}
+  labels:
+    {{ include "yardpass-backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{ include "yardpass-backend.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{ include "yardpass-backend.selector" . | nindent 8 }}
+        version: {{ .Values.version | default "v1" }}
+    spec:
+      containers:
+        - name: {{ .Values.appLabel }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: redis-url
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: {{ .Values.service.metricsPort }}
+          {{ include "yardpass-backend.liveness" . | nindent 10 }}
+          {{ include "yardpass-backend.readiness" . | nindent 10 }}

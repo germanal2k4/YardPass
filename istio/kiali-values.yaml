@@ -1,0 +1,18 @@
+auth:
+  strategy: anonymous
+
+deployment:
+  ingress:
+    enabled: false
+
+server:
+  web_root: /
+  port: 20001
+
+external_services:
+  prometheus:
+    url: http://prometheus-operated.istio-system.svc.cluster.local:9090
+  grafana:
+    enabled: false
+  tracing:
+    enabled: false

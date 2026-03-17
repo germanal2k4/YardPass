@@ -34,6 +34,19 @@ type PostgresRepo struct {
 	metrics *metrics.Metrics
 }
 
+// NewPostgresRepoFromPool creates a PostgresRepo from an existing pool, for integration tests.
+// Caller is responsible for closing the pool. Logger may be nil (uses Nop).
+func NewPostgresRepoFromPool(pool *pgxpool.Pool, logger *zap.Logger) *PostgresRepo {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &PostgresRepo{
+		pool:    pool,
+		queries: db.New(pool),
+		logger:  logger,
+	}
+}
+
 func NewPostgresRepo(lf fx.Lifecycle, cfg config.PGConfig, logger *zap.Logger, t *tracer.Tracer, m *metrics.Metrics) *PostgresRepo {
 	repo := PostgresRepo{
 		logger:  logger,

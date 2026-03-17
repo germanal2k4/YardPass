@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "yardpass-frontend.resource-name" . }}
+  labels:
+    {{ include "yardpass-frontend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{ include "yardpass-frontend.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{ include "yardpass-frontend.selector" . | nindent 8 }}
+        version: {{ .Values.version | default "v1" }}
+    spec:
+      containers:
+        - name: {{ .Values.appLabel }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          {{ include "yardpass-frontend.liveness" . | nindent 10 }}
+          {{ include "yardpass-frontend.readiness" . | nindent 10 }}

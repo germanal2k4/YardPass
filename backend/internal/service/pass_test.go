@@ -178,7 +178,7 @@ func TestPassService_CreatePass(t *testing.T) {
 		now := time.Now()
 		validTo := now.Add(2 * time.Hour)
 
-		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		apartmentRepo.On("GetByID", mock.Anything, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
@@ -292,13 +292,14 @@ func TestPassService_ValidatePass(t *testing.T) {
 		}
 
 		passRepo.On("GetByID", ctx, passID).Return(pass, nil)
+		passRepo.On("Update", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
 		}, nil)
-		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{}, nil)
-		scanEventRepo.On("Create", ctx, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
+		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
+		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
 
 		result, err := service.ValidatePass(ctx, passID, 1)
 
@@ -329,5 +330,43 @@ func TestPassService_ValidatePass(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.False(t, result.Valid)
 		assert.Equal(t, "PASS_EXPIRED", result.Reason)
+	})
+
+	t.Run("cannot validate pass twice", func(t *testing.T) {
+		passID := uuid.New()
+		apartmentID := int64(1)
+		buildingID := int64(1)
+		now := time.Now()
+
+		pass := &domain.Pass{
+			ID:          passID,
+			ApartmentID: apartmentID,
+			Status:      "active",
+			ValidFrom:   now.Add(-1 * time.Hour),
+			ValidTo:     now.Add(1 * time.Hour),
+		}
+
+		passRepo.On("GetByID", mock.Anything, passID).Return(pass, nil)
+		passRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Pass")).Return(nil)
+		apartmentRepo.On("GetByID", mock.Anything, apartmentID).Return(&domain.Apartment{
+			ID:         apartmentID,
+			BuildingID: buildingID,
+			Number:     "101",
+		}, nil)
+		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
+		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
+
+		// First validation should be successful
+		firstResult, err := service.ValidatePass(ctx, passID, 1)
+		assert.NoError(t, err)
+		assert.NotNil(t, firstResult)
+		assert.True(t, firstResult.Valid)
+
+		// Second validation should be rejected as already used
+		secondResult, err := service.ValidatePass(ctx, passID, 1)
+		assert.NoError(t, err)
+		assert.NotNil(t, secondResult)
+		assert.False(t, secondResult.Valid)
+		assert.Equal(t, "PASS_ALREADY_USED", secondResult.Reason)
 	})
 }

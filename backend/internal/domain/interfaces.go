@@ -122,10 +122,28 @@ type CreatePassRequest struct {
 	ValidTo     time.Time
 }
 
+// PassService is the interface for pass-related operations (used by handlers for testability).
+type PassService interface {
+	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
+	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
+	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
+	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
+	GetActivePasses(ctx context.Context, apartmentID int64) ([]Pass, error)
+	GetActivePassesByResident(ctx context.Context, residentID int64) ([]Pass, error)
+	GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]Pass, error)
+	SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]Pass, error)
+}
+
 type AuthTokens struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int64
+}
+
+// AuthService is the interface for auth operations (used by handlers for testability).
+type AuthService interface {
+	Login(ctx context.Context, username, password string) (*AuthTokens, error)
+	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 }
 
 type TokenClaims struct {

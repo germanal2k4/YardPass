@@ -1,0 +1,22 @@
+replicaCount: 1
+version: v1
+
+image:
+  repository: yardpass/backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+appLabel: yardpass-bot
+
+# TELEGRAM_BOT_TOKEN must be set via secret
+env:
+  API_BASE_URL: "http://yardpass-backend:8080"
+  SERVICE_TOKEN: your-service-token
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+
+livenessProbe:
+  enabled: false
+
+readinessProbe:
+  enabled: false

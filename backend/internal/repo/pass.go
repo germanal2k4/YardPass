@@ -116,7 +116,14 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 
 func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
 	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByApartmentID")
-	today := time.Now().Truncate(24 * time.Hour)
+	// Use local day boundary in Europe/Moscow to count daily limits
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := time.Now().In(location)
+	todayLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, location)
+	today := todayLocal.UTC()
 	count, err := r.queries.CountActiveTodayByApartmentID(ctx, db.CountActiveTodayByApartmentIDParams{
 		ApartmentID: apartmentID,
 		CreatedAt:   today,
@@ -126,7 +133,14 @@ func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentI
 
 func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
 	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByResidentID")
-	today := time.Now().Truncate(24 * time.Hour)
+	// Use local day boundary in Europe/Moscow to count daily limits
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := time.Now().In(location)
+	todayLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, location)
+	today := todayLocal.UTC()
 	count, err := r.queries.CountActiveTodayByResidentID(ctx, db.CountActiveTodayByResidentIDParams{
 		ResidentID: &residentID,
 		CreatedAt:  today,

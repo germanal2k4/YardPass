@@ -1,0 +1,7 @@
+auth:
+  enabled: false
+
+master:
+  persistence:
+    enabled: true
+    size: 256Mi

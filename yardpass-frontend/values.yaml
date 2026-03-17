@@ -1,0 +1,35 @@
+replicaCount: 1
+version: v1
+
+image:
+  repository: yardpass/frontend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+appLabel: yardpass-frontend
+
+# Empty string = same-origin (use gateway host for API)
+# Set for local dev or when API is on different domain
+env:
+  VITE_API_BASE_URL: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /
+    port: 80
+  initialDelaySeconds: 2
+  periodSeconds: 5

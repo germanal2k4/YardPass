@@ -241,6 +241,13 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		return result, nil
 	}
 
+	if pass.Status == "used" {
+		result.Reason = "PASS_ALREADY_USED"
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
+		return result, nil
+	}
+
 	if now.After(validTo) {
 		result.Reason = "PASS_EXPIRED"
 		pass.Status = "expired"
@@ -264,6 +271,10 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 			}
 		}
 	}
+
+	// First successful validation: mark pass as used
+	pass.Status = "used"
+	_ = s.passRepo.Update(ctx, pass)
 
 	result.Valid = true
 	result.Pass = pass
@@ -380,6 +391,15 @@ func normalizeCarPlate(plate string) string {
 }
 
 func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime, endTime string) error {
+	// Interpret quiet hours in local building timezone (Europe/Moscow)
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+
+	validFromLocal := validFrom.In(location)
+	validToLocal := validTo.In(location)
+
 	start, err := parseTime(startTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours start: %w", err)
@@ -389,8 +409,8 @@ func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime
 		return fmt.Errorf("invalid quiet hours end: %w", err)
 	}
 
-	fromHour := validFrom.Hour()*60 + validFrom.Minute()
-	toHour := validTo.Hour()*60 + validTo.Minute()
+	fromHour := validFromLocal.Hour()*60 + validFromLocal.Minute()
+	toHour := validToLocal.Hour()*60 + validToLocal.Minute()
 	startMin := start.Hour()*60 + start.Minute()
 	endMin := end.Hour()*60 + end.Minute()
 
@@ -409,6 +429,13 @@ func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime
 }
 
 func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) bool {
+	// Interpret quiet hours in local building timezone (Europe/Moscow)
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := now.In(location)
+
 	start, err := parseTime(startTime)
 	if err != nil {
 		return false
@@ -418,7 +445,7 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 		return false
 	}
 
-	nowMin := now.Hour()*60 + now.Minute()
+	nowMin := nowLocal.Hour()*60 + nowLocal.Minute()
 	startMin := start.Hour()*60 + start.Minute()
 	endMin := end.Hour()*60 + end.Minute()
 

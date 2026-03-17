@@ -19,6 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api ./cmd/api
 # Build Bot binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bot ./cmd/bot
 
+# Build migrate binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./cmd/migrate
+
 # API runtime stage
 FROM alpine:latest AS api
 
@@ -27,6 +30,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 COPY --from=builder /app/api .
+COPY --from=builder /app/migrate .
 COPY --from=builder /app/config/config.yaml .
 COPY --from=builder /app/migrations ./migrations
 
@@ -49,4 +53,16 @@ COPY --from=builder /app/bot .
 COPY --from=builder /app/config/config.yaml .
 
 CMD ["./bot", "-c", "config.yaml"]
+
+# Migrate stage
+FROM alpine:latest AS migrate
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/migrate .
+COPY --from=builder /app/migrations ./migrations
+
+CMD ["./migrate", "up"]
 

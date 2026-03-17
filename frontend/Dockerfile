@@ -18,9 +18,10 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 # Copy source code
 COPY . .
 
-# Set build environment variables
+# Set build environment variables (VITE_API_BASE_URL="" for same-origin in k8s)
+ARG VITE_API_BASE_URL=http://localhost:8080
 ENV NODE_ENV=production
-ENV VITE_API_BASE_URL=http://localhost:8080
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Build application (using build:prod to skip TypeScript checks for Docker)
 # Vite handles TypeScript compilation during build

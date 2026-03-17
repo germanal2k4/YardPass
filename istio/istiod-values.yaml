@@ -1,0 +1,18 @@
+meshConfig:
+  accessLogFile: /dev/stdout
+  accessLogEncoding: JSON
+  defaultConfig:
+    proxyStatsMatcher:
+      inclusionRegexps:
+        - ".*circuit_breakers.*"
+        - ".*upstream_rq_retry.*"
+        - ".*upstream_rq_timeout.*"
+      inclusionPrefixes:
+        - "cluster_manager"
+        - "listener_manager"
+        - "server"
+        - "cluster.xds-grpc"
+
+pilot:
+  env:
+    PILOT_ENABLE_WORKLOAD_ENTRY_CROSS_CLUSTER: "false"

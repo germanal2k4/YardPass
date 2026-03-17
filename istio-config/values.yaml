@@ -1,0 +1,26 @@
+namespace:
+  name: yardpass
+
+gateway:
+  enabled: true
+  host: yardpass.example.com
+
+virtualServices:
+  frontend:
+    enabled: true
+  api:
+    enabled: true
+
+peerAuthentication:
+  enabled: true
+  mode: STRICT
+
+prometheus:
+  serviceMonitor:
+    enabled: true
+
+destinationRules:
+  frontend:
+    enabled: true
+  backend:
+    enabled: true

@@ -3,20 +3,25 @@ package handlers
 import (
 	"net/http"
 
-	"yardpass/internal/auth"
+	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 
 	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
-	jwtService *auth.JWTService
+	authService domain.AuthService
 }
 
-func NewAuthHandler(jwtService *auth.JWTService) *AuthHandler {
+func NewAuthHandler(authService domain.AuthService) *AuthHandler {
 	return &AuthHandler{
-		jwtService: jwtService,
+		authService: authService,
 	}
+}
+
+// NewAuthHandlerWithService is an alias for NewAuthHandler for tests.
+func NewAuthHandlerWithService(authService domain.AuthService) *AuthHandler {
+	return NewAuthHandler(authService)
 }
 
 type LoginRequest struct {
@@ -35,7 +40,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.jwtService.Login(c.Request.Context(), req.Username, req.Password)
+	tokens, err := h.authService.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
 		errors.Unauthorized(c, "INVALID_CREDENTIALS", err.Error())
 		return
@@ -56,7 +61,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.jwtService.RefreshToken(c.Request.Context(), req.RefreshToken)
+	tokens, err := h.authService.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
 		errors.Unauthorized(c, "INVALID_REFRESH_TOKEN", err.Error())
 		return

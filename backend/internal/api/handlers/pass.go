@@ -7,17 +7,16 @@ import (
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type PassHandler struct {
-	passService *service.PassService
+	passService domain.PassService
 }
 
-func NewPassHandler(passService *service.PassService) *PassHandler {
+func NewPassHandler(passService domain.PassService) *PassHandler {
 	return &PassHandler{
 		passService: passService,
 	}

@@ -3,13 +3,13 @@ package middleware
 import (
 	"strings"
 
-	"yardpass/internal/auth"
+	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(jwtService *auth.JWTService) gin.HandlerFunc {
+func AuthMiddleware(jwtService domain.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

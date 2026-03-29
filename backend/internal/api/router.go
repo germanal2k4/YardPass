@@ -8,8 +8,8 @@ import (
 
 	"yardpass/internal/api/handlers"
 	"yardpass/internal/api/middleware"
-	"yardpass/internal/auth"
 	"yardpass/internal/config"
+	"yardpass/internal/domain"
 	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
 	"yardpass/internal/redis"
@@ -37,7 +37,7 @@ func NewRouter(
 	scanEventHandler *handlers.ScanEventHandler,
 	reportHandler *handlers.ReportHandler,
 	parkingHandler *handlers.ParkingHandler,
-	jwtService *auth.JWTService,
+	jwtService domain.AuthService,
 	redisClient *redis.Client,
 	logger *zap.Logger,
 	tracer *tracer.Tracer,

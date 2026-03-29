@@ -14,7 +14,6 @@ import (
 	"yardpass/internal/observability/tracer"
 	"yardpass/internal/qr"
 	"yardpass/internal/redis"
-	"yardpass/internal/service"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/fx"
@@ -28,7 +27,7 @@ type Bot struct {
 	serverHost string
 	serverPort string
 
-	passService   *service.PassService
+	passService   domain.PassService
 	residentRepo  domain.ResidentRepository
 	apartmentRepo domain.ApartmentRepository
 	qrGen         *qr.Generator
@@ -65,7 +64,7 @@ const (
 func NewBot(
 	lf fx.Lifecycle,
 	cfg *config.Config,
-	passService *service.PassService,
+	passService domain.PassService,
 	residentRepo domain.ResidentRepository,
 	apartmentRepo domain.ApartmentRepository,
 	qrGen *qr.Generator,

@@ -144,6 +144,7 @@ type AuthTokens struct {
 type AuthService interface {
 	Login(ctx context.Context, username, password string) (*AuthTokens, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
+	ValidateToken(ctx context.Context, token string) (*TokenClaims, error)
 }
 
 type TokenClaims struct {

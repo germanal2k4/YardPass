@@ -1,40 +1,14 @@
-version: '3.8'
+# YardPass — локальный стек приложения. Postgres и Redis подключаются из docker-compose.data.yml
+include:
+  - path: docker-compose.data.yml
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: yardpass
-      POSTGRES_USER: yardpass
-      POSTGRES_PASSWORD: password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yardpass"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   jaeger:
     image: jaegertracing/all-in-one:latest
     restart: unless-stopped
     ports:
-      - "16686:16686" # jaeger Web UI
-      - "4317:4317" # otel gRPC collector
+      - "16686:16686"
+      - "4317:4317"
 
   elasticsearch:
     image: elasticsearch:7.17.0
@@ -56,23 +30,24 @@ services:
     restart: "no"
 
   backend:
-    build: 
+    build:
       context: ./backend
       target: api
     environment:
-      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
-      - JWT_ACCESS_TTL=15m
-      - JWT_REFRESH_TTL=168h
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-168h}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
-      - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-      - ELASTIC_URL=http://elasticsearch:9200
-      - TRACER_URL=jaeger:4317
+      - RATE_LIMIT_CREATE_PASS_PER_HOUR=${RATE_LIMIT_CREATE_PASS_PER_HOUR:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
     ports:
       - "8080:8080"
       - "5050:5050"
@@ -88,21 +63,22 @@ services:
     restart: unless-stopped
 
   bot:
-    profiles: ["bot", "full"]  # Не запускается по умолчанию
-    build: 
+    profiles: ["bot", "full"]
+    build:
       context: ./backend
       dockerfile: Dockerfile
       target: bot
     environment:
-      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - API_BASE_URL=http://backend:8080
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-      - ELASTIC_URL=http://elasticsearch:9200
-      - TRACER_URL=jaeger:4317
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,8 +93,7 @@ services:
     ports:
       - "3000:80"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8080
-      - VITE_DEFAULT_BUILDING_ID=1
+      - BACKEND_URL=http://backend:8080
     depends_on:
       - backend
     restart: unless-stopped
@@ -133,8 +108,8 @@ services:
       - ./backend/deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
     ports:
       - "9090:9090"
 
@@ -156,7 +131,5 @@ services:
       - "3030:3000"
 
 volumes:
-  postgres_data:
-  redis_data:
   prometheus_data:
   grafana_data:

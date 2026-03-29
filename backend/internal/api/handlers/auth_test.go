@@ -35,6 +35,14 @@ func (m *mockAuthService) RefreshToken(ctx context.Context, refreshToken string)
 	return args.Get(0).(*domain.AuthTokens), args.Error(1)
 }
 
+func (m *mockAuthService) ValidateToken(ctx context.Context, token string) (*domain.TokenClaims, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.TokenClaims), args.Error(1)
+}
+
 func TestAuthHandler_Login(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -1,0 +1,29 @@
+{{- if .Values.authorizationPolicy.backend.enabled }}
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: yardpass-backend-policy
+  namespace: yardpass
+spec:
+  selector:
+    matchLabels:
+      app: yardpass-backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+            paths: ["/api/*", "/auth/*", "/health"]
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/yardpass/sa/yardpass-bot
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            paths: ["/service/*"]
+{{- end }}

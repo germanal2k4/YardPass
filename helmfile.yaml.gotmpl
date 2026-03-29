@@ -1,3 +1,18 @@
+environments:
+  default:
+    values:
+      - values-default.yaml
+  local:
+    values:
+      - values-default.yaml
+      - values-local.yaml
+  cd:
+    missingFileHandler: Warn
+    values:
+      - values-default.yaml
+      - values-cd.yaml
+      - values-cd-override.yaml
+---
 repositories:
   - name: istio
     url: https://istio-release.storage.googleapis.com/charts
@@ -7,8 +22,6 @@ repositories:
     url: https://kiali.org/helm-charts
   - name: jetstack
     url: https://charts.jetstack.io
-  - name: bitnami
-    url: https://charts.bitnami.com/bitnami
 
 releases:
   - name: istio-base
@@ -17,6 +30,7 @@ releases:
     chart: istio/base
     version: 1.20.0
     wait: true
+    forceConflicts: true
 
   - name: istiod
     namespace: istio-system
@@ -62,6 +76,41 @@ releases:
     values:
       - istio/prometheus-values.yaml
 
+  - name: jaeger
+    namespace: istio-system
+    chart: ./jaeger
+    needs:
+      - istio-system/istiod
+    wait: true
+    values:
+      - jaeger/values.yaml
+
+  - name: grafana-dashboards
+    namespace: istio-system
+    chart: ./grafana-dashboards
+    needs:
+      - istio-system/prometheus
+    wait: false
+
+  - name: elasticsearch
+    namespace: istio-system
+    chart: ./elasticsearch
+    needs:
+      - istio-system/istiod
+    wait: true
+    timeout: 300
+    values:
+      - elasticsearch/values.yaml
+
+  - name: fluent-bit
+    namespace: istio-system
+    chart: ./fluent-bit
+    needs:
+      - istio-system/elasticsearch
+    wait: true
+    values:
+      - fluent-bit/values.yaml
+
   - name: cert-manager
     namespace: istio-system
     chart: jetstack/cert-manager
@@ -72,25 +121,7 @@ releases:
   - name: yardpass-namespace
     namespace: default
     chart: ./yardpass-namespace
-    wait: false
-
-  - name: postgres
-    namespace: yardpass
-    createNamespace: true
-    chart: bitnami/postgresql
-    needs:
-      - default/yardpass-namespace
-    wait: false
-    values:
-      - istio/postgres-values.yaml
-
-  - name: redis
-    namespace: yardpass
-    createNamespace: false
-    chart: bitnami/redis
-    wait: false
-    values:
-      - istio/redis-values.yaml
+    wait: true
 
   - name: istio-config
     namespace: yardpass
@@ -109,11 +140,11 @@ releases:
     needs:
       - istio-system/istiod
       - yardpass/istio-config
-      - yardpass/postgres
-      - yardpass/redis
     values:
       - yardpass-backend/values.yaml
-
+{{ if hasKey .Values "backend" }}
+      - {{ .Values.backend | toYaml | nindent 8 }}
+{{ end }}
   - name: yardpass-frontend
     namespace: yardpass
     createNamespace: false
@@ -123,6 +154,9 @@ releases:
       - yardpass/istio-config
     values:
       - yardpass-frontend/values.yaml
+{{ if hasKey .Values "frontend" }}
+      - {{ .Values.frontend | toYaml | nindent 8 }}
+{{ end }}
 
   - name: yardpass-bot
     namespace: yardpass
@@ -130,8 +164,12 @@ releases:
     chart: ./yardpass-bot
     needs:
       - yardpass/yardpass-backend
-      - yardpass/postgres
-      - yardpass/redis
     values:
       - yardpass-bot/values.yaml
-    installed: false
+{{ if hasKey .Values "bot" }}
+      - {{ .Values.bot | toYaml | nindent 8 }}
+{{ end }}
+    set:
+      - name: secrets.telegramToken
+        value: {{ env "TELEGRAM_BOT_TOKEN" | default "" | quote }}
+    installed: true

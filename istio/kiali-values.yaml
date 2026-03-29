@@ -11,8 +11,13 @@ server:
 
 external_services:
   prometheus:
-    url: http://prometheus-operated.istio-system.svc.cluster.local:9090
+    url: http://prometheus-kube-prometheus-prometheus.istio-system:9090
   grafana:
-    enabled: false
+    enabled: true
+    in_cluster_url: http://prometheus-grafana.istio-system
+    url: http://localhost:3001
   tracing:
-    enabled: false
+    enabled: true
+    in_cluster_url: http://jaeger-query.istio-system:16686
+    use_grpc: false
+    url: ""

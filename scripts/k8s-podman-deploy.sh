@@ -5,8 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# shellcheck disable=SC1091
+[[ -f .env ]] && set -a && source .env && set +a
+
 MINIKUBE_PROFILE="${MINIKUBE_PROFILE:-minikube}"
 BACKEND_IMAGE="localhost/yardpass/backend:latest"
+BOT_IMAGE="localhost/yardpass/bot:latest"
 FRONTEND_IMAGE="localhost/yardpass/frontend:latest"
 
 RED='\033[0;31m'
@@ -23,15 +27,17 @@ usage() {
 Usage: $(basename "$0") [COMMAND]
 
 Commands:
-  up        Full deploy: start minikube, build images, helmfile sync (default)
-  down      Tear down: delete namespaces and all helm releases
+  up        Full deploy: data services + minikube + build + helmfile sync (default)
+  down      Tear down: delete namespaces, helm releases and stop data services
   rebuild   Rebuild images and redeploy app charts only
-  clean     Full cleanup: delete minikube cluster entirely
+  clean     Full cleanup: delete minikube cluster + data services + volumes
   images    Build and load images only
-  status    Show cluster and pod status
+  data      Start Postgres + Redis (docker-compose.data.yml) only
+  status    Show cluster, pod, and data service status
 
 Environment variables:
   MINIKUBE_PROFILE  Minikube profile name (default: minikube)
+  COMPOSE_CMD       Override compose command (default: auto-detect)
 EOF
 }
 
@@ -44,6 +50,16 @@ check_deps() {
         err "Missing required tools: ${missing[*]}"
         exit 1
     fi
+}
+
+start_data_services() {
+    log "Starting Postgres + Redis (docker-compose.data.yml)..."
+    "$SCRIPT_DIR/compose-db.sh" up
+}
+
+stop_data_services() {
+    log "Stopping Postgres + Redis..."
+    "$SCRIPT_DIR/compose-db.sh" down 2>/dev/null || true
 }
 
 ensure_minikube() {
@@ -65,6 +81,9 @@ build_images() {
     log "Building backend image (target=api)..."
     podman build --target api -t "$BACKEND_IMAGE" ./backend
 
+    log "Building bot image (target=bot)..."
+    podman build --target bot -t "$BOT_IMAGE" ./backend
+
     log "Building frontend image..."
     podman build --build-arg VITE_API_BASE_URL="" -t "$FRONTEND_IMAGE" ./frontend
 }
@@ -75,10 +94,12 @@ load_images() {
     tmpdir=$(mktemp -d)
 
     podman save -o "$tmpdir/backend.tar" "$BACKEND_IMAGE"
+    podman save -o "$tmpdir/bot.tar" "$BOT_IMAGE"
     podman save -o "$tmpdir/frontend.tar" "$FRONTEND_IMAGE"
 
     log "Loading images into minikube..."
     minikube -p "$MINIKUBE_PROFILE" image load "$tmpdir/backend.tar"
+    minikube -p "$MINIKUBE_PROFILE" image load "$tmpdir/bot.tar"
     minikube -p "$MINIKUBE_PROFILE" image load "$tmpdir/frontend.tar"
 
     rm -rf "$tmpdir"
@@ -107,6 +128,10 @@ wait_for_pods() {
 
 show_status() {
     echo ""
+    log "Data services (Postgres + Redis):"
+    "$SCRIPT_DIR/compose-db.sh" status 2>/dev/null || warn "compose status unavailable"
+    echo ""
+
     log "Cluster status:"
     minikube status -p "$MINIKUBE_PROFILE" 2>/dev/null || true
     echo ""
@@ -162,6 +187,7 @@ EOF
 
 cmd_up() {
     check_deps
+    start_data_services
     ensure_minikube
     build_images
     load_images
@@ -182,6 +208,8 @@ cmd_down() {
     log "Cleaning up CRDs and webhooks..."
     kubectl delete validatingwebhookconfiguration istiod-default-validator --ignore-not-found 2>/dev/null || true
 
+    stop_data_services
+
     log "Teardown complete"
 }
 
@@ -201,6 +229,8 @@ cmd_clean() {
     log "Deleting minikube cluster ($MINIKUBE_PROFILE)..."
     minikube delete -p "$MINIKUBE_PROFILE" 2>/dev/null || true
 
+    stop_data_services
+
     log "Pruning podman images..."
     podman image prune -f 2>/dev/null || true
 
@@ -218,12 +248,17 @@ cmd_images() {
     log "Images built and loaded"
 }
 
+cmd_data() {
+    start_data_services
+}
+
 case "${1:-up}" in
     up)      cmd_up ;;
     down)    cmd_down ;;
     rebuild) cmd_rebuild ;;
     clean)   cmd_clean ;;
     images)  cmd_images ;;
+    data)    cmd_data ;;
     status)  show_status ;;
     -h|--help|help) usage ;;
     *)

@@ -101,6 +101,8 @@ services:
       - API_BASE_URL=http://backend:8080
       - LOG_LEVEL=info
       - LOG_FORMAT=json
+      - ELASTIC_URL=http://elasticsearch:9200
+      - TRACER_URL=jaeger:4317
     depends_on:
       postgres:
         condition: service_healthy

@@ -38,8 +38,7 @@ func NewTracer(lc fx.Lifecycle, c config.TracerConfig) (*Tracer, error) {
 
 	res, err := resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
+		resource.NewSchemaless(
 			semconv.ServiceNameKey.String("yardpass"),
 		),
 	)

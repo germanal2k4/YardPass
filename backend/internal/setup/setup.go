@@ -51,8 +51,8 @@ func SetupApi(configPath string) (*fx.App, error) {
 
 			redis.NewClient,
 
-			auth.NewJWTService,
-			service.NewPassService,
+			fx.Annotate(auth.NewJWTService, fx.As(new(domain.AuthService))),
+			fx.Annotate(service.NewPassService, fx.As(new(domain.PassService))),
 			service.NewUserService,
 			service.NewResidentService,
 
@@ -110,7 +110,7 @@ func SetupBot(configPath string) (*fx.App, error) {
 
 			redis.NewClient,
 
-			service.NewPassService,
+			fx.Annotate(service.NewPassService, fx.As(new(domain.PassService))),
 			qr.NewGenerator,
 
 			telegram.NewBot,

@@ -57,6 +57,8 @@ func NewRouter(
 	r.Use(middleware.MetricsMiddleware(metrics))
 	r.Use(middleware.RecoveryMiddleware(logger))
 
+	registerSwaggerRoutes(r)
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})

@@ -22,6 +22,16 @@ frontend:
     pullPolicy: Never
 
 bot:
+  image:
+    repository: localhost/yardpass/bot
+    tag: latest
+    pullPolicy: Never
   secrets:
     databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
     redisUrl: "redis://host.minikube.internal:6379/0"
+    telegramToken: ""
+  env:
+    LOG_TRANSPORT: stdout
+    TRACER_ENABLED: "true"
+    TRACER_URL: "jaeger-collector.istio-system:4317"
+    ELASTIC_URL: ""

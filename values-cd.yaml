@@ -1,5 +1,8 @@
 # CD environment defaults (GitHub Actions -> GHCR -> K8s)
 # Image tags are overridden at deploy time via values-cd-override.yaml
+#
+# DSN к Postgres/Redis: задайте в values-cd-override.yaml (backend.secrets) или секретах кластера;
+# дефолты в chart — host.minikube.internal (только для локального k8s).
 
 backend:
   image:

@@ -15,6 +15,7 @@ spec:
         {{ include "yardpass-bot.selector" . | nindent 8 }}
         version: {{ .Values.version | default "v1" }}
     spec:
+      serviceAccountName: yardpass-bot
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

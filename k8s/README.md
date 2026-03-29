@@ -16,20 +16,36 @@
 │   ├── k8s-deploy.sh          # Быстрый деплой (docker)
 │   └── k8s-local-deploy.sh    # Полный деплой через podman + minikube
 ├── istio/                     # Values для Istio и стека мониторинга
-├── istio-config/              # Istio CR: Gateway, VirtualServices, PeerAuth
+├── docker-compose.data.yml    # Только Postgres + Redis (хост для minikube / общий с полным compose)
+├── docker-compose.yml         # include data.yml + приложение (backend, frontend, …)
+├── istio-config/              # Istio CR: Gateway, VS, ServiceEntry (Postgres/Redis на хосте), PeerAuth, DestinationRule, ServiceMonitor/PodMonitor, Thanos secret
+├── values-default.yaml        # Общие значения helmfile
 ├── jaeger/                    # Helm chart — Jaeger all-in-one
 ├── elasticsearch/             # Helm chart — Elasticsearch single-node
 ├── fluent-bit/                # Helm chart — Fluent Bit DaemonSet
 ├── grafana-dashboards/        # Helm chart — Grafana dashboards via ConfigMaps
 ├── yardpass-backend/          # Helm chart — API
 ├── yardpass-frontend/         # Helm chart — SPA (Nginx)
-└── yardpass-bot/              # Helm chart — Telegram бот (отключён по умолчанию)
+└── yardpass-bot/              # Helm chart — Telegram бот
 ```
 
 ## Требования
 
 - `podman`, `minikube`, `kubectl`, `helm`, `helmfile`
 - macOS / Linux
+
+## Postgres и Redis
+
+Helm-чартов Bitnami Postgres/Redis **нет** — базы только в **docker-compose**.
+
+Если раньше ставились релизы `postgres` / `redis` в `yardpass`, сними: `helm uninstall postgres redis -n yardpass` (или `helmfile destroy` по старому манифесту).
+
+1. Поднять данные на хосте: `./scripts/compose-db.sh` или `docker compose -f docker-compose.data.yml up -d` (либо `docker compose up -d postgres redis` из корня — сервисы приходят из `include`).
+2. Поды в minikube подключаются к `host.minikube.internal:5432` и `:6379` (см. `yardpass-backend/values.yaml`, `values-local.yaml`).
+3. В **istio-config** заданы **ServiceEntry** для Postgres и Redis (`MESH_EXTERNAL`), sidecar маршрутизирует egress.
+4. **mTLS (STRICT)** — между подами в mesh. До БД на хосте — TCP через sidecar; при необходимости SSL на стороне Postgres (`sslmode` в DSN).
+
+Дополнительно: PeerAuthentication на метриках 5050, DestinationRule для Prometheus, ServiceMonitor/PodMonitor Istio, Thanos secret по флагу — см. `istio-config/templates/`.
 
 ## Локальный деплой (podman + minikube)
 

@@ -1,40 +1,14 @@
-version: '3.8'
+# YardPass — локальный стек приложения. Postgres и Redis подключаются из docker-compose.data.yml
+include:
+  - path: docker-compose.data.yml
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-yardpass}
-      POSTGRES_USER: ${POSTGRES_USER:-yardpass}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yardpass}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
   jaeger:
     image: jaegertracing/all-in-one:latest
     restart: unless-stopped
     ports:
-      - "16686:16686" # jaeger Web UI
-      - "4317:4317" # otel gRPC collector
+      - "16686:16686"
+      - "4317:4317"
 
   elasticsearch:
     image: elasticsearch:7.17.0
@@ -56,7 +30,7 @@ services:
     restart: "no"
 
   backend:
-    build: 
+    build:
       context: ./backend
       target: api
     environment:
@@ -89,8 +63,8 @@ services:
     restart: unless-stopped
 
   bot:
-    profiles: ["bot", "full"]  # Не запускается по умолчанию
-    build: 
+    profiles: ["bot", "full"]
+    build:
       context: ./backend
       dockerfile: Dockerfile
       target: bot
@@ -134,8 +108,8 @@ services:
       - ./backend/deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
     ports:
       - "9090:9090"
 
@@ -157,7 +131,5 @@ services:
       - "3030:3000"
 
 volumes:
-  postgres_data:
-  redis_data:
   prometheus_data:
   grafana_data:

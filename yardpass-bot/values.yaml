@@ -11,8 +11,8 @@ imagePullSecrets: []
 appLabel: yardpass-bot
 
 secrets:
-  databaseUrl: "postgres://yardpass:password@postgres-postgresql:5432/yardpass?sslmode=disable"
-  redisUrl: "redis://redis-master:6379/0"
+  databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+  redisUrl: "redis://host.minikube.internal:6379/0"
   telegramToken: ""
 
 env:

@@ -19,8 +19,11 @@ if command -v minikube &>/dev/null && minikube status &>/dev/null; then
   minikube image load yardpass/frontend:latest
 fi
 
+echo "==> Postgres + Redis (docker-compose.data.yml)..."
+"$SCRIPT_DIR/compose-db.sh"
+
 echo "==> Running helmfile sync..."
-helmfile sync
+helmfile -f helmfile.yaml.gotmpl sync
 
 echo ""
 echo "==> Deployment complete. Check status:"

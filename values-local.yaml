@@ -1,11 +1,14 @@
 # Local K8s overrides for minikube + podman (CRI-O)
-# These files are merged into helmfile via environment values
+# Postgres/Redis: docker compose -f docker-compose.data.yml up -d
 
 backend:
   image:
     repository: localhost/yardpass/backend
     tag: latest
     pullPolicy: Never
+  secrets:
+    databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+    redisUrl: "redis://host.minikube.internal:6379/0"
   env:
     LOG_TRANSPORT: stdout
     TRACER_ENABLED: "true"
@@ -17,3 +20,8 @@ frontend:
     repository: localhost/yardpass/frontend
     tag: latest
     pullPolicy: Never
+
+bot:
+  secrets:
+    databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+    redisUrl: "redis://host.minikube.internal:6379/0"

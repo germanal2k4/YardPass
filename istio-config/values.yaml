@@ -11,13 +11,41 @@ virtualServices:
   api:
     enabled: true
 
+# Внешние БД (docker-compose.data.yml на хосте → host.minikube.internal)
+serviceEntry:
+  postgres:
+    enabled: true
+    host: host.minikube.internal
+    port: 5432
+    address: ""
+    resolution: DNS
+  redis:
+    enabled: true
+    host: host.minikube.internal
+    port: 6379
+    address: ""
+    resolution: DNS
+
 peerAuthentication:
   enabled: true
   mode: STRICT
 
+authorizationPolicy:
+  backend:
+    enabled: false
+    # Включить и задать principals при необходимости (как muffin-currency → wallet)
+
 prometheus:
   serviceMonitor:
     enabled: true
+
+# Thanos sidecar / remote write — включить вместе с istio/prometheus-values (S3/MinIO)
+thanos:
+  enabled: false
+  bucket: thanos
+  endpoint: host.minikube.internal:9000
+  accessKey: minio
+  secretKey: minio123
 
 destinationRules:
   frontend:

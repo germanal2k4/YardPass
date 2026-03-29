@@ -1,0 +1,52 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istiod
+  namespace: istio-system
+  labels:
+    app: istio
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: istiod
+  namespaceSelector:
+    matchNames:
+      - istio-system
+  endpoints:
+    - port: http-monitoring
+      interval: 15s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: istio-proxy
+  namespace: istio-system
+  labels:
+    app: istio
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      security.istio.io/tlsMode: istio
+  namespaceSelector:
+    matchNames:
+      - istio-system
+      - yardpass
+  podMetricsEndpoints:
+    - interval: 15s
+      path: /stats/prometheus
+      port: http-envoy-prom
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          action: replace
+          targetLabel: pod_name
+        - sourceLabels: [__meta_kubernetes_namespace]
+          action: replace
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          action: replace
+          targetLabel: app
+{{- end }}

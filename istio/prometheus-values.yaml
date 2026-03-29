@@ -21,13 +21,172 @@ prometheus:
       limits:
         memory: 2Gi
         cpu: 1000m
+    additionalScrapeConfigs:
+      - job_name: 'envoy-stats'
+        metrics_path: /stats/prometheus
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: '.*-envoy-prom'
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:15090
+            target_label: __address__
+          - action: labeldrop
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: pod_name
+
+      - job_name: 'pilot'
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces:
+              names:
+                - istio-system
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: istiod;http-monitoring
 
 grafana:
   enabled: true
   adminPassword: admin
+  initChownData:
+    enabled: false
   persistence:
     enabled: true
     size: 5Gi
+  additionalDataSources:
+    - name: Elasticsearch
+      type: elasticsearch
+      url: http://elasticsearch.istio-system:9200
+      access: proxy
+      isDefault: false
+      jsonData:
+        index: "k8s-logs-*"
+        timeField: "@timestamp"
+        logMessageField: log
+        logLevelField: ""
+        esVersion: "8.0.0"
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: logs
+          orgId: 1
+          folder: Logs
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/logs
+  dashboards:
+    logs:
+      k8s-logs:
+        json: |
+          {
+            "annotations": {"list": []},
+            "editable": true,
+            "fiscalYearStartMonth": 0,
+            "graphTooltip": 0,
+            "links": [],
+            "panels": [
+              {
+                "datasource": {"type": "elasticsearch", "uid": ""},
+                "fieldConfig": {"defaults": {}, "overrides": []},
+                "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+                "id": 1,
+                "options": {
+                  "showLabels": false,
+                  "showTime": false,
+                  "sortOrder": "Descending",
+                  "wrapLogMessage": true,
+                  "dedupStrategy": "none",
+                  "enableLogDetails": true,
+                  "prettifyLogMessage": false
+                },
+                "targets": [
+                  {
+                    "alias": "",
+                    "bucketAggs": [
+                      {"field": "@timestamp", "id": "2", "settings": {"interval": "auto", "min_doc_count": "0", "trimEdges": "0"}, "type": "date_histogram"}
+                    ],
+                    "metrics": [{"id": "1", "type": "logs"}],
+                    "query": "kubernetes.namespace_name:yardpass AND kubernetes.container_name:(yardpass-backend OR yardpass-frontend OR nginx)",
+                    "refId": "A",
+                    "timeField": "@timestamp"
+                  }
+                ],
+                "title": "Application Logs (backend + frontend)",
+                "type": "logs"
+              },
+              {
+                "datasource": {"type": "elasticsearch", "uid": ""},
+                "gridPos": {"h": 4, "w": 12, "x": 0, "y": 4},
+                "id": 2,
+                "options": {
+                  "showLabels": false,
+                  "showTime": false,
+                  "sortOrder": "Descending",
+                  "wrapLogMessage": true,
+                  "dedupStrategy": "none",
+                  "enableLogDetails": true
+                },
+                "targets": [
+                  {
+                    "bucketAggs": [
+                      {"field": "@timestamp", "id": "2", "settings": {"interval": "auto"}, "type": "date_histogram"}
+                    ],
+                    "metrics": [{"id": "1", "type": "logs"}],
+                    "query": "kubernetes.namespace_name:yardpass AND kubernetes.container_name:yardpass-backend",
+                    "refId": "A",
+                    "timeField": "@timestamp"
+                  }
+                ],
+                "title": "Backend Logs",
+                "type": "logs"
+              },
+              {
+                "datasource": {"type": "elasticsearch", "uid": ""},
+                "gridPos": {"h": 4, "w": 12, "x": 12, "y": 4},
+                "id": 3,
+                "options": {
+                  "showLabels": false,
+                  "showTime": false,
+                  "sortOrder": "Descending",
+                  "wrapLogMessage": true,
+                  "dedupStrategy": "none",
+                  "enableLogDetails": true
+                },
+                "targets": [
+                  {
+                    "bucketAggs": [
+                      {"field": "@timestamp", "id": "2", "settings": {"interval": "auto"}, "type": "date_histogram"}
+                    ],
+                    "metrics": [{"id": "1", "type": "logs"}],
+                    "query": "kubernetes.namespace_name:yardpass AND kubernetes.container_name:(yardpass-frontend OR nginx)",
+                    "refId": "A",
+                    "timeField": "@timestamp"
+                  }
+                ],
+                "title": "Frontend Logs",
+                "type": "logs"
+              }
+            ],
+            "schemaVersion": 39,
+            "tags": ["kubernetes", "logs"],
+            "templating": {"list": []},
+            "time": {"from": "now-1h", "to": "now"},
+            "title": "K8s Application Logs",
+            "uid": "k8s-app-logs"
+          }
 
 alertmanager:
   enabled: false
@@ -35,4 +194,6 @@ alertmanager:
 prometheusOperator:
   enabled: true
   admissionWebhooks:
+    enabled: false
+  tls:
     enabled: false

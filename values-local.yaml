@@ -1,0 +1,17 @@
+# Local K8s overrides (minikube/podman)
+# Usage: helm install ... -f yardpass-backend/values.yaml -f values-local.yaml
+
+backend:
+  image:
+    repository: localhost/yardpass/backend
+    pullPolicy: Never
+  env:
+    LOG_TRANSPORT: stdout
+    TRACER_ENABLED: "false"
+    ELASTIC_URL: ""
+    TRACER_URL: ""
+
+frontend:
+  image:
+    repository: localhost/yardpass/frontend
+    pullPolicy: Never

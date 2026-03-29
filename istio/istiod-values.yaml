@@ -1,7 +1,12 @@
 meshConfig:
   accessLogFile: /dev/stdout
   accessLogEncoding: JSON
+  enableTracing: true
   defaultConfig:
+    tracing:
+      zipkin:
+        address: jaeger-collector.istio-system:9411
+      sampling: 100.0
     proxyStatsMatcher:
       inclusionRegexps:
         - ".*circuit_breakers.*"

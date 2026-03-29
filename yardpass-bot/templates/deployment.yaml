@@ -15,6 +15,10 @@ spec:
         {{ include "yardpass-bot.selector" . | nindent 8 }}
         version: {{ .Values.version | default "v1" }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: {{ .Values.appLabel }}
           image: {{ .Values.image.repository }}:{{ .Values.image.tag }}

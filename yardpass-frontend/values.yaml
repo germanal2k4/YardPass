@@ -2,9 +2,11 @@ replicaCount: 1
 version: v1
 
 image:
-  repository: yardpass/frontend
+  repository: ghcr.io/germanal2k4/yardpass-frontend
   tag: "latest"
   pullPolicy: IfNotPresent
+
+imagePullSecrets: []
 
 appLabel: yardpass-frontend
 

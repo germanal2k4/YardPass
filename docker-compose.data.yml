@@ -1,0 +1,44 @@
+# Postgres + Redis на хосте — единственный источник БД для docker-compose и K8s (minikube → host.minikube.internal).
+# Istio: ServiceEntry в istio-config/values.yaml
+#
+# Только данные:
+#   docker compose -f docker-compose.data.yml up -d
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: yardpass-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-yardpass}
+      POSTGRES_USER: ${POSTGRES_USER:-yardpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yardpass} -d ${POSTGRES_DB:-yardpass}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: yardpass-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

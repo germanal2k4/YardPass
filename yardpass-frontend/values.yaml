@@ -2,16 +2,16 @@ replicaCount: 1
 version: v1
 
 image:
-  repository: yardpass/frontend
+  repository: ghcr.io/germanal2k4/yardpass-frontend
   tag: "latest"
   pullPolicy: IfNotPresent
 
+imagePullSecrets: []
+
 appLabel: yardpass-frontend
 
-# Empty string = same-origin (use gateway host for API)
-# Set for local dev or when API is on different domain
 env:
-  VITE_API_BASE_URL: ""
+  BACKEND_URL: "http://yardpass-backend:8080"
 
 service:
   type: ClusterIP

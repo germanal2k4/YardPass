@@ -1,0 +1,26 @@
+# CD environment defaults (GitHub Actions -> GHCR -> K8s)
+# Image tags are overridden at deploy time via values-cd-override.yaml
+#
+# DSN к Postgres/Redis: задайте в values-cd-override.yaml (backend.secrets) или секретах кластера;
+# дефолты в chart — host.minikube.internal (только для локального k8s).
+
+backend:
+  image:
+    repository: ghcr.io/germanal2k4/yardpass-backend
+    tag: latest
+    pullPolicy: Always
+  imagePullSecrets:
+    - name: ghcr-pull-secret
+  env:
+    LOG_TRANSPORT: elastic
+    TRACER_ENABLED: "true"
+    TRACER_URL: "jaeger-collector.istio-system:4317"
+    ELASTIC_URL: "http://elasticsearch.istio-system:9200"
+
+frontend:
+  image:
+    repository: ghcr.io/germanal2k4/yardpass-frontend
+    tag: latest
+    pullPolicy: Always
+  imagePullSecrets:
+    - name: ghcr-pull-secret

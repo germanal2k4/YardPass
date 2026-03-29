@@ -2,11 +2,17 @@ replicaCount: 1
 version: v1
 
 image:
-  repository: yardpass/backend
+  repository: ghcr.io/germanal2k4/yardpass-backend
   tag: "latest"
   pullPolicy: IfNotPresent
 
+imagePullSecrets: []
+
 appLabel: yardpass-backend
+
+secrets:
+  databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+  redisUrl: "redis://host.minikube.internal:6379/0"
 
 env:
   JWT_SECRET: your-secret-key-change-me
@@ -16,6 +22,11 @@ env:
   RATE_LIMIT_CREATE_PASS_PER_HOUR: "10"
   LOG_LEVEL: info
   LOG_FORMAT: json
+  SERVER_HOST: "0.0.0.0"
+  LOG_TRANSPORT: elastic
+  TRACER_ENABLED: "true"
+  TRACER_URL: "jaeger-collector.istio-system:4317"
+  ELASTIC_URL: "http://elasticsearch:9200"
 
 service:
   type: ClusterIP

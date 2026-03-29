@@ -1,0 +1,57 @@
+{{- $pgEnabled := .Values.serviceEntry.postgres.enabled }}
+{{- $rdEnabled := .Values.serviceEntry.redis.enabled }}
+{{- $pgHost := .Values.serviceEntry.postgres.host | default "host.minikube.internal" }}
+{{- $rdHost := .Values.serviceEntry.redis.host | default "host.minikube.internal" }}
+{{- if and $pgEnabled $rdEnabled (eq $pgHost $rdHost) }}
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-data
+  namespace: yardpass
+spec:
+  hosts:
+    - {{ $pgHost }}
+  ports:
+    - number: {{ .Values.serviceEntry.postgres.port | default 5432 }}
+      name: tcp-postgres
+      protocol: TCP
+    - number: {{ .Values.serviceEntry.redis.port | default 6379 }}
+      name: tcp-redis
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: {{ .Values.serviceEntry.postgres.resolution | default "DNS" }}
+{{- else }}
+{{- if $pgEnabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-postgres
+  namespace: yardpass
+spec:
+  hosts:
+    - {{ $pgHost }}
+  ports:
+    - number: {{ .Values.serviceEntry.postgres.port | default 5432 }}
+      name: tcp-postgres
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: {{ .Values.serviceEntry.postgres.resolution | default "DNS" }}
+{{- end }}
+{{- if $rdEnabled }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-redis
+  namespace: yardpass
+spec:
+  hosts:
+    - {{ $rdHost }}
+  ports:
+    - number: {{ .Values.serviceEntry.redis.port | default 6379 }}
+      name: tcp-redis
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: {{ .Values.serviceEntry.redis.resolution | default "DNS" }}
+{{- end }}
+{{- end }}

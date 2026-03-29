@@ -1,0 +1,14 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: yardpass-backend-metrics
+  namespace: yardpass
+spec:
+  selector:
+    matchLabels:
+      app: yardpass-backend
+  portLevelMtls:
+    "5050":
+      mode: PERMISSIVE
+{{- end }}

@@ -11,6 +11,15 @@ spec:
       tcp:
         maxConnections: 100
       http:
-        h2UpgradePolicy: UPGRADE
+        http1MaxPendingRequests: 10
+        http2MaxRequests: 100
         maxRequestsPerConnection: 2
+        maxRetries: 3
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+    tls:
+      mode: ISTIO_MUTUAL
 {{- end }}

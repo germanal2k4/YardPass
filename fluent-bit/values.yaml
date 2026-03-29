@@ -1,0 +1,16 @@
+image:
+  repository: fluent/fluent-bit
+  tag: "3.0"
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    memory: 64Mi
+    cpu: 50m
+  limits:
+    memory: 128Mi
+    cpu: 100m
+
+elasticsearch:
+  host: elasticsearch.istio-system
+  port: 9200

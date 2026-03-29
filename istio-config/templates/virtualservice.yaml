@@ -19,6 +19,8 @@ spec:
             prefix: /service
         - uri:
             exact: /health
+        - uri:
+            prefix: /docs
       route:
         - destination:
             host: yardpass-backend

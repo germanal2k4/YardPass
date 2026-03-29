@@ -1,74 +1,89 @@
 # YardPass Kubernetes + Istio
 
-Развёртывание YardPass в Kubernetes с Istio, Prometheus, Grafana, Kiali (по аналогии с german-currency).
+Развёртывание YardPass в Kubernetes с Istio, Prometheus, Grafana, Kiali, Jaeger, Elasticsearch, Fluent Bit.
 
 ## Структура
 
 ```
 .
-├── helmfile.yaml          # Главный файл деплоя
-├── istio/                 # Values для Istio и стека мониторинга
-│   ├── istiod-values.yaml
-│   ├── prometheus-values.yaml
-│   ├── kiali-values.yaml
-│   ├── cert-manager-values.yaml
-│   ├── postgres-values.yaml
-│   └── redis-values.yaml
-├── istio-config/          # Istio CR: Gateway, VirtualServices, PeerAuth, ServiceMonitor
-├── yardpass-backend/      # Helm chart для API
-├── yardpass-frontend/     # Helm chart для SPA
-├── yardpass-bot/          # Helm chart для Telegram бота (installed: false по умолчанию)
-└── scripts/k8s-deploy.sh
+├── helmfile.yaml.gotmpl       # Главный файл деплоя (environments: default, local)
+├── values-local.yaml          # Overrides для локального деплоя (minikube + podman)
+├── scripts/
+│   ├── k8s-deploy.sh          # Быстрый деплой (docker)
+│   └── k8s-local-deploy.sh    # Полный деплой через podman + minikube
+├── istio/                     # Values для Istio и стека мониторинга
+├── istio-config/              # Istio CR: Gateway, VirtualServices, PeerAuth
+├── jaeger/                    # Helm chart — Jaeger all-in-one
+├── elasticsearch/             # Helm chart — Elasticsearch single-node
+├── fluent-bit/                # Helm chart — Fluent Bit DaemonSet
+├── grafana-dashboards/        # Helm chart — Grafana dashboards via ConfigMaps
+├── yardpass-backend/          # Helm chart — API
+├── yardpass-frontend/         # Helm chart — SPA (Nginx)
+└── yardpass-bot/              # Helm chart — Telegram бот (отключён по умолчанию)
 ```
 
 ## Требования
 
-- Kubernetes (minikube, k3s, или облачный кластер)
-- `kubectl`, `helm`, `helmfile`
-- Для minikube: `minikube addons enable ingress` (опционально)
+- `podman`, `minikube`, `kubectl`, `helm`, `helmfile`
+- macOS / Linux
 
-## Развёртывание
+## Локальный деплой (podman + minikube)
 
 ```bash
-# 1. Собрать образы
-docker build -t yardpass/backend:latest ./backend
-docker build -t yardpass/frontend:latest --build-arg VITE_API_BASE_URL="" ./frontend
+# Полный деплой с нуля
+./scripts/k8s-local-deploy.sh up
 
-# 2. Для minikube — загрузить образы
-minikube image load yardpass/backend:latest
-minikube image load yardpass/frontend:latest
+# Пересборка и передеплой только приложения
+./scripts/k8s-local-deploy.sh rebuild
 
-# 3. Деплой
-helmfile sync
+# Остановка (удаление Helm releases и namespace)
+./scripts/k8s-local-deploy.sh down
+
+# Полная очистка (удаление кластера minikube)
+./scripts/k8s-local-deploy.sh clean
+
+# Только сборка и загрузка образов
+./scripts/k8s-local-deploy.sh images
+
+# Статус кластера
+./scripts/k8s-local-deploy.sh status
 ```
+
+## Облачный деплой
+
+```bash
+# Использует default environment (без local overrides)
+helmfile -f helmfile.yaml.gotmpl sync
+```
+
+## Environments (helmfile)
+
+| Environment | Команда | Образы | Описание |
+|-------------|---------|--------|----------|
+| `default` | `helmfile -f helmfile.yaml.gotmpl sync` | `yardpass/backend:latest` | Продакшн / облако |
+| `local` | `helmfile -f helmfile.yaml.gotmpl -e local sync` | `localhost/yardpass/backend:latest` | Локальный (minikube + podman) |
 
 ## Порты и доступ
 
-| Сервис   | Namespace   | Доступ                          |
-|----------|-------------|----------------------------------|
-| Grafana  | istio-system| `kubectl port-forward -n istio-system svc/prometheus-grafana 3030:80` |
-| Kiali    | istio-system| `kubectl port-forward -n istio-system svc/kiali 20001:20001` |
-| Prometheus | istio-system | Внутренний, через Grafana |
-| Приложение | yardpass  | http://yardpass.example.com (добавить в /etc/hosts) |
+| Сервис | Namespace | Port-forward |
+|--------|-----------|--------------|
+| App (через Gateway) | istio-system | `kubectl port-forward -n istio-system svc/istio-ingress 3000:80` |
+| Grafana | istio-system | `kubectl port-forward -n istio-system svc/prometheus-grafana 3001:80` |
+| Kiali | istio-system | `kubectl port-forward -n istio-system svc/kiali 20001:20001` |
+| Jaeger | istio-system | `kubectl port-forward -n istio-system svc/jaeger-query 16686:16686` |
+| Prometheus | istio-system | `kubectl port-forward -n istio-system svc/prometheus-kube-prometheus-prometheus 9090:9090` |
 
-## Gateway и роутинг
+После port-forward для Gateway добавьте в `/etc/hosts`:
 
-- **Gateway**: `yardpass.example.com` (порт 80)
-- `/`, `/login`, и статика → **yardpass-frontend**
-- `/api`, `/auth`, `/service`, `/health` → **yardpass-backend**
+```
+127.0.0.1 yardpass.example.com
+```
+
+Приложение: http://yardpass.example.com:3000
 
 ## Секреты
 
-Перед деплоем настройте:
+Перед деплоем настройте в соответствующих `values.yaml`:
 
-1. **yardpass-backend** Secret: `database-url`, `redis-url` (по умолчанию для локального postgres/redis)
-2. **yardpass-bot** Secret: `telegram-token` — замените на реальный токен при включении бота
-
-## Включение бота
-
-```yaml
-# В helmfile.yaml для release yardpass-bot:
-installed: true  # было false
-```
-
-И обновите Secret `yardpass-bot` с `TELEGRAM_BOT_TOKEN`.
+1. **yardpass-backend**: `secrets.databaseUrl`, `secrets.redisUrl`
+2. **yardpass-bot**: `secrets.telegramToken` (при включении бота)

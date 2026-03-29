@@ -76,7 +76,7 @@ type LogConfig struct {
 	Level          string         `yaml:"level"            default:"info"`
 	Format         string         `yaml:"format"           default:"json"`
 	Buffered       bool           `yaml:"buffered"         default:"false"`
-	Transport      string         `yaml:"transport"        default:""`
+	Transport      string         `yaml:"transport"        env:"LOG_TRANSPORT"      default:""`
 	FilePath       string         `yaml:"file_path"        default:""`
 	ElasticConfig  *ElasticConfig `yaml:"elastic_config"   default:""`
 	MaskHeaders    []string       `yaml:"mask_headers"     env:"LOG_MASK_HEADERS"     default:"Authorization,X-Service-Token,Cookie"`
@@ -91,8 +91,8 @@ type ElasticConfig struct {
 }
 
 type TracerConfig struct {
-	Enabled bool   `yaml:"enabled" default:"true"`
-	Url     string `yaml:"url" env:"TRACER_URL" default:"localhost:4317"`
+	Enabled bool   `yaml:"enabled" env:"TRACER_ENABLED" default:"true"`
+	Url     string `yaml:"url"     env:"TRACER_URL"     default:"localhost:4317"`
 }
 
 type MetricsConfig struct {

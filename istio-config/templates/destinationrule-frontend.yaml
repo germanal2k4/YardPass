@@ -11,6 +11,6 @@ spec:
       tcp:
         maxConnections: 100
       http:
-        h2UpgradePolicy: UPGRADE
+        h2UpgradePolicy: DO_NOT_UPGRADE
         maxRequestsPerConnection: 2
 {{- end }}

@@ -7,8 +7,6 @@ repositories:
     url: https://kiali.org/helm-charts
   - name: jetstack
     url: https://charts.jetstack.io
-  - name: bitnami
-    url: https://charts.bitnami.com/bitnami
 
 releases:
   - name: istio-base
@@ -62,6 +60,41 @@ releases:
     values:
       - istio/prometheus-values.yaml
 
+  - name: jaeger
+    namespace: istio-system
+    chart: ./jaeger
+    needs:
+      - istio-system/istiod
+    wait: true
+    values:
+      - jaeger/values.yaml
+
+  - name: grafana-dashboards
+    namespace: istio-system
+    chart: ./grafana-dashboards
+    needs:
+      - istio-system/prometheus
+    wait: false
+
+  - name: elasticsearch
+    namespace: istio-system
+    chart: ./elasticsearch
+    needs:
+      - istio-system/istiod
+    wait: true
+    timeout: 300
+    values:
+      - elasticsearch/values.yaml
+
+  - name: fluent-bit
+    namespace: istio-system
+    chart: ./fluent-bit
+    needs:
+      - istio-system/elasticsearch
+    wait: true
+    values:
+      - fluent-bit/values.yaml
+
   - name: cert-manager
     namespace: istio-system
     chart: jetstack/cert-manager
@@ -77,7 +110,8 @@ releases:
   - name: postgres
     namespace: yardpass
     createNamespace: true
-    chart: bitnami/postgresql
+    chart: oci://registry-1.docker.io/bitnamicharts/postgresql
+    version: 18.5.14
     needs:
       - default/yardpass-namespace
     wait: false
@@ -87,7 +121,8 @@ releases:
   - name: redis
     namespace: yardpass
     createNamespace: false
-    chart: bitnami/redis
+    chart: oci://registry-1.docker.io/bitnamicharts/redis
+    version: 25.3.9
     wait: false
     values:
       - istio/redis-values.yaml

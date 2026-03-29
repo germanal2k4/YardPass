@@ -4,15 +4,15 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: yardpass
-      POSTGRES_USER: yardpass
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:-yardpass}
+      POSTGRES_USER: ${POSTGRES_USER:-yardpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yardpass"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yardpass}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,19 +60,20 @@ services:
       context: ./backend
       target: api
     environment:
-      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
-      - JWT_ACCESS_TTL=15m
-      - JWT_REFRESH_TTL=168h
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-168h}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
-      - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-      - ELASTIC_URL=http://elasticsearch:9200
-      - TRACER_URL=jaeger:4317
+      - RATE_LIMIT_CREATE_PASS_PER_HOUR=${RATE_LIMIT_CREATE_PASS_PER_HOUR:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
     ports:
       - "8080:8080"
       - "5050:5050"
@@ -94,15 +95,16 @@ services:
       dockerfile: Dockerfile
       target: bot
     environment:
-      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - API_BASE_URL=http://backend:8080
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-      - ELASTIC_URL=http://elasticsearch:9200
-      - TRACER_URL=jaeger:4317
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
     depends_on:
       postgres:
         condition: service_healthy
@@ -117,8 +119,7 @@ services:
     ports:
       - "3000:80"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8080
-      - VITE_DEFAULT_BUILDING_ID=1
+      - BACKEND_URL=http://backend:8080
     depends_on:
       - backend
     restart: unless-stopped

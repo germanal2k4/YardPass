@@ -8,6 +8,10 @@ image:
 
 appLabel: yardpass-backend
 
+secrets:
+  databaseUrl: "postgres://yardpass:password@postgres-postgresql:5432/yardpass?sslmode=disable"
+  redisUrl: "redis://redis-master:6379/0"
+
 env:
   JWT_SECRET: your-secret-key-change-me
   JWT_ACCESS_TTL: 15m
@@ -16,6 +20,11 @@ env:
   RATE_LIMIT_CREATE_PASS_PER_HOUR: "10"
   LOG_LEVEL: info
   LOG_FORMAT: json
+  SERVER_HOST: "0.0.0.0"
+  LOG_TRANSPORT: elastic
+  TRACER_ENABLED: "true"
+  TRACER_URL: "jaeger-collector.istio-system:4317"
+  ELASTIC_URL: "http://elasticsearch:9200"
 
 service:
   type: ClusterIP

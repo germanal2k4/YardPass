@@ -1,11 +1,15 @@
 environments:
-  default: {}
+  default:
+    values:
+      - values-default.yaml
   local:
     values:
+      - values-default.yaml
       - values-local.yaml
   cd:
     missingFileHandler: Warn
     values:
+      - values-default.yaml
       - values-cd.yaml
       - values-cd-override.yaml
 ---
@@ -118,28 +122,6 @@ releases:
     chart: ./yardpass-namespace
     wait: true
 
-  - name: postgres
-    namespace: yardpass
-    createNamespace: false
-    chart: oci://registry-1.docker.io/bitnamicharts/postgresql
-    version: 18.5.14
-    needs:
-      - default/yardpass-namespace
-    wait: false
-    values:
-      - istio/postgres-values.yaml
-
-  - name: redis
-    namespace: yardpass
-    createNamespace: false
-    chart: oci://registry-1.docker.io/bitnamicharts/redis
-    version: 25.3.9
-    needs:
-      - default/yardpass-namespace
-    wait: false
-    values:
-      - istio/redis-values.yaml
-
   - name: istio-config
     namespace: yardpass
     createNamespace: false
@@ -157,8 +139,6 @@ releases:
     needs:
       - istio-system/istiod
       - yardpass/istio-config
-      - yardpass/postgres
-      - yardpass/redis
     values:
       - yardpass-backend/values.yaml
 {{ if hasKey .Values "backend" }}
@@ -183,8 +163,9 @@ releases:
     chart: ./yardpass-bot
     needs:
       - yardpass/yardpass-backend
-      - yardpass/postgres
-      - yardpass/redis
     values:
       - yardpass-bot/values.yaml
-    installed: false
+{{ if hasKey .Values "bot" }}
+      - {{ .Values.bot | toYaml | nindent 8 }}
+{{ end }}
+    installed: true

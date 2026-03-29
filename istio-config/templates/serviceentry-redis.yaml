@@ -1,0 +1,20 @@
+{{- if .Values.serviceEntry.redis.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: yardpass-redis
+  namespace: yardpass
+spec:
+  hosts:
+    - {{ .Values.serviceEntry.redis.host | default "host.minikube.internal" }}
+  {{- if .Values.serviceEntry.redis.address }}
+  addresses:
+    - {{ .Values.serviceEntry.redis.address }}
+  {{- end }}
+  ports:
+    - number: {{ .Values.serviceEntry.redis.port | default 6379 }}
+      name: redis
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: {{ .Values.serviceEntry.redis.resolution | default "DNS" }}
+{{- end }}

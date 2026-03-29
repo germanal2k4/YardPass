@@ -1,3 +1,9 @@
+environments:
+  default: {}
+  local:
+    values:
+      - values-local.yaml
+---
 repositories:
   - name: istio
     url: https://istio-release.storage.googleapis.com/charts
@@ -105,11 +111,11 @@ releases:
   - name: yardpass-namespace
     namespace: default
     chart: ./yardpass-namespace
-    wait: false
+    wait: true
 
   - name: postgres
     namespace: yardpass
-    createNamespace: true
+    createNamespace: false
     chart: oci://registry-1.docker.io/bitnamicharts/postgresql
     version: 18.5.14
     needs:
@@ -123,6 +129,8 @@ releases:
     createNamespace: false
     chart: oci://registry-1.docker.io/bitnamicharts/redis
     version: 25.3.9
+    needs:
+      - default/yardpass-namespace
     wait: false
     values:
       - istio/redis-values.yaml
@@ -148,7 +156,9 @@ releases:
       - yardpass/redis
     values:
       - yardpass-backend/values.yaml
-
+{{ if hasKey .Values "backend" }}
+      - {{ .Values.backend | toYaml | nindent 8 }}
+{{ end }}
   - name: yardpass-frontend
     namespace: yardpass
     createNamespace: false
@@ -158,6 +168,9 @@ releases:
       - yardpass/istio-config
     values:
       - yardpass-frontend/values.yaml
+{{ if hasKey .Values "frontend" }}
+      - {{ .Values.frontend | toYaml | nindent 8 }}
+{{ end }}
 
   - name: yardpass-bot
     namespace: yardpass

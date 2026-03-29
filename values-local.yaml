@@ -1,17 +1,19 @@
-# Local K8s overrides (minikube/podman)
-# Usage: helm install ... -f yardpass-backend/values.yaml -f values-local.yaml
+# Local K8s overrides for minikube + podman (CRI-O)
+# These files are merged into helmfile via environment values
 
 backend:
   image:
     repository: localhost/yardpass/backend
+    tag: latest
     pullPolicy: Never
   env:
     LOG_TRANSPORT: stdout
-    TRACER_ENABLED: "false"
+    TRACER_ENABLED: "true"
+    TRACER_URL: "jaeger-collector.istio-system:4317"
     ELASTIC_URL: ""
-    TRACER_URL: ""
 
 frontend:
   image:
     repository: localhost/yardpass/frontend
+    tag: latest
     pullPolicy: Never

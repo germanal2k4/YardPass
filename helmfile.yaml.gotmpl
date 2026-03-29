@@ -3,6 +3,11 @@ environments:
   local:
     values:
       - values-local.yaml
+  cd:
+    missingFileHandler: Warn
+    values:
+      - values-cd.yaml
+      - values-cd-override.yaml
 ---
 repositories:
   - name: istio

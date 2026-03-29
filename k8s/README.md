@@ -6,8 +6,12 @@
 
 ```
 .
-├── helmfile.yaml.gotmpl       # Главный файл деплоя (environments: default, local)
+├── helmfile.yaml.gotmpl       # Главный файл деплоя (environments: default, local, cd)
 ├── values-local.yaml          # Overrides для локального деплоя (minikube + podman)
+├── values-cd.yaml             # Overrides для CI/CD деплоя (ghcr.io образы)
+├── .github/workflows/
+│   ├── ci.yml                 # CI: тесты, линтинг, сборка
+│   └── cd.yml                 # CD: build/push образов в GHCR, деплой в K8s
 ├── scripts/
 │   ├── k8s-deploy.sh          # Быстрый деплой (docker)
 │   └── k8s-local-deploy.sh    # Полный деплой через podman + minikube
@@ -49,19 +53,39 @@
 ./scripts/k8s-local-deploy.sh status
 ```
 
-## Облачный деплой
+## CI/CD (GitHub Actions)
 
-```bash
-# Использует default environment (без local overrides)
-helmfile -f helmfile.yaml.gotmpl sync
-```
+Пайплайн из двух workflows:
+
+1. **CI** (`ci.yml`) — запускается на push/PR в `main`: тесты backend (Go), тесты frontend (Node), E2E (Playwright)
+2. **CD** (`cd.yml`) — запускается после успешного CI на `main`:
+   - Собирает Docker-образы backend и frontend
+   - Пушит в GitHub Container Registry (`ghcr.io/germanal2k4/yardpass-*`)
+   - Деплоит в K8s через `helmfile -e cd sync`
+
+### Необходимые GitHub Secrets
+
+| Secret | Описание |
+|--------|----------|
+| `KUBE_CONFIG` | Base64-encoded kubeconfig для доступа к кластеру (`cat ~/.kube/config \| base64`) |
+| `DB_URL` | PostgreSQL connection string (опционально, для переопределения дефолта) |
+| `REDIS_URL` | Redis connection string (опционально) |
+
+`GITHUB_TOKEN` для ghcr.io предоставляется автоматически.
+
+### Как настроить
+
+1. Добавьте секреты в GitHub: Settings -> Secrets and variables -> Actions
+2. Убедитесь, что K8s кластер доступен из GitHub Actions runner
+3. При push в `main` — CI прогоняет тесты, CD собирает образы и деплоит
 
 ## Environments (helmfile)
 
 | Environment | Команда | Образы | Описание |
 |-------------|---------|--------|----------|
-| `default` | `helmfile -f helmfile.yaml.gotmpl sync` | `yardpass/backend:latest` | Продакшн / облако |
-| `local` | `helmfile -f helmfile.yaml.gotmpl -e local sync` | `localhost/yardpass/backend:latest` | Локальный (minikube + podman) |
+| `default` | `helmfile -f helmfile.yaml.gotmpl sync` | `ghcr.io/germanal2k4/yardpass-*:latest` | Продакшн / облако |
+| `local` | `helmfile -f helmfile.yaml.gotmpl -e local sync` | `localhost/yardpass/*:latest` | Локальный (minikube + podman) |
+| `cd` | `helmfile -f helmfile.yaml.gotmpl -e cd sync` | `ghcr.io/germanal2k4/yardpass-*:<sha>` | CI/CD (GitHub Actions) |
 
 ## Порты и доступ
 

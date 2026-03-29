@@ -33,6 +33,9 @@ Thumbs.db
 *.tmp
 .cache/
 
+# CD deploy override (generated at deploy time)
+values-cd-override.yaml
+
 # Mock server
 mock-server/
 docker-compose.dev.yml

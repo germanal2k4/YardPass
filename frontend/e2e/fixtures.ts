@@ -1,15 +1,6 @@
 import { test as base, expect, Page } from '@playwright/test';
 
-const mockAdminTokens = {
-  access_token: 'mock-admin-token',
-  refresh_token: 'mock-admin-refresh',
-  expires_in: 3600,
-  token_type: 'Bearer',
-};
-
-const mockGuardTokens = {
-  access_token: 'mock-guard-token',
-  refresh_token: 'mock-guard-refresh',
+const mockAuthMeta = {
   expires_in: 3600,
   token_type: 'Bearer',
 };
@@ -100,10 +91,22 @@ async function setupApiMocks(page: Page) {
     const body = route.request().postDataJSON();
     if (body.username === 'admin' && body.password === 'password') {
       loggedInRole = 'admin';
-      await route.fulfill({ json: mockAdminTokens });
+      await route.fulfill({
+        status: 200,
+        json: mockAuthMeta,
+        headers: {
+          'Set-Cookie': 'access_token=mock-admin-token; Path=/',
+        },
+      });
     } else if (body.username === 'guard' && body.password === 'password') {
       loggedInRole = 'guard';
-      await route.fulfill({ json: mockGuardTokens });
+      await route.fulfill({
+        status: 200,
+        json: mockAuthMeta,
+        headers: {
+          'Set-Cookie': 'access_token=mock-guard-token; Path=/',
+        },
+      });
     } else {
       await route.fulfill({
         status: 401,
@@ -114,20 +117,31 @@ async function setupApiMocks(page: Page) {
 
   await page.route('**/auth/refresh', async (route) => {
     await route.fulfill({
-      json: loggedInRole === 'guard' ? mockGuardTokens : mockAdminTokens,
+      status: 200,
+      json: mockAuthMeta,
+      headers: {
+        'Set-Cookie':
+          loggedInRole === 'guard'
+            ? 'access_token=mock-guard-token; Path=/'
+            : 'access_token=mock-admin-token; Path=/',
+      },
     });
   });
 
+  await page.route('**/auth/logout', async (route) => {
+    loggedInRole = null;
+    await route.fulfill({ status: 204, body: '' });
+  });
+
   await page.route('**/api/v1/me', async (route) => {
-    const auth = route.request().headers()['authorization'];
-    if (!auth) {
+    if (!loggedInRole) {
       await route.fulfill({
         status: 401,
         json: { error: { code: 'UNAUTHORIZED', message: 'Missing token' } },
       });
       return;
     }
-    if (auth.includes('mock-guard-token')) {
+    if (loggedInRole === 'guard') {
       await route.fulfill({ json: mockGuardUser });
     } else {
       await route.fulfill({ json: mockAdminUser });

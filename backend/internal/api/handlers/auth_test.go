@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"yardpass/internal/config"
 	"yardpass/internal/domain"
 
 	"github.com/gin-gonic/gin"
@@ -43,12 +45,22 @@ func (m *mockAuthService) ValidateToken(ctx context.Context, token string) (*dom
 	return args.Get(0).(*domain.TokenClaims), args.Error(1)
 }
 
+func testAuthConfig() *config.Config {
+	return &config.Config{
+		JWT: config.JWTConfig{
+			AccessTTL:  15 * time.Minute,
+			RefreshTTL: 168 * time.Hour,
+		},
+		Cookie: config.CookieConfig{Secure: false, SameSite: "Lax"},
+	}
+}
+
 func TestAuthHandler_Login(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("login success", func(t *testing.T) {
 		svc := new(mockAuthService)
-		h := NewAuthHandlerWithService(svc)
+		h := NewAuthHandlerWithService(svc, testAuthConfig())
 
 		r := gin.New()
 		r.POST("/login", h.Login)
@@ -68,14 +80,21 @@ func TestAuthHandler_Login(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		var resp map[string]interface{}
 		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		assert.Equal(t, "access-tok", resp["access_token"])
-		assert.Equal(t, "refresh-tok", resp["refresh_token"])
+		assert.Equal(t, float64(900), resp["expires_in"])
+		assert.Nil(t, resp["access_token"])
+		cookies := w.Result().Cookies()
+		var names []string
+		for _, ck := range cookies {
+			names = append(names, ck.Name)
+		}
+		assert.Contains(t, names, "access_token")
+		assert.Contains(t, names, "refresh_token")
 		svc.AssertExpectations(t)
 	})
 
 	t.Run("login invalid credentials", func(t *testing.T) {
 		svc := new(mockAuthService)
-		h := NewAuthHandlerWithService(svc)
+		h := NewAuthHandlerWithService(svc, testAuthConfig())
 
 		r := gin.New()
 		r.POST("/login", h.Login)
@@ -94,7 +113,7 @@ func TestAuthHandler_Login(t *testing.T) {
 
 	t.Run("login invalid request body", func(t *testing.T) {
 		svc := new(mockAuthService)
-		h := NewAuthHandlerWithService(svc)
+		h := NewAuthHandlerWithService(svc, testAuthConfig())
 
 		r := gin.New()
 		r.POST("/login", h.Login)
@@ -112,29 +131,25 @@ func TestAuthHandler_Login(t *testing.T) {
 func TestAuthHandler_Refresh(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("refresh success", func(t *testing.T) {
+	t.Run("refresh success with cookie", func(t *testing.T) {
 		svc := new(mockAuthService)
-		h := NewAuthHandlerWithService(svc)
+		h := NewAuthHandlerWithService(svc, testAuthConfig())
 
 		r := gin.New()
 		r.POST("/refresh", h.Refresh)
 
-		svc.On("RefreshToken", mock.Anything, "valid-refresh-tok").Return(&domain.AuthTokens{
+		svc.On("RefreshToken", mock.Anything, "cookie-refresh").Return(&domain.AuthTokens{
 			AccessToken:  "new-access",
 			RefreshToken: "new-refresh",
 			ExpiresIn:    900,
 		}, nil)
 
-		body, _ := json.Marshal(RefreshRequest{RefreshToken: "valid-refresh-tok"})
-		req := httptest.NewRequest(http.MethodPost, "/refresh", bytes.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
+		req := httptest.NewRequest(http.MethodPost, "/refresh", http.NoBody)
+		req.Header.Set("Cookie", "refresh_token=cookie-refresh")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		var resp map[string]interface{}
-		_ = json.Unmarshal(w.Body.Bytes(), &resp)
-		assert.Equal(t, "new-access", resp["access_token"])
 		svc.AssertExpectations(t)
 	})
 }

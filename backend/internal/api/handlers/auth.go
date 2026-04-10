@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"yardpass/internal/config"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 
@@ -11,26 +12,24 @@ import (
 
 type AuthHandler struct {
 	authService domain.AuthService
+	cfg         *config.Config
 }
 
-func NewAuthHandler(authService domain.AuthService) *AuthHandler {
+func NewAuthHandler(authService domain.AuthService, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
+		cfg:         cfg,
 	}
 }
 
 // NewAuthHandlerWithService is an alias for NewAuthHandler for tests.
-func NewAuthHandlerWithService(authService domain.AuthService) *AuthHandler {
-	return NewAuthHandler(authService)
+func NewAuthHandlerWithService(authService domain.AuthService, cfg *config.Config) *AuthHandler {
+	return NewAuthHandler(authService, cfg)
 }
 
 type LoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
-}
-
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -46,33 +45,38 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	h.setAuthCookies(c, tokens.AccessToken, tokens.RefreshToken)
+
 	c.JSON(http.StatusOK, gin.H{
-		"access_token":  tokens.AccessToken,
-		"refresh_token": tokens.RefreshToken,
-		"expires_in":    tokens.ExpiresIn,
-		"token_type":    "Bearer",
+		"expires_in": tokens.ExpiresIn,
+		"token_type": "Bearer",
 	})
 }
 
 func (h *AuthHandler) Refresh(c *gin.Context) {
-	var req RefreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+	refreshToken, err := c.Cookie(cookieRefreshToken)
+	if err != nil || refreshToken == "" {
+		errors.BadRequest(c, "INVALID_REQUEST", "refresh_token is required")
 		return
 	}
 
-	tokens, err := h.authService.RefreshToken(c.Request.Context(), req.RefreshToken)
+	tokens, err := h.authService.RefreshToken(c.Request.Context(), refreshToken)
 	if err != nil {
 		errors.Unauthorized(c, "INVALID_REFRESH_TOKEN", err.Error())
 		return
 	}
 
+	h.setAuthCookies(c, tokens.AccessToken, tokens.RefreshToken)
+
 	c.JSON(http.StatusOK, gin.H{
-		"access_token":  tokens.AccessToken,
-		"refresh_token": tokens.RefreshToken,
-		"expires_in":    tokens.ExpiresIn,
-		"token_type":    "Bearer",
+		"expires_in": tokens.ExpiresIn,
+		"token_type": "Bearer",
 	})
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	h.clearAuthCookies(c)
+	c.Status(http.StatusNoContent)
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {

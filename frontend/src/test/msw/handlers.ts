@@ -13,12 +13,15 @@ export const mockGuardUser = {
   building_id: 1,
 };
 
-export const mockTokens = {
-  access_token: 'mock-access-token',
-  refresh_token: 'mock-refresh-token',
+export const mockAuthSuccess = {
   expires_in: 3600,
   token_type: 'Bearer' as const,
 };
+
+function hasAccessToken(request: Request): boolean {
+  const cookie = request.headers.get('Cookie') ?? '';
+  return /(?:^|;\s)access_token=[^;]+/.test(cookie);
+}
 
 export const mockResidents = [
   {
@@ -103,10 +106,18 @@ export const handlers = [
   http.post(`${API_BASE}/auth/login`, async ({ request }) => {
     const body = (await request.json()) as { username: string; password: string };
     if (body.username === 'admin' && body.password === 'password') {
-      return HttpResponse.json(mockTokens);
+      return HttpResponse.json(mockAuthSuccess, {
+        headers: {
+          'Set-Cookie': 'access_token=mock-access-token; Path=/; SameSite=Lax',
+        },
+      });
     }
     if (body.username === 'guard' && body.password === 'password') {
-      return HttpResponse.json(mockTokens);
+      return HttpResponse.json(mockAuthSuccess, {
+        headers: {
+          'Set-Cookie': 'access_token=mock-access-token; Path=/; SameSite=Lax',
+        },
+      });
     }
     return HttpResponse.json(
       { error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' } },
@@ -115,12 +126,22 @@ export const handlers = [
   }),
 
   http.post(`${API_BASE}/auth/refresh`, () => {
-    return HttpResponse.json(mockTokens);
+    return HttpResponse.json(mockAuthSuccess, {
+      headers: {
+        'Set-Cookie': 'access_token=mock-access-token; Path=/; SameSite=Lax',
+      },
+    });
+  }),
+
+  http.post(`${API_BASE}/auth/logout`, () => {
+    const headers = new Headers();
+    headers.append('Set-Cookie', 'access_token=; Path=/; Max-Age=0');
+    headers.append('Set-Cookie', 'refresh_token=; Path=/; Max-Age=0');
+    return new HttpResponse(null, { status: 204, headers });
   }),
 
   http.get(`${API_BASE}/api/v1/me`, ({ request }) => {
-    const auth = request.headers.get('Authorization');
-    if (!auth) {
+    if (!hasAccessToken(request)) {
       return HttpResponse.json(
         { error: { code: 'UNAUTHORIZED', message: 'Invalid or missing token' } },
         { status: 401 },

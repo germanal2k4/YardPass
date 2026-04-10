@@ -1,14 +1,14 @@
 import { createContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/shared/api/auth';
-import { STORAGE_KEYS, APP_ROUTES } from '@/shared/config/constants';
+import { APP_ROUTES } from '@/shared/config/constants';
 import type { MeResponse, LoginRequest } from '@/shared/types/api';
 
 interface AuthContextType {
   user: MeResponse | null;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,20 +24,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-      
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
         const userData = await authApi.getMe();
         setUser(userData);
-      } catch (error) {
-        // Token invalid, clear storage
-        localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-        localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      } catch {
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -47,30 +38,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const login = async (credentials: LoginRequest) => {
-    try {
-      const response = await authApi.login(credentials);
-      
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, response.access_token);
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refresh_token);
+    await authApi.login(credentials);
 
-      const userData = await authApi.getMe();
-      setUser(userData);
+    const userData = await authApi.getMe();
+    setUser(userData);
 
-      // Redirect based on role
-      if (userData.role === 'admin') {
-        navigate(APP_ROUTES.ADMIN, { replace: true });
-      } else if (userData.role === 'guard') {
-        navigate(APP_ROUTES.SECURITY, { replace: true });
-      } else {
-        navigate(APP_ROUTES.HOME, { replace: true });
-      }
-    } catch (error) {
-      throw error;
+    if (userData.role === 'admin') {
+      navigate(APP_ROUTES.ADMIN, { replace: true });
+    } else if (userData.role === 'guard') {
+      navigate(APP_ROUTES.SECURITY, { replace: true });
+    } else {
+      navigate(APP_ROUTES.HOME, { replace: true });
     }
   };
 
-  const logout = () => {
-    authApi.logout();
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // still leave the app logged out locally
+    }
     setUser(null);
     navigate(APP_ROUTES.LOGIN);
   };
@@ -81,4 +68,3 @@ export function AuthProvider({ children }: AuthProviderProps) {
     </AuthContext.Provider>
   );
 }
-

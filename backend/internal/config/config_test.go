@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -36,6 +37,14 @@ func TestLoad_Defaults(t *testing.T) {
 	assertEqual(t, "JWT.Secret", "", cfg.JWT.Secret)
 	assertEqual(t, "JWT.AccessTTL", 15*time.Minute, cfg.JWT.AccessTTL)
 	assertEqual(t, "JWT.RefreshTTL", 168*time.Hour, cfg.JWT.RefreshTTL)
+
+	// CORS / cookie defaults
+	wantOrigins := []string{"http://localhost:3000", "http://127.0.0.1:3000"}
+	if !slices.Equal(wantOrigins, cfg.CORS.AllowedOrigins) {
+		t.Errorf("CORS.AllowedOrigins = %v, want %v", cfg.CORS.AllowedOrigins, wantOrigins)
+	}
+	assertEqual(t, "Cookie.Secure", false, cfg.Cookie.Secure)
+	assertEqual(t, "Cookie.SameSite", "Lax", cfg.Cookie.SameSite)
 
 	// Telegram defaults
 	assertEqual(t, "Telegram.BotToken", "", cfg.Telegram.BotToken)

@@ -80,14 +80,8 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
   expires_in: number;
   token_type: 'Bearer';
-}
-
-export interface RefreshRequest {
-  refresh_token: string;
 }
 
 export interface MeResponse {

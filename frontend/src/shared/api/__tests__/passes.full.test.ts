@@ -6,7 +6,7 @@ const API_BASE = 'http://localhost:8080';
 
 describe('passesApi - extended', () => {
   beforeEach(() => {
-    localStorage.setItem('access_token', 'mock-token');
+    document.cookie = 'access_token=mock-token; Path=/';
   });
 
   describe('validate with car_plate', () => {

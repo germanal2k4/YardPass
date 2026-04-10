@@ -6,6 +6,11 @@ node_modules/
 # Testing
 coverage/
 
+# Playwright E2E (HTML report, traces, screenshots)
+playwright-report/
+test-results/
+blob-report/
+
 # Production
 dist/
 build/

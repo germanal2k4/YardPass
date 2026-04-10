@@ -1,23 +1,26 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../AuthProvider';
 import { useAuth } from '../useAuth';
-import { STORAGE_KEYS } from '@/shared/config/constants';
+import { server } from '@/test/msw/server';
+import { handlers, mockUser } from '@/test/msw/handlers';
+import { http, HttpResponse } from 'msw';
 
 function TestConsumer() {
   const { user, isLoading, login, logout } = useAuth();
   if (isLoading) return <div>loading</div>;
-  if (!user) return (
-    <div>
-      <span>no user</span>
-      <button onClick={() => login({ username: 'admin', password: 'password' })}>login</button>
-    </div>
-  );
+  if (!user)
+    return (
+      <div>
+        <span>no user</span>
+        <button onClick={() => login({ username: 'admin', password: 'password' })}>login</button>
+      </div>
+    );
   return (
     <div>
       <span>user:{user.role}</span>
-      <button onClick={logout}>logout</button>
+      <button onClick={() => void logout()}>logout</button>
     </div>
   );
 }
@@ -32,25 +35,46 @@ function renderAuth() {
   );
 }
 
+function clearAllCookies() {
+  document.cookie.split(';').forEach((c) => {
+    const name = c.split('=')[0]?.trim();
+    if (name) {
+      document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+    }
+  });
+}
+
 beforeEach(() => {
-  localStorage.clear();
+  clearAllCookies();
+  server.resetHandlers(...handlers);
+});
+
+afterEach(() => {
+  clearAllCookies();
 });
 
 describe('AuthProvider', () => {
-  it('shows isLoading=false and user=null when no token', async () => {
+  it('shows isLoading=false and user=null when no session', async () => {
+    server.use(
+      http.get('http://localhost:8080/api/v1/me', () =>
+        HttpResponse.json(
+          { error: { code: 'UNAUTHORIZED', message: 'Not logged in' } },
+          { status: 401 },
+        ),
+      ),
+    );
+
     renderAuth();
     await waitFor(() => {
       expect(screen.getByText('no user')).toBeInTheDocument();
     });
   });
 
-  it('fetches user when access token exists', async () => {
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, 'mock-access-token');
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, 'mock-refresh-token');
+  it('fetches user when access cookie is present', async () => {
+    document.cookie = 'access_token=mock-access-token; Path=/';
 
     renderAuth();
 
-    // Should show loading first
     expect(screen.getByText('loading')).toBeInTheDocument();
 
     await waitFor(() => {
@@ -58,10 +82,7 @@ describe('AuthProvider', () => {
     });
   });
 
-  it('clears tokens when getMe fails', async () => {
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, 'invalid-token');
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, 'invalid-refresh');
-
+  it('shows no user when getMe fails', async () => {
     const { server } = await import('@/test/msw/server');
     const { http, HttpResponse } = await import('msw');
     server.use(
@@ -73,22 +94,44 @@ describe('AuthProvider', () => {
       }),
     );
 
+    document.cookie = 'access_token=invalid-token; Path=/';
+
     renderAuth();
 
     await waitFor(() => {
       expect(screen.getByText('no user')).toBeInTheDocument();
     });
-
-    expect(localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)).toBeNull();
-    expect(localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)).toBeNull();
   });
 
-  it('login sets tokens, fetches user and navigates', async () => {
+  it('login fetches user and navigates', async () => {
+    let mePolicy: 'before-login' | 'after-login' = 'before-login';
+    server.use(
+      http.get('http://localhost:8080/api/v1/me', ({ request }) => {
+        if (mePolicy === 'before-login') {
+          return HttpResponse.json(
+            { error: { code: 'UNAUTHORIZED', message: 'Not logged in' } },
+            { status: 401 },
+          );
+        }
+        const cookie = request.headers.get('Cookie') ?? '';
+        const hasAccess = /(?:^|;\s)access_token=[^;]+/.test(cookie);
+        if (!hasAccess) {
+          return HttpResponse.json(
+            { error: { code: 'UNAUTHORIZED', message: 'Not logged in' } },
+            { status: 401 },
+          );
+        }
+        return HttpResponse.json(mockUser);
+      }),
+    );
+
     renderAuth();
 
     await waitFor(() => {
       expect(screen.getByText('no user')).toBeInTheDocument();
     });
+
+    mePolicy = 'after-login';
 
     await act(async () => {
       screen.getByText('login').click();
@@ -97,14 +140,10 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByText('user:admin')).toBeInTheDocument();
     });
-
-    expect(localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)).toBe('mock-access-token');
-    expect(localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)).toBe('mock-refresh-token');
   });
 
-  it('logout clears user and tokens', async () => {
-    localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, 'mock-access-token');
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, 'mock-refresh-token');
+  it('logout clears user', async () => {
+    document.cookie = 'access_token=mock-access-token; Path=/';
 
     renderAuth();
 
@@ -119,8 +158,5 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(screen.getByText('no user')).toBeInTheDocument();
     });
-
-    expect(localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)).toBeNull();
-    expect(localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN)).toBeNull();
   });
 });

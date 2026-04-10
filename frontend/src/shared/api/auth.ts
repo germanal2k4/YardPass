@@ -13,10 +13,7 @@ export const authApi = {
     return response.data;
   },
 
-  logout: () => {
-    // Clear tokens from storage
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+  logout: async (): Promise<void> => {
+    await apiClient.post(API_ENDPOINTS.LOGOUT, {});
   },
 };
-

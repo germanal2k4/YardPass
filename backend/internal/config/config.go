@@ -20,6 +20,8 @@ type Config struct {
 	PG        PGConfig        `yaml:"pg"`
 	Redis     RedisConfig     `yaml:"redis"`
 	JWT       JWTConfig       `yaml:"jwt"`
+	CORS      CORSConfig      `yaml:"cors"`
+	Cookie    CookieConfig    `yaml:"cookie"`
 	Telegram  TelegramConfig  `yaml:"telegram"`
 	Service   ServiceConfig   `yaml:"service"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
@@ -52,6 +54,15 @@ type JWTConfig struct {
 	Secret     string        `yaml:"secret"      env:"JWT_SECRET"      default:""`
 	AccessTTL  time.Duration `yaml:"access_ttl"  env:"JWT_ACCESS_TTL"  default:"15m"`
 	RefreshTTL time.Duration `yaml:"refresh_ttl" env:"JWT_REFRESH_TTL" default:"168h"`
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins" env:"CORS_ALLOWED_ORIGINS" default:"http://localhost:3000,http://127.0.0.1:3000"`
+}
+
+type CookieConfig struct {
+	Secure   bool   `yaml:"secure"    env:"COOKIE_SECURE"    default:"false"`
+	SameSite string `yaml:"same_site" env:"COOKIE_SAMESITE" default:"Lax"`
 }
 
 type TelegramConfig struct {

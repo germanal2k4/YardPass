@@ -7,6 +7,28 @@ dist/
 build/
 bin/
 
+# Test & coverage artifacts (Go, Vitest, Playwright, profiles)
+coverage.out
+coverage.html
+coverage.xml
+*.prof
+*.pprof
+**/playwright-report/
+**/test-results/
+**/blob-report/
+.eslintcache
+*.tsbuildinfo
+
+# Tests, coverage, profiling (Go, Vitest, Playwright, ESLint cache)
+coverage.out
+coverage.html
+*.prof
+*.pprof
+**/.eslintcache
+**/playwright-report/
+**/test-results/
+**/blob-report/
+
 # Environment
 .env
 .env.local

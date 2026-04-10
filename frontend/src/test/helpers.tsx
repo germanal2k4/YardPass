@@ -11,7 +11,7 @@ export interface AuthOverrides {
   user?: MeResponse | null;
   isLoading?: boolean;
   login?: (credentials: LoginRequest) => Promise<void>;
-  logout?: () => void;
+  logout?: () => void | Promise<void>;
 }
 
 interface WrapperOptions {

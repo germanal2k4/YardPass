@@ -50,7 +50,7 @@ func NewRouter(
 	}
 
 	r := gin.New()
-	r.Use(middleware.CORSMiddleware())
+	r.Use(middleware.CORSMiddleware(cfg.CORS.AllowedOrigins))
 	r.Use(middleware.InMemoryRateLimit(100, 200))
 	r.Use(middleware.TracingMiddleware(tracer))
 	r.Use(middleware.LoggingMiddleware(logger, cfg.Log))
@@ -67,6 +67,7 @@ func NewRouter(
 	{
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+		auth.POST("/logout", authHandler.Logout)
 	}
 
 	api := r.Group("/api/v1")

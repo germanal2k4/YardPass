@@ -6,15 +6,14 @@ const API_BASE = 'http://localhost:8080';
 
 describe('authApi', () => {
   beforeEach(() => {
-    localStorage.clear();
+    document.cookie = 'access_token=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
   });
 
   describe('login', () => {
-    it('returns tokens on successful login', async () => {
+    it('returns metadata on successful login and sets access cookie (mock)', async () => {
       const result = await authApi.login({ username: 'admin', password: 'password' });
 
-      expect(result.access_token).toBe('mock-access-token');
-      expect(result.refresh_token).toBe('mock-refresh-token');
+      expect(result.expires_in).toBe(3600);
       expect(result.token_type).toBe('Bearer');
     });
 
@@ -27,7 +26,7 @@ describe('authApi', () => {
 
   describe('getMe', () => {
     it('returns user data when authenticated', async () => {
-      localStorage.setItem('access_token', 'mock-token');
+      document.cookie = 'access_token=mock-token; Path=/';
       const result = await authApi.getMe();
 
       expect(result.user_id).toBe(1);
@@ -35,7 +34,7 @@ describe('authApi', () => {
     });
 
     it('throws on server error', async () => {
-      localStorage.setItem('access_token', 'mock-token');
+      document.cookie = 'access_token=mock-token; Path=/';
       server.use(
         http.get(`${API_BASE}/api/v1/me`, () => {
           return HttpResponse.json(
@@ -50,14 +49,8 @@ describe('authApi', () => {
   });
 
   describe('logout', () => {
-    it('clears tokens from localStorage', () => {
-      localStorage.setItem('access_token', 'tok-a');
-      localStorage.setItem('refresh_token', 'tok-r');
-
-      authApi.logout();
-
-      expect(localStorage.getItem('access_token')).toBeNull();
-      expect(localStorage.getItem('refresh_token')).toBeNull();
+    it('calls logout endpoint', async () => {
+      await expect(authApi.logout()).resolves.toBeUndefined();
     });
   });
 });

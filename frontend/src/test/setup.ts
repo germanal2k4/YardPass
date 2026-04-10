@@ -7,6 +7,9 @@ import { server } from './msw/server';
 // Stub with empty string (falsy) so formatErrorMessage behaves like production.
 vi.stubEnv('DEV', '');
 
+// MSW matches absolute URLs used in handlers; keep in sync with tests.
+vi.stubEnv('VITE_API_BASE_URL', 'http://localhost:8080');
+
 // MSW server lifecycle
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
 afterEach(() => {

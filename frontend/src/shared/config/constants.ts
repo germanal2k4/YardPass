@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   // Auth
   LOGIN: '/auth/login',
   REFRESH: '/auth/refresh',
+  LOGOUT: '/auth/logout',
   ME: '/api/v1/me',
   
   // Passes
@@ -62,9 +63,3 @@ export const ERROR_MESSAGES: Record<string, string> = {
   RULE_NOT_FOUND: 'Правила не найдены',
   MISSING_BUILDING_ID: 'Не указан ID здания',
 };
-
-export const STORAGE_KEYS = {
-  ACCESS_TOKEN: 'access_token',
-  REFRESH_TOKEN: 'refresh_token',
-} as const;
-

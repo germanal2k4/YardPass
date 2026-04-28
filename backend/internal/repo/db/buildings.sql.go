@@ -9,6 +9,30 @@ import (
 	"context"
 )
 
+const createBuilding = `-- name: CreateBuilding :one
+INSERT INTO buildings (name, address)
+VALUES ($1, $2)
+RETURNING id, name, address, created_at, updated_at
+`
+
+type CreateBuildingParams struct {
+	Name    string
+	Address *string
+}
+
+func (q *Queries) CreateBuilding(ctx context.Context, arg CreateBuildingParams) (Building, error) {
+	row := q.db.QueryRow(ctx, createBuilding, arg.Name, arg.Address)
+	var i Building
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Address,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getBuildingByID = `-- name: GetBuildingByID :one
 SELECT id, name, address, created_at, updated_at
 FROM buildings

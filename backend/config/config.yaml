@@ -44,6 +44,13 @@ rate_limit:
 redis:
     url: redis://localhost:6379/0
 
+smtp:
+    host: ""
+    port: "587"
+    username: ""
+    password: ""
+    from: ""
+
 server:
     host: localhost
     port: "8080"

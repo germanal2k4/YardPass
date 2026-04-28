@@ -140,6 +140,25 @@ export const handlers = [
     return new HttpResponse(null, { status: 204, headers });
   }),
 
+  http.post(`${API_BASE}/auth/purchase-subscription`, async ({ request }) => {
+    const body = (await request.json()) as { email: string; building_name: string };
+    return HttpResponse.json(
+      {
+        building_id: 1,
+        building_name: body.building_name,
+        subscription_fee: 200000,
+        period: '1 year',
+        email: body.email,
+        accounts: [
+          { username: 'admin_building_1234', password: 'secretAdmin' },
+          { username: 'guard_building_5678', password: 'secretGuard' },
+        ],
+        message: 'Subscription is paid. Credentials were sent to email.',
+      },
+      { status: 201 }
+    );
+  }),
+
   http.get(`${API_BASE}/api/v1/me`, ({ request }) => {
     if (!hasAccessToken(request)) {
       return HttpResponse.json(

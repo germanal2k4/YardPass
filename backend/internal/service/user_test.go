@@ -59,6 +59,11 @@ func (m *mockBuildingRepo) List(ctx context.Context) ([]domain.Building, error) 
 	return args.Get(0).([]domain.Building), args.Error(1)
 }
 
+func (m *mockBuildingRepo) Create(ctx context.Context, building *domain.Building) error {
+	args := m.Called(ctx, building)
+	return args.Error(0)
+}
+
 func TestUserService_RegisterUser(t *testing.T) {
 	logger := zap.NewNop()
 	noopMetrics := &metrics.Metrics{}
@@ -128,7 +133,7 @@ func TestUserService_RegisterUser(t *testing.T) {
 		req := domain.RegisterUserRequest{
 			Username: "su",
 			Password: "secret",
-			Role:    "superuser",
+			Role:     "superuser",
 		}
 		user, err := svc.RegisterUser(ctx, req, 1)
 		assert.Error(t, err)

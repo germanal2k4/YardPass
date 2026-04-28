@@ -68,6 +68,7 @@ func NewRouter(
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
 		auth.POST("/logout", authHandler.Logout)
+		auth.POST("/purchase-subscription", authHandler.PurchaseSubscription)
 	}
 
 	api := r.Group("/api/v1")

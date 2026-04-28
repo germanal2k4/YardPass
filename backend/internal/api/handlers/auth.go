@@ -11,20 +11,27 @@ import (
 )
 
 type AuthHandler struct {
-	authService domain.AuthService
-	cfg         *config.Config
+	authService         domain.AuthService
+	subscriptionService domain.SubscriptionService
+	cfg                 *config.Config
 }
 
-func NewAuthHandler(authService domain.AuthService, cfg *config.Config) *AuthHandler {
+func NewAuthHandler(authService domain.AuthService, subscriptionService domain.SubscriptionService, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		cfg:         cfg,
+		authService:         authService,
+		subscriptionService: subscriptionService,
+		cfg:                 cfg,
 	}
 }
 
 // NewAuthHandlerWithService is an alias for NewAuthHandler for tests.
 func NewAuthHandlerWithService(authService domain.AuthService, cfg *config.Config) *AuthHandler {
-	return NewAuthHandler(authService, cfg)
+	return NewAuthHandler(authService, nil, cfg)
+}
+
+// NewAuthHandlerWithServices is a helper constructor for tests.
+func NewAuthHandlerWithServices(authService domain.AuthService, subscriptionService domain.SubscriptionService, cfg *config.Config) *AuthHandler {
+	return NewAuthHandler(authService, subscriptionService, cfg)
 }
 
 type LoginRequest struct {
@@ -32,6 +39,30 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+func (h *AuthHandler) PurchaseSubscription(c *gin.Context) {
+	if h.subscriptionService == nil {
+		errors.InternalServerError(c, "SERVICE_UNAVAILABLE", "subscription service is not configured")
+		return
+	}
+
+	var req domain.PurchaseSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		return
+	}
+
+	res, err := h.subscriptionService.Purchase(c.Request.Context(), req)
+	if err != nil {
+		errors.BadRequest(c, "PURCHASE_FAILED", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, res)
+}
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

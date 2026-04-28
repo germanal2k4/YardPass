@@ -22,6 +22,7 @@ type Config struct {
 	JWT       JWTConfig       `yaml:"jwt"`
 	CORS      CORSConfig      `yaml:"cors"`
 	Cookie    CookieConfig    `yaml:"cookie"`
+	SMTP      SMTPConfig      `yaml:"smtp"`
 	Telegram  TelegramConfig  `yaml:"telegram"`
 	Service   ServiceConfig   `yaml:"service"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
@@ -63,6 +64,14 @@ type CORSConfig struct {
 type CookieConfig struct {
 	Secure   bool   `yaml:"secure"    env:"COOKIE_SECURE"    default:"false"`
 	SameSite string `yaml:"same_site" env:"COOKIE_SAMESITE" default:"Lax"`
+}
+
+type SMTPConfig struct {
+	Host     string `yaml:"host"     env:"SMTP_HOST"     default:""`
+	Port     string `yaml:"port"     env:"SMTP_PORT"     default:"587"`
+	Username string `yaml:"username" env:"SMTP_USERNAME" default:""`
+	Password string `yaml:"password" env:"SMTP_PASSWORD" default:""`
+	From     string `yaml:"from"     env:"SMTP_FROM"     default:""`
 }
 
 type TelegramConfig struct {

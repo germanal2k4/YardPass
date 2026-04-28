@@ -204,7 +204,7 @@ export function WelcomePage() {
 
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="h6" gutterBottom fontWeight="600" color="text.primary">
-              Нет аккаунта?
+              Нет доступа к системе?
             </Typography>
             <Button
               variant="outlined"
@@ -228,10 +228,10 @@ export function WelcomePage() {
                 },
               }}
             >
-              Зарегистрироваться
+              Оплатить подписку
             </Button>
             <Typography variant="body2" color="text.secondary">
-              Создайте новый аккаунт охранника или администратора
+              Оформите подписку для здания и получите доступы по email
             </Typography>
           </Box>
 

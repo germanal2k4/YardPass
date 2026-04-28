@@ -90,6 +90,28 @@ export interface MeResponse {
   building_id?: number; // ID здания, к которому привязан пользователь
 }
 
+export interface PurchaseSubscriptionRequest {
+  email: string;
+  building_name: string;
+  card_number: string;
+  card_holder: string;
+  expiry: string;
+  cvv: string;
+}
+
+export interface PurchaseSubscriptionResponse {
+  building_id: number;
+  building_name: string;
+  subscription_fee: number;
+  period: string;
+  email: string;
+  accounts: Array<{
+    username: string;
+    password: string;
+  }>;
+  message: string;
+}
+
 export interface CreatePassRequest {
   apartment_id: number;
   car_plate: string;

@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   LOGIN: '/auth/login',
   REFRESH: '/auth/refresh',
   LOGOUT: '/auth/logout',
+  PURCHASE_SUBSCRIPTION: '/auth/purchase-subscription',
   ME: '/api/v1/me',
   
   // Passes

@@ -38,6 +38,21 @@ func (r *BuildingRepo) List(ctx context.Context) ([]domain.Building, error) {
 	return buildingsFromDB(rows), nil
 }
 
+func (r *BuildingRepo) Create(ctx context.Context, building *domain.Building) error {
+	ctx = queryNameToContext(ctx, "BuildingRepo.Create")
+	row, err := r.queries.CreateBuilding(ctx, db.CreateBuildingParams{
+		Name:    building.Name,
+		Address: building.Address,
+	})
+	if err != nil {
+		return err
+	}
+	building.ID = row.ID
+	building.CreatedAt = row.CreatedAt
+	building.UpdatedAt = row.UpdatedAt
+	return nil
+}
+
 func buildingFromDB(b db.Building) *domain.Building {
 	res := domain.Building(b)
 	return &res

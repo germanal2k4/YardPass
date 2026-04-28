@@ -12,6 +12,7 @@ import (
 	"yardpass/internal/auth"
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
+	"yardpass/internal/mailer"
 	"yardpass/internal/observability/logger"
 	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
@@ -52,7 +53,9 @@ func SetupApi(configPath string) (*fx.App, error) {
 			redis.NewClient,
 
 			fx.Annotate(auth.NewJWTService, fx.As(new(domain.AuthService))),
+			fx.Annotate(mailer.NewSMTPMailer, fx.As(new(service.EmailSender))),
 			fx.Annotate(service.NewPassService, fx.As(new(domain.PassService))),
+			fx.Annotate(service.NewSubscriptionService, fx.As(new(domain.SubscriptionService))),
 			service.NewUserService,
 			service.NewResidentService,
 

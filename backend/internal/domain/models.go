@@ -99,6 +99,30 @@ type RegisterUserRequest struct {
 	BuildingID *int64  `json:"building_id,omitempty"`
 }
 
+type PurchaseSubscriptionRequest struct {
+	Email        string `json:"email" binding:"required,email"`
+	BuildingName string `json:"building_name" binding:"required"`
+	CardNumber   string `json:"card_number" binding:"required"`
+	CardHolder   string `json:"card_holder" binding:"required"`
+	Expiry       string `json:"expiry" binding:"required"`
+	CVV          string `json:"cvv" binding:"required"`
+}
+
+type AccountCredentials struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type PurchaseSubscriptionResponse struct {
+	BuildingID      int64                `json:"building_id"`
+	BuildingName    string               `json:"building_name"`
+	SubscriptionFee int64                `json:"subscription_fee"`
+	Period          string               `json:"period"`
+	Email           string               `json:"email"`
+	Accounts        []AccountCredentials `json:"accounts"`
+	Message         string               `json:"message"`
+}
+
 // CreateResidentRequest is the request payload for resident creation.
 type CreateResidentRequest struct {
 	ApartmentID int64   `json:"apartment_id" binding:"required"`

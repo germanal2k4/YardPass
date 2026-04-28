@@ -10,6 +10,7 @@ import (
 type BuildingRepository interface {
 	GetByID(ctx context.Context, id int64) (*Building, error)
 	List(ctx context.Context) ([]Building, error)
+	Create(ctx context.Context, building *Building) error
 }
 
 type ApartmentRepository interface {
@@ -145,6 +146,10 @@ type AuthService interface {
 	Login(ctx context.Context, username, password string) (*AuthTokens, error)
 	RefreshToken(ctx context.Context, refreshToken string) (*AuthTokens, error)
 	ValidateToken(ctx context.Context, token string) (*TokenClaims, error)
+}
+
+type SubscriptionService interface {
+	Purchase(ctx context.Context, req PurchaseSubscriptionRequest) (*PurchaseSubscriptionResponse, error)
 }
 
 type TokenClaims struct {

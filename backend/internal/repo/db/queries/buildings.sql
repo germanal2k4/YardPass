@@ -7,3 +7,8 @@ WHERE id = $1;
 SELECT id, name, address, created_at, updated_at
 FROM buildings
 ORDER BY name;
+
+-- name: CreateBuilding :one
+INSERT INTO buildings (name, address)
+VALUES ($1, $2)
+RETURNING id, name, address, created_at, updated_at;

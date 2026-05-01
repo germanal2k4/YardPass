@@ -13,6 +13,11 @@ appLabel: yardpass-backend
 secrets:
   databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
   redisUrl: "redis://host.minikube.internal:6379/0"
+  smtpHost: ""
+  smtpPort: "587"
+  smtpUsername: ""
+  smtpPassword: ""
+  smtpFrom: ""
 
 env:
   JWT_SECRET: your-secret-key-change-me

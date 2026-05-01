@@ -45,6 +45,31 @@ spec:
                 secretKeyRef:
                   name: yardpass-backend
                   key: redis-url
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-host
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-port
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-username
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-password
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-from
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}

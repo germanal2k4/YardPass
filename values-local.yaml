@@ -9,6 +9,11 @@ backend:
   secrets:
     databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
     redisUrl: "redis://host.minikube.internal:6379/0"
+    smtpHost: "mailhog.yardpass.svc.cluster.local"
+    smtpPort: "1025"
+    smtpUsername: ""
+    smtpPassword: ""
+    smtpFrom: "noreply@yardpass.local"
   env:
     LOG_TRANSPORT: stdout
     TRACER_ENABLED: "true"

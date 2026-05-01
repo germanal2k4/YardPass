@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/service"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -304,8 +305,12 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 }
 
 func (b *Bot) handleCarPlate(ctx context.Context, msg Message, state *UserState) {
-	carPlate := msg.Text
-	state.Data["car_plate"] = carPlate
+	normalized := service.NormalizeCarPlate(msg.Text)
+	if normalized == "" {
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Введите буквы и цифры (например A123BC77 или А123ВС77).")
+		return
+	}
+	state.Data["car_plate"] = normalized
 
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]interface{}{
@@ -712,18 +717,25 @@ func (b *Bot) showMyCarMenu(ctx context.Context, chatID int64, userID int64) {
 	_ = b.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
 }
 
-func (b *Bot) handleResidentCarPlate(ctx context.Context, msg Message, state *UserState) {
-	carPlateRaw := strings.TrimSpace(msg.Text)
+func (b *Bot) handleResidentCarPlate(ctx context.Context, msg Message, _ *UserState) {
 	userID := msg.From.ID
-	b.clearState(userID)
+	normalized := service.NormalizeCarPlate(msg.Text)
 
 	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
 	if err != nil || resident == nil {
+		b.clearState(userID)
 		_ = b.sendMessage(ctx, msg.Chat.ID, "Ошибка: житель не найден")
 		return
 	}
 
-	if err := b.residentRepo.SetCarPlate(ctx, resident.ID, &carPlateRaw); err != nil {
+	if normalized == "" {
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Укажите буквы и цифры госномера (например А123ВС77 или A123BC77).")
+		return
+	}
+
+	b.clearState(userID)
+
+	if err := b.residentRepo.SetCarPlate(ctx, resident.ID, &normalized); err != nil {
 		_ = b.sendMessage(ctx, msg.Chat.ID, fmt.Sprintf("Ошибка при сохранении номера: %s", err.Error()))
 		b.logger.Error("failed to set resident car plate", zap.Error(err), zap.Int64("user_id", userID))
 		return
@@ -733,7 +745,7 @@ func (b *Bot) handleResidentCarPlate(ctx context.Context, msg Message, state *Us
 		"✅ Автомобиль зарегистрирован: *%s*\n\n"+
 			"Теперь при проверке вашего личного QR-пропуска охранник увидит номер автомобиля.\n\n"+
 			"Получите обновлённый QR-код: /personal",
-		carPlateRaw,
+		normalized,
 	))
 }
 

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -658,4 +659,23 @@ func TestPassService_ValidateResidentPersonalPass(t *testing.T) {
 		assert.False(t, result.Valid)
 		assert.Equal(t, "RESIDENT_NOT_FOUND", result.Reason)
 	})
+}
+
+func TestNormalizeCarPlate(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"a123bc", "A123BC"},
+		{"А123ВС77", "A123BC77"},
+		{"а 123 в с 77", "A123BC77"},
+		{"", ""},
+		{"   ", ""},
+		{"ЙЙЙ", ""},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q", tt.in), func(t *testing.T) {
+			assert.Equal(t, tt.want, NormalizeCarPlate(tt.in))
+		})
+	}
 }

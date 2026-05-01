@@ -93,7 +93,7 @@ func NewPassService(
 func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
 	var carPlate *string
 	if req.CarPlate != nil && *req.CarPlate != "" {
-		normalized := normalizeCarPlate(*req.CarPlate)
+		normalized := NormalizeCarPlate(*req.CarPlate)
 		if normalized == "" {
 			s.rejectionsTotal.WithLabelValues("invalid_car_plate").Inc()
 			return nil, errors.New("invalid car plate number")
@@ -238,7 +238,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 }
 
 func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
-	normalizedCarPlate := normalizeCarPlate(carPlate)
+	normalizedCarPlate := NormalizeCarPlate(carPlate)
 	if normalizedCarPlate == "" {
 		result := &domain.PassValidationResult{
 			Valid:  false,
@@ -305,8 +305,8 @@ func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token st
 	}
 
 	carPlate := ""
-	if resident.CarPlate != nil {
-		carPlate = *resident.CarPlate
+	if resident.CarPlate != nil && *resident.CarPlate != "" {
+		carPlate = NormalizeCarPlate(*resident.CarPlate)
 	}
 
 	return &domain.PassValidationResult{
@@ -480,7 +480,8 @@ var russianToEnglish = map[rune]rune{
 	'у': 'Y', 'х': 'X',
 }
 
-func normalizeCarPlate(plate string) string {
+// NormalizeCarPlate uppercases, strips spaces, maps Russian plate look-alike letters to Latin, and keeps only A–Z and 0–9.
+func NormalizeCarPlate(plate string) string {
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
 
 	var result strings.Builder

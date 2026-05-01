@@ -46,6 +46,11 @@ func (m *mockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *
 	return args.Error(0)
 }
 
+func (m *mockResidentRepo) SetTimezone(ctx context.Context, id int64, timezone *string) error {
+	args := m.Called(ctx, id, timezone)
+	return args.Error(0)
+}
+
 func (m *mockResidentRepo) Delete(ctx context.Context, id int64) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
@@ -58,6 +63,11 @@ func (m *mockResidentRepo) BulkCreate(ctx context.Context, residents []domain.Re
 
 func (m *mockResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	args := m.Called(ctx, filters)
+	return args.Get(0).([]domain.Resident), args.Error(1)
+}
+
+func (m *mockResidentRepo) ListActiveWithCarPlate(ctx context.Context, buildingID *int64) ([]domain.Resident, error) {
+	args := m.Called(ctx, buildingID)
 	return args.Get(0).([]domain.Resident), args.Error(1)
 }
 

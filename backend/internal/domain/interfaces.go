@@ -26,9 +26,12 @@ type ResidentRepository interface {
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
 	SetCarPlate(ctx context.Context, id int64, carPlate *string) error
+	SetTimezone(ctx context.Context, id int64, timezone *string) error
 	Delete(ctx context.Context, id int64) error
 	BulkCreate(ctx context.Context, residents []Resident) error
 	List(ctx context.Context, filters ResidentFilters) ([]Resident, error)
+	// ListActiveWithCarPlate returns active residents that have a non-empty car_plate, optionally scoped to a building.
+	ListActiveWithCarPlate(ctx context.Context, buildingID *int64) ([]Resident, error)
 }
 
 type ResidentFilters struct {

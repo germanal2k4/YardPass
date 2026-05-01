@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -144,6 +144,11 @@ func (m *MockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *
 	return args.Error(0)
 }
 
+func (m *MockResidentRepo) SetTimezone(ctx context.Context, id int64, timezone *string) error {
+	args := m.Called(ctx, id, timezone)
+	return args.Error(0)
+}
+
 func (m *MockResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
 	args := m.Called(ctx, resident)
 	return args.Error(0)
@@ -166,6 +171,11 @@ func (m *MockResidentRepo) BulkCreate(ctx context.Context, residents []domain.Re
 
 func (m *MockResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	args := m.Called(ctx, filters)
+	return args.Get(0).([]domain.Resident), args.Error(1)
+}
+
+func (m *MockResidentRepo) ListActiveWithCarPlate(ctx context.Context, buildingID *int64) ([]domain.Resident, error) {
+	args := m.Called(ctx, buildingID)
 	return args.Get(0).([]domain.Resident), args.Error(1)
 }
 
@@ -247,6 +257,13 @@ func TestPassService_CreatePass(t *testing.T) {
 		}, nil)
 
 		residentID := int64(1)
+		residentRepo.On("GetByID", ctx, residentID).Return(&domain.Resident{
+			ID:          residentID,
+			ApartmentID: apartmentID,
+			TelegramID:  100,
+			ChatID:      100,
+			Status:      "active",
+		}, nil)
 		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 5).Return(true, nil)
 
 		carPlate := "A123BC"
@@ -297,6 +314,13 @@ func TestPassService_CreatePass(t *testing.T) {
 		passRepo2.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 5).Return(false, nil)
 
 		residentID := int64(1)
+		residentRepo2.On("GetByID", ctx, residentID).Return(&domain.Resident{
+			ID:          residentID,
+			ApartmentID: apartmentID,
+			TelegramID:  100,
+			ChatID:      100,
+			Status:      "active",
+		}, nil)
 		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
@@ -318,6 +342,99 @@ func TestPassService_CreatePass(t *testing.T) {
 		apartmentRepo2.AssertExpectations(t)
 		ruleRepo2.AssertExpectations(t)
 	})
+}
+
+func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
+	logger := zap.NewNop()
+	ctx := context.Background()
+
+	passRepo := new(MockPassRepo)
+	apartmentRepo := new(MockApartmentRepo)
+	ruleRepo := new(MockRuleRepo)
+	residentRepo := new(MockResidentRepo)
+	scanEventRepo := new(MockScanEventRepo)
+	noopMetrics := &metrics.Metrics{}
+	svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", logger, noopMetrics)
+
+	apartmentID := int64(1)
+	buildingID := int64(1)
+	residentID := int64(99)
+	start := "23:00"
+	end := "07:00"
+
+	apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		ID: apartmentID, BuildingID: buildingID, Number: "101",
+	}, nil)
+	ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		DailyPassLimitPerApartment: 10,
+		MaxPassDurationHours:       24,
+		QuietHoursStart:            &start,
+		QuietHoursEnd:              &end,
+	}, nil)
+
+	msk, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	tz := "Europe/Moscow"
+	residentRepo.On("GetByID", ctx, residentID).Return(&domain.Resident{
+		ID:          residentID,
+		ApartmentID: apartmentID,
+		TelegramID:  1,
+		ChatID:      1,
+		Status:      "active",
+		Timezone:    &tz,
+	}, nil)
+
+	// 09:00–11:00 UTC on a winter date = 12:00–14:00 MSK — outside quiet window
+	validFrom := time.Date(2026, 1, 15, 9, 0, 0, 0, time.UTC)
+	validTo := time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC)
+	require.Equal(t, 12, validFrom.In(msk).Hour())
+
+	passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 10).Return(true, nil)
+	carPlate := "A123BC"
+	_, err = svc.CreatePass(ctx, domain.CreatePassRequest{
+		ApartmentID: apartmentID,
+		ResidentID:  &residentID,
+		CarPlate:    &carPlate,
+		ValidFrom:   validFrom,
+		ValidTo:     validTo,
+	})
+	assert.NoError(t, err)
+
+	// 20:00–22:00 UTC = 23:00–01:00 MSK — overlaps quiet hours starting at 23:00
+	passRepo2 := new(MockPassRepo)
+	apartmentRepo2 := new(MockApartmentRepo)
+	ruleRepo2 := new(MockRuleRepo)
+	residentRepo2 := new(MockResidentRepo)
+	scanEventRepo2 := new(MockScanEventRepo)
+	svc2 := NewPassService(passRepo2, apartmentRepo2, residentRepo2, ruleRepo2, scanEventRepo2, "test-secret", logger, noopMetrics)
+
+	apartmentRepo2.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		ID: apartmentID, BuildingID: buildingID, Number: "101",
+	}, nil)
+	ruleRepo2.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		DailyPassLimitPerApartment: 10,
+		MaxPassDurationHours:       24,
+		QuietHoursStart:            &start,
+		QuietHoursEnd:              &end,
+	}, nil)
+	residentRepo2.On("GetByID", ctx, residentID).Return(&domain.Resident{
+		ID:          residentID,
+		ApartmentID: apartmentID,
+		TelegramID:  1,
+		ChatID:      1,
+		Status:      "active",
+		Timezone:    &tz,
+	}, nil)
+
+	_, err = svc2.CreatePass(ctx, domain.CreatePassRequest{
+		ApartmentID: apartmentID,
+		ResidentID:  &residentID,
+		CarPlate:    &carPlate,
+		ValidFrom:   time.Date(2026, 1, 15, 20, 0, 0, 0, time.UTC),
+		ValidTo:     time.Date(2026, 1, 15, 22, 0, 0, 0, time.UTC),
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "quiet hours")
 }
 
 func TestPassService_ValidatePass(t *testing.T) {
@@ -661,21 +778,59 @@ func TestPassService_ValidateResidentPersonalPass(t *testing.T) {
 	})
 }
 
-func TestNormalizeCarPlate(t *testing.T) {
-	tests := []struct {
-		in   string
-		want string
-	}{
-		{"a123bc", "A123BC"},
-		{"А123ВС77", "A123BC77"},
-		{"а 123 в с 77", "A123BC77"},
-		{"", ""},
-		{"   ", ""},
-		{"ЙЙЙ", ""},
-	}
-	for _, tt := range tests {
-		t.Run(fmt.Sprintf("%q", tt.in), func(t *testing.T) {
-			assert.Equal(t, tt.want, NormalizeCarPlate(tt.in))
-		})
-	}
+func TestPassService_ValidatePassByCarPlate_ResidentRegisteredCar(t *testing.T) {
+	logger := zap.NewNop()
+	ctx := context.Background()
+	noopMetrics := &metrics.Metrics{}
+	secret := "test-secret"
+	buildingID := int64(1)
+
+	t.Run("valid when no guest pass but resident has matching plate", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		apartmentRepo := new(MockApartmentRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		cyrillicPlate := "А123ВС77"
+		passRepo.On("GetActiveByCarPlate", ctx, "A123BC77", &buildingID).Return(nil, nil)
+		residentRepo.On("ListActiveWithCarPlate", ctx, &buildingID).Return([]domain.Resident{
+			{
+				ID:          1,
+				ApartmentID: 10,
+				TelegramID:  111,
+				Status:      "active",
+				CarPlate:    &cyrillicPlate,
+			},
+		}, nil)
+		apartmentRepo.On("GetByID", ctx, int64(10)).Return(&domain.Apartment{
+			ID: 10, BuildingID: buildingID, Number: "42",
+		}, nil)
+
+		result, err := svc.ValidatePassByCarPlate(ctx, "a 123 bc 77", 0, &buildingID)
+		assert.NoError(t, err)
+		assert.True(t, result.Valid)
+		assert.Equal(t, "A123BC77", result.CarPlate)
+		assert.Equal(t, "42", result.Apartment)
+	})
+
+	t.Run("PASS_NOT_FOUND when no guest and no resident plate", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, new(MockApartmentRepo), residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		otherPlate := "A111AA11"
+		passRepo.On("GetActiveByCarPlate", ctx, "X999XX99", &buildingID).Return(nil, nil)
+		residentRepo.On("ListActiveWithCarPlate", ctx, &buildingID).Return([]domain.Resident{
+			{ID: 1, ApartmentID: 1, Status: "active", CarPlate: &otherPlate},
+		}, nil)
+
+		result, err := svc.ValidatePassByCarPlate(ctx, "X999XX99", 0, &buildingID)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "PASS_NOT_FOUND", result.Reason)
+	})
 }

@@ -14,6 +14,10 @@ spec:
       labels:
         {{ include "yardpass-bot.selector" . | nindent 8 }}
         version: {{ .Values.version | default "v1" }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       serviceAccountName: yardpass-bot
       {{- with .Values.imagePullSecrets }}

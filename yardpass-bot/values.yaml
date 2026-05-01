@@ -8,6 +8,8 @@ image:
 
 imagePullSecrets: []
 
+podAnnotations: {}
+
 appLabel: yardpass-bot
 
 secrets:
@@ -16,6 +18,7 @@ secrets:
   telegramToken: ""
 
 env:
+  JWT_SECRET: ""
   API_BASE_URL: "http://yardpass-backend:8080"
   SERVICE_TOKEN: your-service-token
   LOG_LEVEL: info

@@ -5,6 +5,7 @@ import { APP_ROUTES } from '@/shared/config/constants';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -170,6 +171,62 @@ export function AdminPage() {
                   py: 1.5,
                   fontSize: '1.1rem',
                   fontWeight: 700,
+                }}
+              >
+                Открыть
+              </Button>
+            </Paper>
+          </Grid>
+
+          {/* Охранники */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Paper
+              elevation={4}
+              sx={{
+                p: 5,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                border: '2px solid transparent',
+                background: 'linear-gradient(135deg, rgba(67, 160, 71, 0.08) 0%, rgba(255, 255, 255, 1) 100%)',
+                '&:hover': {
+                  transform: 'translateY(-8px)',
+                  boxShadow: '0 12px 40px rgba(67, 160, 71, 0.25)',
+                  borderColor: '#43A047',
+                },
+              }}
+              onClick={() => navigate(APP_ROUTES.ADMIN_GUARDS)}
+            >
+              <PersonAddIcon
+                sx={{
+                  fontSize: 100,
+                  color: '#43A047',
+                  mb: 3,
+                  filter: 'drop-shadow(0 4px 8px rgba(67, 160, 71, 0.3))',
+                }}
+              />
+              <Typography variant="h4" gutterBottom fontWeight="700" color="#263238">
+                Охранники
+              </Typography>
+              <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
+                Добавление и просмотр аккаунтов охранников
+              </Typography>
+              <Button
+                variant="contained"
+                size="large"
+                sx={{
+                  mt: 'auto',
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  fontWeight: 700,
+                  backgroundColor: '#43A047',
+                  '&:hover': {
+                    backgroundColor: '#388E3C',
+                  },
                 }}
               >
                 Открыть

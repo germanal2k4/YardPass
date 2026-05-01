@@ -241,8 +241,7 @@ func TestPassService_CreatePass(t *testing.T) {
 		}, nil)
 
 		residentID := int64(1)
-		passRepo.On("CountActiveTodayByResidentID", ctx, residentID).Return(2, nil)
-		passRepo.On("Create", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
+		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 5).Return(true, nil)
 
 		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
@@ -289,9 +288,9 @@ func TestPassService_CreatePass(t *testing.T) {
 			MaxPassDurationHours:       24,
 		}, nil)
 
-		residentID := int64(1)
-		passRepo2.On("CountActiveTodayByResidentID", ctx, residentID).Return(5, nil)
+		passRepo2.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 5).Return(false, nil)
 
+		residentID := int64(1)
 		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,

@@ -120,8 +120,12 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		}
 	}
 
+	validFromUTC := req.ValidFrom.UTC()
+	validToUTC := req.ValidTo.UTC()
+	localLocation := resolveLocationForPassTimes(req.ValidFrom, req.ValidTo)
+
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
-	if req.ValidTo.Sub(req.ValidFrom) > maxDuration {
+	if validToUTC.Sub(validFromUTC) > maxDuration {
 		s.rejectionsTotal.WithLabelValues("max_duration_exceeded").Inc()
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
@@ -130,17 +134,10 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, errors.New("resident_id is required")
 	}
 
-	count, err := s.passRepo.CountActiveTodayByResidentID(ctx, *req.ResidentID)
-	if err != nil {
-		return nil, fmt.Errorf("check daily limit: %w", err)
-	}
-	if count >= int(rule.DailyPassLimitPerApartment) {
-		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
-		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
-	}
-
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-		if err := s.validateQuietHours(req.ValidFrom, req.ValidTo, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+		validFromLocal := validFromUTC.In(localLocation)
+		validToLocal := validToUTC.In(localLocation)
+		if err := s.validateQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
 			s.rejectionsTotal.WithLabelValues("quiet_hours").Inc()
 			return nil, err
 		}
@@ -152,14 +149,29 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		ResidentID:  req.ResidentID,
 		CarPlate:    carPlate,
 		GuestName:   req.GuestName,
-		ValidFrom:   req.ValidFrom,
-		ValidTo:     req.ValidTo,
+		ValidFrom:   validFromUTC,
+		ValidTo:     validToUTC,
 		Status:      "active",
 	}
 
-	if err := s.passRepo.Create(ctx, pass); err != nil {
+	dayAnchorLocal := validFromUTC.In(localLocation)
+	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
+	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
+
+	created, err := s.passRepo.CreateWithDailyLimit(
+		ctx,
+		pass,
+		startOfDayLocal.UTC(),
+		endOfDayLocal.UTC(),
+		int(rule.DailyPassLimitPerApartment),
+	)
+	if err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
 		return nil, fmt.Errorf("create pass: %w", err)
+	}
+	if !created {
+		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
+		return nil, fmt.Errorf("daily pass limit exceeded (limit: %d per day)", rule.DailyPassLimitPerApartment)
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
@@ -320,7 +332,8 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
+				localLocation := resolveLocationForPassTimes(pass.ValidFrom, pass.ValidTo)
+				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
 					s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 					s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
@@ -454,16 +467,7 @@ func normalizeCarPlate(plate string) string {
 	return result.String()
 }
 
-func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime, endTime string) error {
-	// Interpret quiet hours in local building timezone (Europe/Moscow)
-	location, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		location = time.UTC
-	}
-
-	validFromLocal := validFrom.In(location)
-	validToLocal := validTo.In(location)
-
+func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time, startTime, endTime string) error {
 	start, err := parseTime(startTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours start: %w", err)
@@ -492,14 +496,7 @@ func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime
 	return nil
 }
 
-func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) bool {
-	// Interpret quiet hours in local building timezone (Europe/Moscow)
-	location, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		location = time.UTC
-	}
-	nowLocal := now.In(location)
-
+func (s *PassService) isQuietHours(nowLocal time.Time, startTime, endTime string) bool {
 	start, err := parseTime(startTime)
 	if err != nil {
 		return false
@@ -522,4 +519,24 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
+}
+
+func resolveLocationFromTimestamp(ts time.Time) *time.Location {
+	if ts.IsZero() {
+		return nil
+	}
+	if loc := ts.Location(); loc != nil {
+		return loc
+	}
+	return nil
+}
+
+func resolveLocationForPassTimes(validFrom, validTo time.Time) *time.Location {
+	if loc := resolveLocationFromTimestamp(validFrom); loc != nil {
+		return loc
+	}
+	if loc := resolveLocationFromTimestamp(validTo); loc != nil {
+		return loc
+	}
+	return time.UTC
 }

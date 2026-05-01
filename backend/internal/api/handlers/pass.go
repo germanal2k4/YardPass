@@ -24,6 +24,7 @@ func NewPassHandler(passService domain.PassService) *PassHandler {
 
 type CreatePassRequest struct {
 	ApartmentID int64     `json:"apartment_id" binding:"required"`
+	ResidentID  *int64    `json:"resident_id,omitempty"`
 	CarPlate    *string   `json:"car_plate,omitempty"`
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
@@ -43,15 +44,21 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		req.ValidFrom = time.Now().UTC()
-	} else {
-		req.ValidFrom = req.ValidFrom.UTC()
+		req.ValidFrom = time.Now().In(req.ValidTo.Location())
 	}
 
-	req.ValidTo = req.ValidTo.UTC()
+	residentID := req.ResidentID
+	if residentID == nil {
+		if rid, ok := c.Get("resident_id"); ok {
+			if id, ok := rid.(int64); ok {
+				residentID = &id
+			}
+		}
+	}
 
 	createReq := domain.CreatePassRequest{
 		ApartmentID: req.ApartmentID,
+		ResidentID:  residentID,
 		CarPlate:    req.CarPlate,
 		GuestName:   req.GuestName,
 		ValidFrom:   req.ValidFrom,

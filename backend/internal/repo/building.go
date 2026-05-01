@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/repo/db"
@@ -27,7 +28,7 @@ func (r *BuildingRepo) GetByID(ctx context.Context, id int64) (*domain.Building,
 	if err != nil {
 		return nil, err
 	}
-	return buildingFromDB(row), nil
+	return buildingFromGetByIDRow(row), nil
 }
 
 func (r *BuildingRepo) List(ctx context.Context) ([]domain.Building, error) {
@@ -36,7 +37,7 @@ func (r *BuildingRepo) List(ctx context.Context) ([]domain.Building, error) {
 	if err != nil {
 		return nil, err
 	}
-	return buildingsFromDB(rows), nil
+	return buildingsFromListRows(rows), nil
 }
 
 func (r *BuildingRepo) Create(ctx context.Context, building *domain.Building) error {
@@ -99,7 +100,7 @@ func (r *BuildingRepo) UpdateApartmentCount(ctx context.Context, id int64, apart
 		return nil, err
 	}
 
-	return buildingFromDB(row), nil
+	return buildingFromUpdateApartmentCountRow(row), nil
 }
 
 func upsertApartmentsForBuilding(ctx context.Context, tx pgx.Tx, buildingID int64, apartmentCount int32) error {
@@ -129,15 +130,38 @@ func upsertApartmentsForBuilding(ctx context.Context, tx pgx.Tx, buildingID int6
 	return err
 }
 
-func buildingFromDB(b db.Building) *domain.Building {
-	res := domain.Building(b)
+func newDomainBuilding(
+	id int64,
+	name string,
+	address *string,
+	apartmentCount int32,
+	createdAt time.Time,
+	updatedAt time.Time,
+) domain.Building {
+	return domain.Building{
+		ID:             id,
+		Name:           name,
+		Address:        address,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
+		ApartmentCount: apartmentCount,
+	}
+}
+
+func buildingFromGetByIDRow(b db.GetBuildingByIDRow) *domain.Building {
+	res := newDomainBuilding(b.ID, b.Name, b.Address, b.ApartmentCount, b.CreatedAt, b.UpdatedAt)
 	return &res
 }
 
-func buildingsFromDB(rows []db.Building) []domain.Building {
+func buildingFromUpdateApartmentCountRow(b db.UpdateBuildingApartmentCountRow) *domain.Building {
+	res := newDomainBuilding(b.ID, b.Name, b.Address, b.ApartmentCount, b.CreatedAt, b.UpdatedAt)
+	return &res
+}
+
+func buildingsFromListRows(rows []db.ListBuildingsRow) []domain.Building {
 	result := make([]domain.Building, len(rows))
 	for i, b := range rows {
-		result[i] = domain.Building(b)
+		result[i] = newDomainBuilding(b.ID, b.Name, b.Address, b.ApartmentCount, b.CreatedAt, b.UpdatedAt)
 	}
 	return result
 }

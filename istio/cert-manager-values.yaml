@@ -1,0 +1,8 @@
+installCRDs: true
+
+crds:
+  enabled: true
+
+global:
+  leaderElection:
+    namespace: istio-system

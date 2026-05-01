@@ -1,0 +1,5 @@
+apiVersion: v2
+name: jaeger
+description: Jaeger all-in-one for distributed tracing
+version: 0.1.0
+appVersion: "latest"

@@ -96,10 +96,10 @@ func (h *RuleHandler) Update(c *gin.Context) {
 		rule.QuietHoursEnd = req.QuietHoursEnd
 	}
 	if req.DailyPassLimitPerApartment != nil {
-		rule.DailyPassLimitPerApartment = *req.DailyPassLimitPerApartment
+		rule.DailyPassLimitPerApartment = int32(*req.DailyPassLimitPerApartment)
 	}
 	if req.MaxPassDurationHours != nil {
-		rule.MaxPassDurationHours = *req.MaxPassDurationHours
+		rule.MaxPassDurationHours = int32(*req.MaxPassDurationHours)
 	}
 
 	if rule.ID == 0 {

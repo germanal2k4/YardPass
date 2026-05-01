@@ -1,75 +1,84 @@
-version: '3.8'
+# YardPass — локальный стек приложения. Postgres и Redis подключаются из docker-compose.data.yml
+include:
+  - path: docker-compose.data.yml
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: yardpass-postgres
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
+  elasticsearch:
+    image: elasticsearch:7.17.0
     environment:
-      POSTGRES_DB: yardpass
-      POSTGRES_USER: yardpass
-      POSTGRES_PASSWORD: password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
+      - discovery.type=single-node
+      - xpack.security.enabled=false
     ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yardpass"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "9200:9200"
 
-  redis:
-    image: redis:7-alpine
-    container_name: yardpass-redis
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-
-  backend:
-    build: ./backend
-    container_name: yardpass-backend
+  migrate:
+    build:
+      context: ./backend
+      target: migrate
     environment:
       - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
-      - JWT_ACCESS_TTL=15m
-      - JWT_REFRESH_TTL=168h
-      - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=8080
-      - RATE_LIMIT_CREATE_PASS_PER_HOUR=10
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-    ports:
-      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      target: api
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-168h}
+      - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - RATE_LIMIT_CREATE_PASS_PER_HOUR=${RATE_LIMIT_CREATE_PASS_PER_HOUR:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
+    ports:
+      - "8080:8080"
+      - "5050:5050"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+      jaeger:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
     restart: unless-stopped
 
   bot:
-    build: 
+    profiles: ["bot", "full"]
+    build:
       context: ./backend
       dockerfile: Dockerfile
       target: bot
-    container_name: yardpass-bot
     environment:
-      - DATABASE_URL=postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable
-      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - API_BASE_URL=http://backend:8080
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
+      - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_URL=${TRACER_URL:-jaeger:4317}
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,17 +90,46 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: yardpass-frontend
     ports:
       - "3000:80"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8080
-      - VITE_DEFAULT_BUILDING_ID=1
+      - BACKEND_URL=http://backend:8080
     depends_on:
       - backend
     restart: unless-stopped
 
-volumes:
-  postgres_data:
-  redis_data:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    depends_on:
+      - jaeger
+      - backend
+    volumes:
+      - ./backend/deployment/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
 
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - elasticsearch
+      - jaeger
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./backend/deployment/grafana/provisioning:/etc/grafana/provisioning
+    ports:
+      - "3030:3000"
+
+volumes:
+  prometheus_data:
+  grafana_data:

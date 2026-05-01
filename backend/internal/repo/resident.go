@@ -2,10 +2,13 @@ package repo
 
 import (
 	"context"
-	"fmt"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
+	"yardpass/internal/repo/db"
+
 	"github.com/jackc/pgx/v5"
+	"go.uber.org/zap"
 )
 
 type ResidentRepo struct {
@@ -17,104 +20,68 @@ func NewResidentRepo(repo *PostgresRepo) *ResidentRepo {
 }
 
 func (r *ResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident, error) {
-	query := `
-		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
-		FROM residents
-		WHERE id = $1
-	`
-
-	var resident domain.Resident
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&resident.ID,
-		&resident.ApartmentID,
-		&resident.TelegramID,
-		&resident.ChatID,
-		&resident.Name,
-		&resident.Phone,
-		&resident.Status,
-		&resident.CreatedAt,
-		&resident.UpdatedAt,
-	)
-
+	ctx = queryNameToContext(ctx, "ResidentRepo.GetByID")
+	row, err := r.queries.GetResidentByID(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &resident, nil
+	return residentFromDB(row), nil
 }
 
 func (r *ResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Resident, error) {
-	query := `
-		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
-		FROM residents
-		WHERE telegram_id = $1
-	`
-
-	var resident domain.Resident
-	err := r.pool.QueryRow(ctx, query, telegramID).Scan(
-		&resident.ID,
-		&resident.ApartmentID,
-		&resident.TelegramID,
-		&resident.ChatID,
-		&resident.Name,
-		&resident.Phone,
-		&resident.Status,
-		&resident.CreatedAt,
-		&resident.UpdatedAt,
-	)
-
+	ctx = queryNameToContext(ctx, "ResidentRepo.GetByTelegramID")
+	row, err := r.queries.GetResidentByTelegramID(ctx, telegramID)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &resident, nil
+	return residentFromDB(row), nil
 }
 
 func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
-	query := `
-		INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, created_at, updated_at
-	`
-
-	err := r.pool.QueryRow(ctx, query,
-		resident.ApartmentID,
-		resident.TelegramID,
-		resident.ChatID,
-		resident.Name,
-		resident.Phone,
-		resident.Status,
-	).Scan(&resident.ID, &resident.CreatedAt, &resident.UpdatedAt)
-
-	return err
+	ctx = queryNameToContext(ctx, "ResidentRepo.Create")
+	row, err := r.queries.CreateResident(ctx, db.CreateResidentParams{
+		ApartmentID: resident.ApartmentID,
+		TelegramID:  resident.TelegramID,
+		ChatID:      resident.ChatID,
+		Name:        resident.Name,
+		Phone:       resident.Phone,
+		Status:      resident.Status,
+	})
+	if err != nil {
+		return err
+	}
+	resident.ID = row.ID
+	resident.CreatedAt = row.CreatedAt
+	resident.UpdatedAt = row.UpdatedAt
+	return nil
 }
 
 func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) error {
-	query := `
-		UPDATE residents
-		SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, status = $7
-		WHERE id = $1
-		RETURNING updated_at
-	`
-
-	return r.pool.QueryRow(ctx, query,
-		resident.ID,
-		resident.ApartmentID,
-		resident.TelegramID,
-		resident.ChatID,
-		resident.Name,
-		resident.Phone,
-		resident.Status,
-	).Scan(&resident.UpdatedAt)
+	ctx = queryNameToContext(ctx, "ResidentRepo.Update")
+	updatedAt, err := r.queries.UpdateResident(ctx, db.UpdateResidentParams{
+		ID:          resident.ID,
+		ApartmentID: resident.ApartmentID,
+		TelegramID:  resident.TelegramID,
+		ChatID:      resident.ChatID,
+		Name:        resident.Name,
+		Phone:       resident.Phone,
+		Status:      resident.Status,
+	})
+	if err != nil {
+		return err
+	}
+	resident.UpdatedAt = updatedAt
+	return nil
 }
 
-func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []*domain.Resident) error {
+func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Resident) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.BulkCreate")
 	if len(residents) == 0 {
 		return nil
 	}
@@ -123,89 +90,68 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []*domain.Resid
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			logger.FromContext(ctx).Error("Failed to rollback transaction", zap.Error(err))
+		}
+	}()
 
-	query := `
-		INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (telegram_id) DO UPDATE SET
-			apartment_id = EXCLUDED.apartment_id,
-			chat_id = EXCLUDED.chat_id,
-			name = EXCLUDED.name,
-			phone = EXCLUDED.phone,
-			status = EXCLUDED.status
-		RETURNING id, created_at, updated_at
-	`
-
+	qtx := r.queries.WithTx(tx)
 	for _, resident := range residents {
-		err := tx.QueryRow(ctx, query,
-			resident.ApartmentID,
-			resident.TelegramID,
-			resident.ChatID,
-			resident.Name,
-			resident.Phone,
-			resident.Status,
-		).Scan(&resident.ID, &resident.CreatedAt, &resident.UpdatedAt)
+		row, err := qtx.UpsertResident(ctx, db.UpsertResidentParams{
+			ApartmentID: resident.ApartmentID,
+			TelegramID:  resident.TelegramID,
+			ChatID:      resident.ChatID,
+			Name:        resident.Name,
+			Phone:       resident.Phone,
+			Status:      resident.Status,
+		})
 		if err != nil {
 			return err
 		}
+		resident.ID = row.ID
+		resident.CreatedAt = row.CreatedAt
+		resident.UpdatedAt = row.UpdatedAt
 	}
 
 	return tx.Commit(ctx)
 }
 
-func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
-	query := `
-		SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
-		FROM residents
-		WHERE 1=1
+func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.List")
+	const listResidentsWithApartmentNumberQuery = `
+		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.status, r.created_at, r.updated_at
+		FROM residents r
+		INNER JOIN apartments a ON a.id = r.apartment_id
+		WHERE ($1::bigint IS NULL OR r.apartment_id = $1)
+		  AND ($2::bigint IS NULL OR a.building_id = $2)
+		  AND ($3::varchar IS NULL OR r.status = $3)
+		ORDER BY r.created_at DESC
+		LIMIT $4
+		OFFSET $5
 	`
-	args := []interface{}{}
-	argPos := 1
 
-	if filters.ApartmentID != nil {
-		query += fmt.Sprintf(` AND apartment_id = $%d`, argPos)
-		args = append(args, *filters.ApartmentID)
-		argPos++
-	}
-
-	if filters.BuildingID != nil {
-		query += ` AND apartment_id IN (SELECT id FROM apartments WHERE building_id = $` + fmt.Sprintf("%d", argPos) + `)`
-		args = append(args, *filters.BuildingID)
-		argPos++
-	}
-
-	if filters.Status != nil {
-		query += fmt.Sprintf(` AND status = $%d`, argPos)
-		args = append(args, *filters.Status)
-		argPos++
-	}
-
-	query += ` ORDER BY created_at DESC`
-
-	if filters.Limit > 0 {
-		query += fmt.Sprintf(` LIMIT $%d`, argPos)
-		args = append(args, filters.Limit)
-		argPos++
-	}
-
-	if filters.Offset > 0 {
-		query += fmt.Sprintf(` OFFSET $%d`, argPos)
-		args = append(args, filters.Offset)
-	}
-
-	rows, err := r.pool.Query(ctx, query, args...)
+	rows, err := r.pool.Query(
+		ctx,
+		listResidentsWithApartmentNumberQuery,
+		filters.ApartmentID,
+		filters.BuildingID,
+		filters.Status,
+		intToInt32Ptr(filters.Limit),
+		intToInt32Ptr(filters.Offset),
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var residents []*domain.Resident
+	var result []domain.Resident
 	for rows.Next() {
 		var resident domain.Resident
 		if err := rows.Scan(
 			&resident.ID,
 			&resident.ApartmentID,
+			&resident.ApartmentNumber,
 			&resident.TelegramID,
 			&resident.ChatID,
 			&resident.Name,
@@ -216,9 +162,30 @@ func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters)
 		); err != nil {
 			return nil, err
 		}
-		residents = append(residents, &resident)
+		result = append(result, resident)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
-	return residents, rows.Err()
+func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.Delete")
+	return r.queries.DeleteResident(ctx, id)
+}
+
+func residentFromDB(row db.Resident) *domain.Resident {
+	return &domain.Resident{
+		ID:          row.ID,
+		ApartmentID: row.ApartmentID,
+		TelegramID:  row.TelegramID,
+		ChatID:      row.ChatID,
+		Name:        row.Name,
+		Phone:       row.Phone,
+		Status:      row.Status,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
 }
 

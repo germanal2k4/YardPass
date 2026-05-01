@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "yardpass-backend.resource-name" . }}
+  labels:
+    {{ include "yardpass-backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{ include "yardpass-backend.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{ include "yardpass-backend.selector" . | nindent 8 }}
+        version: {{ .Values.version | default "v1" }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["./migrate", "up"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: database-url
+      containers:
+        - name: {{ .Values.appLabel }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: redis-url
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-host
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-port
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-username
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-password
+            - name: SMTP_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: yardpass-backend
+                  key: smtp-from
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: {{ .Values.service.metricsPort }}
+          {{ include "yardpass-backend.liveness" . | nindent 10 }}
+          {{ include "yardpass-backend.readiness" . | nindent 10 }}

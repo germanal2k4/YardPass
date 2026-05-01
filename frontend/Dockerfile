@@ -18,30 +18,41 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 # Copy source code
 COPY . .
 
-# Build application
-RUN if [ -f pnpm-lock.yaml ]; then \
-      pnpm run build; \
+# Set build environment variables (VITE_API_BASE_URL="" for same-origin in k8s)
+ARG VITE_API_BASE_URL=http://localhost:8080
+ENV NODE_ENV=production
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+# Build application (using build:prod to skip TypeScript checks for Docker)
+# Vite handles TypeScript compilation during build
+RUN echo "Starting Vite build..." && \
+    if [ -f pnpm-lock.yaml ]; then \
+      pnpm run build:prod; \
     elif [ -f yarn.lock ]; then \
-      yarn build; \
+      yarn build:prod; \
     else \
-      npm run build; \
-    fi
+      npm run build:prod; \
+    fi && \
+    echo "Build completed successfully" && \
+    ls -la dist
 
 # Production stage
 FROM nginx:alpine
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx template and entrypoint
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint-custom.sh
+RUN chmod +x /docker-entrypoint-custom.sh
 
 # Copy built assets
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Expose port
+ENV BACKEND_URL=http://backend:8080
+
 EXPOSE 80
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint-custom.sh"]
 

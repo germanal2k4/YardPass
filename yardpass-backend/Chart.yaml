@@ -1,0 +1,6 @@
+apiVersion: v2
+name: yardpass-backend
+description: YardPass API backend
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

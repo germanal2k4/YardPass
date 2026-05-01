@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ParkingHandler struct {

@@ -1,0 +1,11 @@
+replicaCount: 1
+
+image:
+  repository: mailhog/mailhog
+  tag: v1.0.1
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  smtpPort: 1025
+  httpPort: 8025

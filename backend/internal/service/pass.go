@@ -2,49 +2,108 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
+
+	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
 type PassService struct {
-	passRepo     domain.PassRepository
-	apartmentRepo domain.ApartmentRepository
-	ruleRepo     domain.RuleRepository
-	scanEventRepo domain.ScanEventRepository
-	logger       *zap.Logger
+	passRepo        domain.PassRepository
+	apartmentRepo   domain.ApartmentRepository
+	residentRepo    domain.ResidentRepository
+	ruleRepo        domain.RuleRepository
+	scanEventRepo   domain.ScanEventRepository
+	personalPassKey []byte
+	fallbackLogger  *zap.Logger
+	opsTotal        *prometheus.CounterVec
+	createdByType   *prometheus.CounterVec
+	rejectionsTotal *prometheus.CounterVec
 }
 
 func NewPassService(
 	passRepo domain.PassRepository,
 	apartmentRepo domain.ApartmentRepository,
+	residentRepo domain.ResidentRepository,
 	ruleRepo domain.RuleRepository,
 	scanEventRepo domain.ScanEventRepository,
+	personalPassSecret string,
 	logger *zap.Logger,
+	m *metrics.Metrics,
 ) *PassService {
+	if strings.TrimSpace(personalPassSecret) == "" {
+		personalPassSecret = "yardpass-personal-pass-secret"
+	}
+
+	opsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "operations_total",
+			Help:      "Total number of pass operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	createdByType := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "created_by_type_total",
+			Help:      "Total number of passes created by guest type",
+		},
+		[]string{"type"},
+	)
+
+	rejectionsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_pass_service",
+			Name:      "rejections_total",
+			Help:      "Total number of pass creation rejections by reason",
+		},
+		[]string{"reason"},
+	)
+
+	m.GetRegistry().MustRegister(opsTotal, createdByType, rejectionsTotal)
+
 	return &PassService{
-		passRepo:      passRepo,
-		apartmentRepo: apartmentRepo,
-		ruleRepo:      ruleRepo,
-		scanEventRepo: scanEventRepo,
-		logger:        logger,
+		passRepo:        passRepo,
+		apartmentRepo:   apartmentRepo,
+		residentRepo:    residentRepo,
+		ruleRepo:        ruleRepo,
+		scanEventRepo:   scanEventRepo,
+		personalPassKey: []byte(personalPassSecret),
+		fallbackLogger:  logger,
+		opsTotal:        opsTotal,
+		createdByType:   createdByType,
+		rejectionsTotal: rejectionsTotal,
 	}
 }
 
 func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
-	carPlate := normalizeCarPlate(req.CarPlate)
-	if carPlate == "" {
-		return nil, errors.New("invalid car plate number")
+	var carPlate *string
+	if req.CarPlate != nil && *req.CarPlate != "" {
+		normalized := normalizeCarPlate(*req.CarPlate)
+		if normalized == "" {
+			s.rejectionsTotal.WithLabelValues("invalid_car_plate").Inc()
+			return nil, errors.New("invalid car plate number")
+		}
+		carPlate = &normalized
 	}
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get apartment: %w", err)
+		return nil, fmt.Errorf("get apartment: %w", err)
 	}
 	if apartment == nil {
 		return nil, errors.New("apartment not found")
@@ -52,28 +111,37 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rules: %w", err)
+		return nil, fmt.Errorf("get rules: %w", err)
 	}
 	if rule == nil {
 		rule = &domain.Rule{
 			DailyPassLimitPerApartment: 5,
-			MaxPassDurationHours:        24,
+			MaxPassDurationHours:       24,
 		}
 	}
 
-	validFromUTC := req.ValidFrom.UTC()
-	validToUTC := req.ValidTo.UTC()
-	localLocation := resolveLocationForPassTimes(req.ValidFrom, req.ValidTo)
-
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
-	if validToUTC.Sub(validFromUTC) > maxDuration {
+	if req.ValidTo.Sub(req.ValidFrom) > maxDuration {
+		s.rejectionsTotal.WithLabelValues("max_duration_exceeded").Inc()
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
 
+	if req.ResidentID == nil {
+		return nil, errors.New("resident_id is required")
+	}
+
+	count, err := s.passRepo.CountActiveTodayByResidentID(ctx, *req.ResidentID)
+	if err != nil {
+		return nil, fmt.Errorf("check daily limit: %w", err)
+	}
+	if count >= int(rule.DailyPassLimitPerApartment) {
+		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
+		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
+	}
+
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-		validFromLocal := validFromUTC.In(localLocation)
-		validToLocal := validToUTC.In(localLocation)
-		if err := s.validateQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+		if err := s.validateQuietHours(req.ValidFrom, req.ValidTo, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+			s.rejectionsTotal.WithLabelValues("quiet_hours").Inc()
 			return nil, err
 		}
 	}
@@ -81,44 +149,79 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	pass := &domain.Pass{
 		ID:          uuid.New(),
 		ApartmentID: req.ApartmentID,
+		ResidentID:  req.ResidentID,
 		CarPlate:    carPlate,
 		GuestName:   req.GuestName,
-		ValidFrom:   validFromUTC,
-		ValidTo:     validToUTC,
+		ValidFrom:   req.ValidFrom,
+		ValidTo:     req.ValidTo,
 		Status:      "active",
 	}
 
-	dayAnchorLocal := validFromUTC.In(localLocation)
-	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
-	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
-
-	created, err := s.passRepo.CreateWithDailyLimit(
-		ctx,
-		pass,
-		startOfDayLocal.UTC(),
-		endOfDayLocal.UTC(),
-		rule.DailyPassLimitPerApartment,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create pass: %w", err)
-	}
-	if !created {
-		return nil, errors.New("daily pass limit exceeded")
+	if err := s.passRepo.Create(ctx, pass); err != nil {
+		s.opsTotal.WithLabelValues("create", "error").Inc()
+		return nil, fmt.Errorf("create pass: %w", err)
 	}
 
-	s.logger.Info("pass created",
+	s.opsTotal.WithLabelValues("create", "success").Inc()
+	if carPlate != nil {
+		s.createdByType.WithLabelValues("car").Inc()
+	} else {
+		s.createdByType.WithLabelValues("pedestrian").Inc()
+	}
+
+	logFields := []zap.Field{
 		zap.String("pass_id", pass.ID.String()),
 		zap.Int64("apartment_id", pass.ApartmentID),
-		zap.String("car_plate", carPlate),
-	)
+	}
+	if carPlate != nil {
+		logFields = append(logFields, zap.String("car_plate", *carPlate))
+	} else {
+		logFields = append(logFields, zap.String("type", "pedestrian"))
+	}
+
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+	lgr.Info("Pass created", logFields...)
 
 	return pass, nil
+}
+
+func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64) string {
+	return fmt.Sprintf("resident:%d:%s", residentTelegramID, s.signResidentToken(residentTelegramID))
 }
 
 func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pass: %w", err)
+		return nil, fmt.Errorf("get pass: %w", err)
+	}
+
+	if pass == nil {
+		result := &domain.PassValidationResult{
+			Valid:  false,
+			Reason: "PASS_NOT_FOUND",
+		}
+		return result, nil
+	}
+
+	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	normalizedCarPlate := normalizeCarPlate(carPlate)
+	if normalizedCarPlate == "" {
+		result := &domain.PassValidationResult{
+			Valid:  false,
+			Reason: "INVALID_CAR_PLATE",
+		}
+		return result, nil
+	}
+
+	pass, err := s.passRepo.GetActiveByCarPlate(ctx, normalizedCarPlate, buildingID)
+	if err != nil {
+		return nil, fmt.Errorf("get pass by car plate: %w", err)
 	}
 
 	result := &domain.PassValidationResult{
@@ -127,28 +230,88 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 
 	if pass == nil {
 		result.Reason = "PASS_NOT_FOUND"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
 		return result, nil
+	}
+
+	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	const prefix = "resident:"
+	if !strings.HasPrefix(token, prefix) {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	parts := strings.Split(token, ":")
+	if len(parts) != 3 {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	telegramID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+	if !hmac.Equal([]byte(parts[2]), []byte(s.signResidentToken(telegramID))) {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	resident, err := s.residentRepo.GetByTelegramID(ctx, telegramID)
+	if err != nil || resident == nil || resident.Status != "active" {
+		return &domain.PassValidationResult{Valid: false, Reason: "RESIDENT_NOT_FOUND"}, nil
+	}
+
+	apartment, err := s.apartmentRepo.GetByID(ctx, resident.ApartmentID)
+	if err != nil || apartment == nil {
+		return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+	}
+
+	if buildingID != nil && apartment.BuildingID != *buildingID {
+		return &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}, nil
+	}
+
+	return &domain.PassValidationResult{
+		Valid:     true,
+		CarPlate:  "",
+		Apartment: apartment.Number,
+	}, nil
+}
+
+func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pass, guardUserID int64) (*domain.PassValidationResult, error) {
+	result := &domain.PassValidationResult{
+		Valid: false,
 	}
 
 	if pass.Status == "revoked" {
 		result.Reason = "PASS_REVOKED"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
 	now := time.Now().UTC()
-	if now.Before(pass.ValidFrom) {
+	validFrom := pass.ValidFrom.UTC()
+	validTo := pass.ValidTo.UTC()
+
+	if now.Before(validFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
-	if now.After(pass.ValidTo) {
+	if pass.Status == "used" {
+		result.Reason = "PASS_ALREADY_USED"
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
+		return result, nil
+	}
+
+	if now.After(validTo) {
 		result.Reason = "PASS_EXPIRED"
 		pass.Status = "expired"
 		_ = s.passRepo.Update(ctx, pass)
-		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+		s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+		s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 		return result, nil
 	}
 
@@ -157,33 +320,40 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-				localLocation := resolveLocationForPassTimes(pass.ValidFrom, pass.ValidTo)
-				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
+				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
-					s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
+					s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+					s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
 					return result, nil
 				}
 			}
 		}
 	}
 
+	// First successful validation: mark pass as used
+	pass.Status = "used"
+	_ = s.passRepo.Update(ctx, pass)
+
 	result.Valid = true
 	result.Pass = pass
-	result.CarPlate = pass.CarPlate
+	if pass.CarPlate != nil {
+		result.CarPlate = *pass.CarPlate
+	}
 	result.ValidTo = &pass.ValidTo
 
 	if apartment != nil {
 		result.Apartment = apartment.Number
 	}
 
-	s.logScanEvent(ctx, passID, guardUserID, "valid", "")
+	s.opsTotal.WithLabelValues("validate", "valid").Inc()
+	s.logScanEvent(ctx, pass.ID, guardUserID, "valid", "")
 	return result, nil
 }
 
 func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return fmt.Errorf("failed to get pass: %w", err)
+		return fmt.Errorf("get pass: %w", err)
 	}
 	if pass == nil {
 		return errors.New("pass not found")
@@ -194,10 +364,18 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 	}
 
 	if err := s.passRepo.Revoke(ctx, passID); err != nil {
-		return fmt.Errorf("failed to revoke pass: %w", err)
+		s.opsTotal.WithLabelValues("revoke", "error").Inc()
+		return fmt.Errorf("revoke pass: %w", err)
 	}
 
-	s.logger.Info("pass revoked",
+	s.opsTotal.WithLabelValues("revoke", "success").Inc()
+
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+
+	lgr.Info("Pass revoked",
 		zap.String("pass_id", passID.String()),
 		zap.Int64("revoked_by", revokedBy),
 	)
@@ -205,19 +383,24 @@ func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedB
 	return nil
 }
 
-func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePasses(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByApartmentID(ctx, apartmentID)
 }
 
-func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+func (s *PassService) GetActivePassesByResident(ctx context.Context, residentID int64) ([]domain.Pass, error) {
+	return s.passRepo.GetActiveByResidentID(ctx, residentID)
+}
+
+func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
 	return s.passRepo.GetActiveByBuildingID(ctx, buildingID)
 }
 
-func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]*domain.Pass, error) {
+func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]domain.Pass, error) {
 	return s.passRepo.SearchByCarPlate(ctx, carPlate, buildingID, 50)
 }
 
 func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardUserID int64, result, reason string) {
+
 	event := &domain.ScanEvent{
 		PassID:      passID,
 		GuardUserID: guardUserID,
@@ -227,24 +410,60 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	}
 
 	if err := s.scanEventRepo.Create(ctx, event); err != nil {
-		s.logger.Error("failed to log scan event", zap.Error(err))
+		lgr := logger.FromContext(ctx)
+		if lgr == nil {
+			lgr = s.fallbackLogger
+		}
+
+		lgr.Error("Failed to log scan event",
+			zap.Error(err),
+			zap.String("pass_id", passID.String()),
+			zap.String("result", result),
+			zap.String("reason", reason),
+		)
 	}
+}
+
+func (s *PassService) signResidentToken(telegramID int64) string {
+	mac := hmac.New(sha256.New, s.personalPassKey)
+	mac.Write([]byte(strconv.FormatInt(telegramID, 10)))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+var russianToEnglish = map[rune]rune{
+	'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'К': 'K',
+	'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'Т': 'T',
+	'У': 'Y', 'Х': 'X',
+	'а': 'A', 'в': 'B', 'с': 'C', 'е': 'E', 'к': 'K',
+	'м': 'M', 'н': 'H', 'о': 'O', 'р': 'P', 'т': 'T',
+	'у': 'Y', 'х': 'X',
 }
 
 func normalizeCarPlate(plate string) string {
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
-	
+
 	var result strings.Builder
 	for _, r := range normalized {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+		if eng, ok := russianToEnglish[r]; ok {
+			result.WriteRune(eng)
+		} else if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	return result.String()
 }
 
 func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime, endTime string) error {
+	// Interpret quiet hours in local building timezone (Europe/Moscow)
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+
+	validFromLocal := validFrom.In(location)
+	validToLocal := validTo.In(location)
+
 	start, err := parseTime(startTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours start: %w", err)
@@ -254,8 +473,8 @@ func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime
 		return fmt.Errorf("invalid quiet hours end: %w", err)
 	}
 
-	fromHour := validFrom.Hour()*60 + validFrom.Minute()
-	toHour := validTo.Hour()*60 + validTo.Minute()
+	fromHour := validFromLocal.Hour()*60 + validFromLocal.Minute()
+	toHour := validToLocal.Hour()*60 + validToLocal.Minute()
 	startMin := start.Hour()*60 + start.Minute()
 	endMin := end.Hour()*60 + end.Minute()
 
@@ -274,6 +493,13 @@ func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime
 }
 
 func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) bool {
+	// Interpret quiet hours in local building timezone (Europe/Moscow)
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := now.In(location)
+
 	start, err := parseTime(startTime)
 	if err != nil {
 		return false
@@ -283,7 +509,7 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 		return false
 	}
 
-	nowMin := now.Hour()*60 + now.Minute()
+	nowMin := nowLocal.Hour()*60 + nowLocal.Minute()
 	startMin := start.Hour()*60 + start.Minute()
 	endMin := end.Hour()*60 + end.Minute()
 
@@ -297,24 +523,3 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
 }
-
-func resolveLocationFromTimestamp(ts time.Time) *time.Location {
-	if ts.IsZero() {
-		return nil
-	}
-	if loc := ts.Location(); loc != nil {
-		return loc
-	}
-	return nil
-}
-
-func resolveLocationForPassTimes(validFrom, validTo time.Time) *time.Location {
-	if loc := resolveLocationFromTimestamp(validFrom); loc != nil {
-		return loc
-	}
-	if loc := resolveLocationFromTimestamp(validTo); loc != nil {
-		return loc
-	}
-	return time.UTC
-}
-

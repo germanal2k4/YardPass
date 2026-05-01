@@ -1,32 +1,32 @@
 package middleware
 
 import (
-	"context"
-	"strings"
-
-	"yardpass/internal/auth"
+	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 
 	"github.com/gin-gonic/gin"
 )
 
-func AuthMiddleware(jwtService *auth.JWTService) gin.HandlerFunc {
+const cookieAccessToken = "access_token"
+
+func accessTokenFromRequest(c *gin.Context) string {
+	tok, err := c.Cookie(cookieAccessToken)
+	if err == nil && tok != "" {
+		return tok
+	}
+	return ""
+}
+
+func AuthMiddleware(jwtService domain.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			errors.Unauthorized(c, "MISSING_TOKEN", "Authorization header is required")
+		token := accessTokenFromRequest(c)
+		if token == "" {
+			errors.Unauthorized(c, "MISSING_TOKEN", "Access cookie is required")
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			errors.Unauthorized(c, "INVALID_TOKEN_FORMAT", "Token must be in format: Bearer <token>")
-			c.Abort()
-			return
-		}
-
-		claims, err := jwtService.ValidateToken(c.Request.Context(), parts[1])
+		claims, err := jwtService.ValidateToken(c.Request.Context(), token)
 		if err != nil {
 			errors.Unauthorized(c, "INVALID_TOKEN", "Invalid or expired token")
 			c.Abort()
@@ -37,10 +37,7 @@ func AuthMiddleware(jwtService *auth.JWTService) gin.HandlerFunc {
 		c.Set("role", claims.Role)
 		if claims.BuildingID != nil {
 			c.Set("building_id", *claims.BuildingID)
-			c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "building_id", *claims.BuildingID))
 		}
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "user_id", claims.UserID))
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), "role", claims.Role))
 
 		c.Next()
 	}

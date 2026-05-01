@@ -1,0 +1,66 @@
+# YardPass Configuration
+# Auto-generated with default values. Override as needed.
+# Environment variables take precedence over these values.
+
+jwt:
+    access_ttl: 15m
+    refresh_ttl: 168h
+
+log:
+    buffered: true
+    disabled: false
+    elastic_config:
+        url: http://localhost:9200
+        index: yardpass-logs
+        flush_interval: 1s
+        write_buffer_size: 1024
+    format: json
+    level: info
+    transport: elastic
+    mask_body_fields:
+        - password
+        - token
+        - secret
+        - api_key
+        - apiKey
+        - refresh_token
+        - access_token
+    mask_headers:
+        - Authorization
+        - X-Service-Token
+        - Cookie
+pg:
+    dsn: postgres://yardpass:password@localhost:5432/yardpass?sslmode=disable
+    max_conn_idle_time: 30m
+    max_conn_lifetime: 1h
+    max_conns: 25
+    min_conns: 5
+
+rate_limit:
+    create_pass_per_hour: 10
+    requests_per_minute: 60
+    scan_per_minute: 100
+
+redis:
+    url: redis://localhost:6379/0
+
+smtp:
+    host: ""
+    port: "587"
+    username: ""
+    password: ""
+    from: ""
+
+server:
+    host: localhost
+    port: "8080"
+    start_timeout: 15s
+    stop_timeout: 15s
+
+tracer:
+    enabled: true
+    url: localhost:4317
+
+metrics:
+    enabled: true
+    port: 5050

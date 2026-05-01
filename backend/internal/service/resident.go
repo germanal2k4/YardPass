@@ -10,35 +10,60 @@ import (
 	"strings"
 
 	"yardpass/internal/domain"
+	"yardpass/internal/observability/logger"
+	"yardpass/internal/observability/metrics"
+
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
 type ResidentService struct {
-	residentRepo  domain.ResidentRepository
-	apartmentRepo domain.ApartmentRepository
-	logger        *zap.Logger
+	residentRepo   domain.ResidentRepository
+	apartmentRepo  domain.ApartmentRepository
+	fallbackLogger *zap.Logger
+	opsTotal       *prometheus.CounterVec
+	importTotal    *prometheus.CounterVec
 }
 
-func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo domain.ApartmentRepository, logger *zap.Logger) *ResidentService {
+func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo domain.ApartmentRepository, logger *zap.Logger, m *metrics.Metrics) *ResidentService {
+	opsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_resident",
+			Name:      "operations_total",
+			Help:      "Total number of resident operations",
+		},
+		[]string{"operation", "result"},
+	)
+
+	importTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "yardpass_resident",
+			Name:      "import_rows_total",
+			Help:      "Total number of rows processed during CSV import",
+		},
+		[]string{"result"},
+	)
+
+	m.GetRegistry().MustRegister(opsTotal, importTotal)
+
 	return &ResidentService{
-		residentRepo:  residentRepo,
-		apartmentRepo: apartmentRepo,
-		logger:        logger,
+		residentRepo:   residentRepo,
+		apartmentRepo:  apartmentRepo,
+		fallbackLogger: logger,
+		opsTotal:       opsTotal,
+		importTotal:    importTotal,
 	}
 }
 
-type CreateResidentRequest struct {
-	ApartmentID int64   `json:"apartment_id" binding:"required"`
-	TelegramID  int64   `json:"telegram_id" binding:"required"`
-	ChatID      int64   `json:"chat_id" binding:"required"`
-	Name        *string `json:"name,omitempty"`
-	Phone       *string `json:"phone,omitempty"`
-}
-
-func (s *ResidentService) CreateResident(ctx context.Context, req CreateResidentRequest) (*domain.Resident, error) {
-	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
+func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateResidentRequest) (*domain.Resident, error) {
+	apartmentID, err := s.resolveApartmentID(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get apartment: %w", err)
+		return nil, err
+	}
+
+	apartment, err := s.apartmentRepo.GetByID(ctx, apartmentID)
+	if err != nil {
+		return nil, fmt.Errorf("get apartment: %w", err)
 	}
 	if apartment == nil {
 		return nil, errors.New("apartment not found")
@@ -46,49 +71,62 @@ func (s *ResidentService) CreateResident(ctx context.Context, req CreateResident
 
 	existing, err := s.residentRepo.GetByTelegramID(ctx, req.TelegramID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check telegram_id: %w", err)
+		return nil, fmt.Errorf("check telegram_id: %w", err)
 	}
+
+	chatID := req.TelegramID
+	if req.ChatID != nil {
+		chatID = *req.ChatID
+	}
+
 	if existing != nil {
-		existing.ApartmentID = req.ApartmentID
-		existing.ChatID = req.ChatID
+		existing.ApartmentID = apartmentID
+		existing.ChatID = chatID
 		existing.Name = req.Name
 		existing.Phone = req.Phone
 		if err := s.residentRepo.Update(ctx, existing); err != nil {
-			return nil, fmt.Errorf("failed to update resident: %w", err)
+			s.opsTotal.WithLabelValues("update", "error").Inc()
+			return nil, fmt.Errorf("update resident: %w", err)
 		}
+		s.opsTotal.WithLabelValues("update", "success").Inc()
 		return existing, nil
 	}
 
 	resident := &domain.Resident{
-		ApartmentID: req.ApartmentID,
+		ApartmentID: apartmentID,
 		TelegramID:  req.TelegramID,
-		ChatID:      req.ChatID,
+		ChatID:      chatID,
 		Name:        req.Name,
 		Phone:       req.Phone,
 		Status:      "active",
 	}
 
 	if err := s.residentRepo.Create(ctx, resident); err != nil {
-		return nil, fmt.Errorf("failed to create resident: %w", err)
+		s.opsTotal.WithLabelValues("create", "error").Inc()
+		return nil, fmt.Errorf("create resident: %w", err)
 	}
 
+	s.opsTotal.WithLabelValues("create", "success").Inc()
 	return resident, nil
 }
 
-func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []CreateResidentRequest) ([]*domain.Resident, []error) {
-	var residents []*domain.Resident
-	var errors []error
+func (s *ResidentService) BulkCreateResidents(ctx context.Context, requests []domain.CreateResidentRequest) ([]domain.Resident, []domain.BulkCreateError) {
+	var residents []domain.Resident
+	var createErrors []domain.BulkCreateError
 
 	for i, req := range requests {
 		resident, err := s.CreateResident(ctx, req)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("row %d: %w", i+1, err))
+			createErrors = append(createErrors, domain.BulkCreateError{
+				Row:   i + 1,
+				Error: err.Error(),
+			})
 			continue
 		}
-		residents = append(residents, resident)
+		residents = append(residents, *resident)
 	}
 
-	return residents, errors
+	return residents, createErrors
 }
 
 func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, buildingID int64) (int, []error) {
@@ -97,7 +135,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	records, err := csvReader.ReadAll()
 	if err != nil {
-		return 0, []error{fmt.Errorf("failed to read CSV: %w", err)}
+		return 0, []error{fmt.Errorf("read CSV: %w", err)}
 	}
 
 	if len(records) < 2 {
@@ -117,7 +155,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 		}
 	}
 
-	var requests []CreateResidentRequest
+	var requests []domain.CreateResidentRequest
 	var parseErrors []error
 
 	for i, record := range records[1:] {
@@ -160,10 +198,20 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 			continue
 		}
 
-		req := CreateResidentRequest{
-			ApartmentID: apartmentID,
+		chatID := telegramID
+		if chatIDIdx, ok := headerMap["chat_id"]; ok {
+			chatIDStr := strings.TrimSpace(record[chatIDIdx])
+			if chatIDStr != "" {
+				if parsedChatID, err := strconv.ParseInt(chatIDStr, 10, 64); err == nil {
+					chatID = parsedChatID
+				}
+			}
+		}
+
+		req := domain.CreateResidentRequest{
+			ApartmentID: &apartmentID,
 			TelegramID:  telegramID,
-			ChatID:      telegramID,
+			ChatID:      &chatID,
 		}
 
 		if nameIdx, ok := headerMap["name"]; ok {
@@ -180,16 +228,6 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 			}
 		}
 
-		if chatIDIdx, ok := headerMap["chat_id"]; ok {
-			chatIDStr := strings.TrimSpace(record[chatIDIdx])
-			if chatIDStr != "" {
-				chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
-				if err == nil {
-					req.ChatID = chatID
-				}
-			}
-		}
-
 		requests = append(requests, req)
 	}
 
@@ -198,16 +236,71 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	}
 
 	residents, createErrors := s.BulkCreateResidents(ctx, requests)
-	s.logger.Info("bulk import completed",
+
+	s.importTotal.WithLabelValues("success").Add(float64(len(residents)))
+	s.importTotal.WithLabelValues("error").Add(float64(len(createErrors)))
+
+	lgr := logger.FromContext(ctx)
+	if lgr == nil {
+		lgr = s.fallbackLogger
+	}
+	lgr.Info("Bulk import completed",
 		zap.Int("total", len(requests)),
 		zap.Int("success", len(residents)),
 		zap.Int("errors", len(createErrors)),
 	)
 
-	return len(residents), createErrors
+	var errorList []error
+	for _, err := range createErrors {
+		errorList = append(errorList, fmt.Errorf("row %d: %s", err.Row, err.Error))
+	}
+
+	return len(residents), errorList
 }
 
-func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]*domain.Resident, error) {
+func (s *ResidentService) resolveApartmentID(ctx context.Context, req domain.CreateResidentRequest) (int64, error) {
+	if req.ApartmentID != nil {
+		return *req.ApartmentID, nil
+	}
+	if req.BuildingID == nil {
+		return 0, errors.New("building_id is required when apartment_id is not provided")
+	}
+	if req.ApartmentNumber == nil || strings.TrimSpace(*req.ApartmentNumber) == "" {
+		return 0, errors.New("apartment_number is required when apartment_id is not provided")
+	}
+
+	apartments, err := s.apartmentRepo.GetByBuildingID(ctx, *req.BuildingID)
+	if err != nil {
+		return 0, fmt.Errorf("get apartments by building: %w", err)
+	}
+	targetNumber := strings.TrimSpace(*req.ApartmentNumber)
+	for _, apt := range apartments {
+		if strings.EqualFold(strings.TrimSpace(apt.Number), targetNumber) {
+			return apt.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("apartment %s not found in building", targetNumber)
+}
+
+func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	return s.residentRepo.List(ctx, filters)
 }
 
+func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
+	resident, err := s.residentRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("get resident: %w", err)
+	}
+	if resident == nil {
+		return errors.New("resident not found")
+	}
+
+	if err := s.residentRepo.Delete(ctx, id); err != nil {
+		s.opsTotal.WithLabelValues("delete", "error").Inc()
+		return fmt.Errorf("delete resident: %w", err)
+	}
+
+	s.opsTotal.WithLabelValues("delete", "success").Inc()
+	return nil
+}

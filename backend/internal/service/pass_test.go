@@ -5,15 +5,30 @@ import (
 	"testing"
 	"time"
 
+	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"yardpass/internal/domain"
 	"go.uber.org/zap"
 )
 
 type MockPassRepo struct {
 	mock.Mock
+}
+
+func (m *MockPassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
+	args := m.Called(ctx, normalizedCarPlate, buildingID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Pass), args.Error(1)
+}
+
+func (m *MockPassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]domain.Pass, error) {
+	args := m.Called(ctx, residentID)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 func (m *MockPassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
@@ -24,14 +39,14 @@ func (m *MockPassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass,
 	return args.Get(0).(*domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]domain.Pass, error) {
 	args := m.Called(ctx, apartmentID, status)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
 	args := m.Called(ctx, apartmentID)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 func (m *MockPassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
@@ -39,14 +54,14 @@ func (m *MockPassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartm
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockPassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
+	args := m.Called(ctx, residentID)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockPassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	args := m.Called(ctx, pass)
 	return args.Error(0)
-}
-
-func (m *MockPassRepo) CreateWithDailyLimit(ctx context.Context, pass *domain.Pass, dayStartUTC, dayEndUTC time.Time, dailyLimit int) (bool, error) {
-	args := m.Called(ctx, pass, dayStartUTC, dayEndUTC, dailyLimit)
-	return args.Bool(0), args.Error(1)
 }
 
 func (m *MockPassRepo) Update(ctx context.Context, pass *domain.Pass) error {
@@ -59,14 +74,14 @@ func (m *MockPassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
 	return args.Error(0)
 }
 
-func (m *MockPassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
+func (m *MockPassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
 	args := m.Called(ctx, buildingID)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
-func (m *MockPassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
+func (m *MockPassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]domain.Pass, error) {
 	args := m.Called(ctx, carPlate, buildingID, limit)
-	return args.Get(0).([]*domain.Pass), args.Error(1)
+	return args.Get(0).([]domain.Pass), args.Error(1)
 }
 
 type MockApartmentRepo struct {
@@ -81,9 +96,9 @@ func (m *MockApartmentRepo) GetByID(ctx context.Context, id int64) (*domain.Apar
 	return args.Get(0).(*domain.Apartment), args.Error(1)
 }
 
-func (m *MockApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Apartment, error) {
+func (m *MockApartmentRepo) GetByBuildingID(ctx context.Context, buildingID int64) ([]domain.Apartment, error) {
 	args := m.Called(ctx, buildingID)
-	return args.Get(0).([]*domain.Apartment), args.Error(1)
+	return args.Get(0).([]domain.Apartment), args.Error(1)
 }
 
 func (m *MockApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegramID int64) (*domain.Apartment, error) {
@@ -96,6 +111,51 @@ func (m *MockApartmentRepo) GetByResidentTelegramID(ctx context.Context, telegra
 
 type MockRuleRepo struct {
 	mock.Mock
+}
+
+type MockResidentRepo struct {
+	mock.Mock
+}
+
+func (m *MockResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Resident), args.Error(1)
+}
+
+func (m *MockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Resident, error) {
+	args := m.Called(ctx, telegramID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Resident), args.Error(1)
+}
+
+func (m *MockResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
+	args := m.Called(ctx, resident)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) Update(ctx context.Context, resident *domain.Resident) error {
+	args := m.Called(ctx, resident)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) BulkCreate(ctx context.Context, residents []domain.Resident) error {
+	args := m.Called(ctx, residents)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
+	args := m.Called(ctx, filters)
+	return args.Get(0).([]domain.Resident), args.Error(1)
 }
 
 func (m *MockRuleRepo) GetByBuildingID(ctx context.Context, buildingID int64) (*domain.Rule, error) {
@@ -125,14 +185,24 @@ func (m *MockScanEventRepo) Create(ctx context.Context, event *domain.ScanEvent)
 	return args.Error(0)
 }
 
-func (m *MockScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]*domain.ScanEvent, error) {
+func (m *MockScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]domain.ScanEvent, error) {
 	args := m.Called(ctx, filters)
-	return args.Get(0).([]*domain.ScanEvent), args.Error(1)
+	return args.Get(0).([]domain.ScanEvent), args.Error(1)
 }
 
 func (m *MockScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
 	args := m.Called(ctx)
 	return args.Int(0), args.Error(1)
+}
+
+func (m *MockScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]domain.ScanEventWithDetails, error) {
+	args := m.Called(ctx, filters, buildingID)
+	return args.Get(0).([]domain.ScanEventWithDetails), args.Error(1)
+}
+
+func (m *MockScanEventRepo) GetStatistics(ctx context.Context, from *time.Time, to *time.Time, buildingID *int64) (*domain.Statistics, error) {
+	args := m.Called(ctx, from, to, buildingID)
+	return args.Get(0).(*domain.Statistics), args.Error(1)
 }
 
 func TestPassService_CreatePass(t *testing.T) {
@@ -142,9 +212,11 @@ func TestPassService_CreatePass(t *testing.T) {
 	passRepo := new(MockPassRepo)
 	apartmentRepo := new(MockApartmentRepo)
 	ruleRepo := new(MockRuleRepo)
+	residentRepo := new(MockResidentRepo)
 	scanEventRepo := new(MockScanEventRepo)
 
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger)
+	noopMetrics := &metrics.Metrics{}
+	service := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", logger, noopMetrics)
 
 	t.Run("successful creation", func(t *testing.T) {
 		apartmentID := int64(1)
@@ -152,22 +224,26 @@ func TestPassService_CreatePass(t *testing.T) {
 		now := time.Now()
 		validTo := now.Add(2 * time.Hour)
 
-		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		apartmentRepo.On("GetByID", mock.Anything, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
-		}, nil).Once()
+		}, nil)
 
 		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
 			DailyPassLimitPerApartment: 5,
 			MaxPassDurationHours:       24,
-		}, nil).Once()
+		}, nil)
 
-		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 5).Return(true, nil).Once()
+		residentID := int64(1)
+		passRepo.On("CountActiveTodayByResidentID", ctx, residentID).Return(2, nil)
+		passRepo.On("Create", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 
+		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			ResidentID:  &residentID,
+			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,
 		}
@@ -176,7 +252,8 @@ func TestPassService_CreatePass(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, pass)
-		assert.Equal(t, "A123BC", pass.CarPlate)
+		assert.NotNil(t, pass.CarPlate)
+		assert.Equal(t, "A123BC", *pass.CarPlate)
 		assert.Equal(t, "active", pass.Status)
 
 		passRepo.AssertExpectations(t)
@@ -185,35 +262,51 @@ func TestPassService_CreatePass(t *testing.T) {
 	})
 
 	t.Run("daily limit exceeded", func(t *testing.T) {
+		passRepo2 := new(MockPassRepo)
+		apartmentRepo2 := new(MockApartmentRepo)
+		ruleRepo2 := new(MockRuleRepo)
+		residentRepo2 := new(MockResidentRepo)
+		scanEventRepo2 := new(MockScanEventRepo)
+		service2 := NewPassService(passRepo2, apartmentRepo2, residentRepo2, ruleRepo2, scanEventRepo2, "test-secret", logger, noopMetrics)
+
 		apartmentID := int64(1)
 		buildingID := int64(1)
 		now := time.Now()
 		validTo := now.Add(2 * time.Hour)
 
-		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		apartmentRepo2.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
-		}, nil).Once()
+		}, nil)
 
-		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		ruleRepo2.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
 			DailyPassLimitPerApartment: 5,
 			MaxPassDurationHours:       24,
-		}, nil).Once()
+		}, nil)
 
-		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 5).Return(false, nil).Once()
+		residentID := int64(1)
+		passRepo2.On("CountActiveTodayByResidentID", ctx, residentID).Return(5, nil)
 
+		carPlate := "A123BC"
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			ResidentID:  &residentID,
+			CarPlate:    &carPlate,
 			ValidFrom:   now,
 			ValidTo:     validTo,
 		}
 
-		pass, err := service.CreatePass(ctx, req)
+		pass, err := service2.CreatePass(ctx, req)
 
 		assert.Error(t, err)
 		assert.Nil(t, pass)
-		assert.Contains(t, err.Error(), "daily pass limit exceeded")
+		if err != nil {
+			assert.Contains(t, err.Error(), "daily pass limit")
+		}
+
+		passRepo2.AssertExpectations(t)
+		apartmentRepo2.AssertExpectations(t)
+		ruleRepo2.AssertExpectations(t)
 	})
 }
 
@@ -224,9 +317,11 @@ func TestPassService_ValidatePass(t *testing.T) {
 	passRepo := new(MockPassRepo)
 	apartmentRepo := new(MockApartmentRepo)
 	ruleRepo := new(MockRuleRepo)
+	residentRepo := new(MockResidentRepo)
 	scanEventRepo := new(MockScanEventRepo)
+	noopMetrics := &metrics.Metrics{}
 
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger)
+	service := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", logger, noopMetrics)
 
 	t.Run("valid pass", func(t *testing.T) {
 		passID := uuid.New()
@@ -234,23 +329,25 @@ func TestPassService_ValidatePass(t *testing.T) {
 		buildingID := int64(1)
 		now := time.Now()
 
+		carPlate := "A123BC"
 		pass := &domain.Pass{
 			ID:          passID,
 			ApartmentID: apartmentID,
-			CarPlate:    "A123BC",
+			CarPlate:    &carPlate,
 			Status:      "active",
 			ValidFrom:   now.Add(-1 * time.Hour),
 			ValidTo:     now.Add(1 * time.Hour),
 		}
 
 		passRepo.On("GetByID", ctx, passID).Return(pass, nil)
+		passRepo.On("Update", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
 		}, nil)
-		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{}, nil)
-		scanEventRepo.On("Create", ctx, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
+		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
+		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
 
 		result, err := service.ValidatePass(ctx, passID, 1)
 
@@ -281,5 +378,43 @@ func TestPassService_ValidatePass(t *testing.T) {
 		assert.NotNil(t, result)
 		assert.False(t, result.Valid)
 		assert.Equal(t, "PASS_EXPIRED", result.Reason)
+	})
+
+	t.Run("cannot validate pass twice", func(t *testing.T) {
+		passID := uuid.New()
+		apartmentID := int64(1)
+		buildingID := int64(1)
+		now := time.Now()
+
+		pass := &domain.Pass{
+			ID:          passID,
+			ApartmentID: apartmentID,
+			Status:      "active",
+			ValidFrom:   now.Add(-1 * time.Hour),
+			ValidTo:     now.Add(1 * time.Hour),
+		}
+
+		passRepo.On("GetByID", mock.Anything, passID).Return(pass, nil)
+		passRepo.On("Update", mock.Anything, mock.AnythingOfType("*domain.Pass")).Return(nil)
+		apartmentRepo.On("GetByID", mock.Anything, apartmentID).Return(&domain.Apartment{
+			ID:         apartmentID,
+			BuildingID: buildingID,
+			Number:     "101",
+		}, nil)
+		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
+		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
+
+		// First validation should be successful
+		firstResult, err := service.ValidatePass(ctx, passID, 1)
+		assert.NoError(t, err)
+		assert.NotNil(t, firstResult)
+		assert.True(t, firstResult.Valid)
+
+		// Second validation should be rejected as already used
+		secondResult, err := service.ValidatePass(ctx, passID, 1)
+		assert.NoError(t, err)
+		assert.NotNil(t, secondResult)
+		assert.False(t, secondResult.Valid)
+		assert.Equal(t, "PASS_ALREADY_USED", secondResult.Reason)
 	})
 }

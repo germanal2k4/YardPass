@@ -1,0 +1,185 @@
+environments:
+  default:
+    values:
+      - values-default.yaml
+  local:
+    values:
+      - values-default.yaml
+      - values-local.yaml
+  cd:
+    missingFileHandler: Warn
+    values:
+      - values-default.yaml
+      - values-cd.yaml
+      - values-cd-override.yaml
+---
+repositories:
+  - name: istio
+    url: https://istio-release.storage.googleapis.com/charts
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: kiali
+    url: https://kiali.org/helm-charts
+  - name: jetstack
+    url: https://charts.jetstack.io
+
+releases:
+  - name: istio-base
+    namespace: istio-system
+    createNamespace: true
+    chart: istio/base
+    version: 1.20.0
+    wait: true
+    forceConflicts: true
+
+  - name: istiod
+    namespace: istio-system
+    chart: istio/istiod
+    version: 1.20.0
+    needs:
+      - istio-system/istio-base
+    wait: true
+    values:
+      - istio/istiod-values.yaml
+
+  - name: istio-ingress
+    namespace: istio-system
+    chart: istio/gateway
+    version: 1.20.0
+    needs:
+      - istio-system/istiod
+    wait: false
+    set:
+      - name: labels.istio
+        value: ingressgateway
+      - name: labels.app
+        value: istio-ingressgateway
+      - name: service.type
+        value: LoadBalancer
+
+  - name: kiali
+    namespace: istio-system
+    chart: kiali/kiali-server
+    version: 1.78.0
+    needs:
+      - istio-system/istiod
+    wait: false
+    values:
+      - istio/kiali-values.yaml
+
+  - name: prometheus
+    namespace: istio-system
+    chart: prometheus-community/kube-prometheus-stack
+    needs:
+      - istio-system/istiod
+    wait: false
+    values:
+      - istio/prometheus-values.yaml
+
+  - name: jaeger
+    namespace: istio-system
+    chart: ./jaeger
+    needs:
+      - istio-system/istiod
+    wait: true
+    values:
+      - jaeger/values.yaml
+
+  - name: grafana-dashboards
+    namespace: istio-system
+    chart: ./grafana-dashboards
+    needs:
+      - istio-system/prometheus
+    wait: false
+
+  - name: elasticsearch
+    namespace: istio-system
+    chart: ./elasticsearch
+    needs:
+      - istio-system/istiod
+    wait: true
+    timeout: 300
+    values:
+      - elasticsearch/values.yaml
+
+  - name: fluent-bit
+    namespace: istio-system
+    chart: ./fluent-bit
+    needs:
+      - istio-system/elasticsearch
+    wait: true
+    values:
+      - fluent-bit/values.yaml
+
+  - name: cert-manager
+    namespace: istio-system
+    chart: jetstack/cert-manager
+    wait: true
+    values:
+      - istio/cert-manager-values.yaml
+
+  - name: yardpass-namespace
+    namespace: default
+    chart: ./yardpass-namespace
+    wait: true
+
+  - name: istio-config
+    namespace: yardpass
+    createNamespace: true
+    chart: ./istio-config
+    needs:
+      - istio-system/istiod
+      - istio-system/prometheus
+    values:
+      - istio-config/values.yaml
+
+  - name: mailhog
+    namespace: yardpass
+    createNamespace: true
+    chart: ./mailhog
+    needs:
+      - yardpass/istio-config
+    wait: true
+    installed: {{ eq .Environment.Name "local" }}
+
+  - name: yardpass-backend
+    namespace: yardpass
+    createNamespace: true
+    chart: ./yardpass-backend
+    needs:
+      - istio-system/istiod
+      - yardpass/istio-config
+      - yardpass/mailhog
+    values:
+      - yardpass-backend/values.yaml
+{{ if hasKey .Values "backend" }}
+      - {{ .Values.backend | toYaml | nindent 8 }}
+{{ end }}
+  - name: yardpass-frontend
+    namespace: yardpass
+    createNamespace: true
+    chart: ./yardpass-frontend
+    needs:
+      - yardpass/yardpass-backend
+      - yardpass/istio-config
+    values:
+      - yardpass-frontend/values.yaml
+{{ if hasKey .Values "frontend" }}
+      - {{ .Values.frontend | toYaml | nindent 8 }}
+{{ end }}
+
+  - name: yardpass-bot
+    namespace: yardpass
+    createNamespace: true
+    chart: ./yardpass-bot
+    needs:
+      - yardpass/yardpass-backend
+    values:
+      - yardpass-bot/values.yaml
+{{ if hasKey .Values "bot" }}
+      - {{ .Values.bot | toYaml | nindent 8 }}
+{{ end }}
+    set:
+      - name: secrets.telegramToken
+        value: {{ env "TELEGRAM_BOT_TOKEN" | default "" | quote }}
+    installed: true

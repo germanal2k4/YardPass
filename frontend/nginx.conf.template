@@ -23,7 +23,7 @@ server {
 
     # Proxy API requests to backend
     location /api/ {
-        proxy_pass http://backend:8080;
+        proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -36,7 +36,7 @@ server {
 
     # Proxy auth requests to backend
     location /auth/ {
-        proxy_pass http://backend:8080;
+        proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -46,7 +46,7 @@ server {
 
     # Proxy health check to backend
     location /health {
-        proxy_pass http://backend:8080;
+        proxy_pass ${BACKEND_URL};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
     }
@@ -63,4 +63,3 @@ server {
         expires 0;
     }
 }
-

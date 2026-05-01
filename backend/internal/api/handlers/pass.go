@@ -24,14 +24,15 @@ func NewPassHandler(passService domain.PassService) *PassHandler {
 
 type CreatePassRequest struct {
 	ApartmentID int64     `json:"apartment_id" binding:"required"`
-	CarPlate    string    `json:"car_plate" binding:"required"`
+	CarPlate    *string   `json:"car_plate,omitempty"`
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
 	ValidTo     time.Time `json:"valid_to" binding:"required"`
 }
 
 type ValidatePassRequest struct {
-	QRUUID string `json:"qr_uuid" binding:"required"`
+	QRUUID   string `json:"qr_uuid,omitempty"`
+	CarPlate string `json:"car_plate,omitempty"`
 }
 
 func (h *PassHandler) Create(c *gin.Context) {
@@ -42,8 +43,12 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		req.ValidFrom = time.Now().In(req.ValidTo.Location())
+		req.ValidFrom = time.Now().UTC()
+	} else {
+		req.ValidFrom = req.ValidFrom.UTC()
 	}
+
+	req.ValidTo = req.ValidTo.UTC()
 
 	createReq := domain.CreatePassRequest{
 		ApartmentID: req.ApartmentID,
@@ -99,19 +104,37 @@ func (h *PassHandler) Validate(c *gin.Context) {
 		return
 	}
 
-	passID, err := uuid.Parse(req.QRUUID)
-	if err != nil {
-		errors.BadRequest(c, "INVALID_QR_UUID", "Invalid QR code format")
-		return
-	}
-
 	userID, _ := c.Get("user_id")
 	var guardUserID int64
 	if userID != nil {
 		guardUserID = userID.(int64)
 	}
 
-	result, err := h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+	buildingID, _ := c.Get("building_id")
+	var bID *int64
+	if buildingID != nil {
+		if id, ok := buildingID.(int64); ok {
+			bID = &id
+		}
+	}
+
+	var result *domain.PassValidationResult
+	var err error
+
+	if req.CarPlate != "" {
+		result, err = h.passService.ValidatePassByCarPlate(c.Request.Context(), req.CarPlate, guardUserID, bID)
+	} else if req.QRUUID != "" {
+		passID, parseErr := uuid.Parse(req.QRUUID)
+		if parseErr == nil {
+			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+		} else {
+			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), req.QRUUID, guardUserID, bID)
+		}
+	} else {
+		errors.BadRequest(c, "MISSING_PARAMETER", "Either qr_uuid or car_plate must be provided")
+		return
+	}
+
 	if err != nil {
 		errors.InternalServerError(c, "VALIDATION_ERROR", err.Error())
 		return
@@ -136,7 +159,7 @@ func (h *PassHandler) GetActive(c *gin.Context) {
 	role, _ := c.Get("role")
 	buildingID, _ := c.Get("building_id")
 
-	var passes []*domain.Pass
+	var passes []domain.Pass
 	var err error
 
 	if role == "guard" && buildingID != nil {

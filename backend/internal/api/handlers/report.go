@@ -3,22 +3,22 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/repo"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
 )
 
 type ReportHandler struct {
-	scanEventRepo *repo.ScanEventRepo
-	passRepo      *repo.PassRepo
+	scanEventRepo domain.ScanEventRepository
+	passRepo      domain.PassRepository
 }
 
-func NewReportHandler(scanEventRepo *repo.ScanEventRepo, passRepo *repo.PassRepo) *ReportHandler {
+func NewReportHandler(scanEventRepo domain.ScanEventRepository, passRepo domain.PassRepository) *ReportHandler {
 	return &ReportHandler{
 		scanEventRepo: scanEventRepo,
 		passRepo:      passRepo,
@@ -40,15 +40,40 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 		}
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "admin" || role == "guard" {
-		if buildingID != nil {
-			id := buildingID.(int64)
-			bID = &id
+
+	switch roleStr {
+	case "superuser":
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
 		}
+	case "admin", "guard":
+		if buildingID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			return
+		}
+		id, ok := buildingID.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
+		bID = &id
 	}
 
 	stats, err := h.scanEventRepo.GetStatistics(c.Request.Context(), from, to, bID)
@@ -90,15 +115,40 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 		}
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "admin" || role == "guard" {
-		if buildingID != nil {
-			id := buildingID.(int64)
-			bID = &id
+
+	switch roleStr {
+	case "superuser":
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
 		}
+	case "admin", "guard":
+		if buildingID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			return
+		}
+		id, ok := buildingID.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
+		bID = &id
 	}
 
 	var filters domain.ScanEventFilters
@@ -131,23 +181,54 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	headers := []string{"ID", "Дата/Время", "Результат", "Номер авто", "Квартира", "Охранник", "Причина"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%c1", 'A'+i)
-		file.SetCellValue(sheetName, cell, header)
+		if err := file.SetCellValue(sheetName, cell, header); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
 	}
 
 	for i, event := range events {
 		row := i + 2
-		file.SetCellValue(sheetName, fmt.Sprintf("A%d", row), event.ID)
-		file.SetCellValue(sheetName, fmt.Sprintf("B%d", row), event.ScannedAt.Format("2006-01-02 15:04:05"))
-		file.SetCellValue(sheetName, fmt.Sprintf("C%d", row), event.Result)
-		file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), event.CarPlate)
-		file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber)
-		file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), event.GuardUsername)
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("A%d", row), event.ID); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("B%d", row), event.ScannedAt.Format("2006-01-02 15:04:05")); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("C%d", row), event.Result); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if event.CarPlate != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), *event.CarPlate); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
+		}
+		if err := file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber); err != nil {
+			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			return
+		}
+		if event.GuardUsername != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuardUsername); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
+		}
 		if event.Reason != nil {
-			file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason)
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				return
+			}
 		}
 	}
 
-	file.DeleteSheet("Sheet1")
+	if err := file.DeleteSheet("Sheet1"); err != nil {
+		errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+		return
+	}
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=report_%s.xlsx", time.Now().Format("20060102_150405")))

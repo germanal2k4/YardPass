@@ -5,17 +5,17 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
-	"yardpass/internal/repo"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ScanEventHandler struct {
-	scanEventRepo *repo.ScanEventRepo
+	scanEventRepo domain.ScanEventRepository
 }
 
-func NewScanEventHandler(scanEventRepo *repo.ScanEventRepo) *ScanEventHandler {
+func NewScanEventHandler(scanEventRepo domain.ScanEventRepository) *ScanEventHandler {
 	return &ScanEventHandler{
 		scanEventRepo: scanEventRepo,
 	}
@@ -56,12 +56,39 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		filters.Result = &result
 	}
 
-	role, _ := c.Get("role")
+	role, exists := c.Get("role")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		return
+	}
+
+	roleStr, ok := role.(string)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		return
+	}
+
 	buildingID, _ := c.Get("building_id")
 
 	var bID *int64
-	if role == "guard" && buildingID != nil {
-		id := buildingID.(int64)
+
+	switch roleStr {
+	case "superuser":
+		if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+			if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
+				bID = &id
+			}
+		}
+	case "admin", "guard":
+		if buildingID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			return
+		}
+		id, ok := buildingID.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
 		bID = &id
 	}
 
@@ -77,4 +104,3 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		"offset": filters.Offset,
 	})
 }
-

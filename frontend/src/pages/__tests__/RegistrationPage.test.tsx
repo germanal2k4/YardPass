@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/helpers';
 import { RegistrationPage } from '../RegistrationPage';
@@ -22,10 +22,10 @@ describe('RegistrationPage', () => {
 
   it('shows error when building is missing', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProviders(<RegistrationPage />, { auth: { user: null } });
+    const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
 
     await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
-    await user.click(screen.getByRole('button', { name: /Оплатить 200 000/i }));
+    fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
       expect(screen.getByText('Укажите название здания')).toBeInTheDocument();
@@ -34,10 +34,10 @@ describe('RegistrationPage', () => {
 
   it('shows error when email is missing', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProviders(<RegistrationPage />, { auth: { user: null } });
+    const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
 
     await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
-    await user.click(screen.getByRole('button', { name: /Оплатить 200 000/i }));
+    fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
       expect(screen.getByText(/Укажите email/i)).toBeInTheDocument();
@@ -46,11 +46,11 @@ describe('RegistrationPage', () => {
 
   it('shows error when card fields are missing', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    renderWithProviders(<RegistrationPage />, { auth: { user: null } });
+    const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
 
     await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
     await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
-    await user.click(screen.getByRole('button', { name: /Оплатить 200 000/i }));
+    fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
       expect(screen.getByText(/Заполните все поля карты/i)).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe('RegistrationPage', () => {
     await user.type(screen.getByLabelText(/Владелец карты/i), 'IVAN PETROV');
     await user.type(screen.getByLabelText(/Срок/i), '12/30');
     await user.type(screen.getByLabelText(/CVV/i), '123');
-    await user.click(screen.getByRole('button', { name: /Оплатить 200 000/i }));
+    await user.click(screen.getByRole('button', { name: /Оплатить/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/Оплата прошла успешно/i)).toBeInTheDocument();

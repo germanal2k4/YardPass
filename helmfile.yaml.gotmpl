@@ -125,7 +125,7 @@ releases:
 
   - name: istio-config
     namespace: yardpass
-    createNamespace: false
+    createNamespace: true
     chart: ./istio-config
     needs:
       - istio-system/istiod
@@ -133,13 +133,23 @@ releases:
     values:
       - istio-config/values.yaml
 
+  - name: mailhog
+    namespace: yardpass
+    createNamespace: true
+    chart: ./mailhog
+    needs:
+      - yardpass/istio-config
+    wait: true
+    installed: {{ eq .Environment.Name "local" }}
+
   - name: yardpass-backend
     namespace: yardpass
-    createNamespace: false
+    createNamespace: true
     chart: ./yardpass-backend
     needs:
       - istio-system/istiod
       - yardpass/istio-config
+      - yardpass/mailhog
     values:
       - yardpass-backend/values.yaml
 {{ if hasKey .Values "backend" }}
@@ -147,7 +157,7 @@ releases:
 {{ end }}
   - name: yardpass-frontend
     namespace: yardpass
-    createNamespace: false
+    createNamespace: true
     chart: ./yardpass-frontend
     needs:
       - yardpass/yardpass-backend
@@ -160,7 +170,7 @@ releases:
 
   - name: yardpass-bot
     namespace: yardpass
-    createNamespace: false
+    createNamespace: true
     chart: ./yardpass-bot
     needs:
       - yardpass/yardpass-backend

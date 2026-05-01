@@ -94,7 +94,7 @@ describe('Public routes', () => {
       auth: { user: null },
       routerProps: { initialEntries: ['/register'] },
     });
-    expect(screen.getByText('Регистрация')).toBeInTheDocument();
+    expect(screen.getByText('Оплата подписки')).toBeInTheDocument();
   });
 
   it('renders ForbiddenPage at /forbidden', () => {

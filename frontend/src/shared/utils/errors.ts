@@ -1,4 +1,4 @@
-import { AxiosError } from 'axios';
+import { AxiosError, isAxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
 import { ERROR_MESSAGES } from '@/shared/config/constants';
 
@@ -78,6 +78,24 @@ export function formatErrorMessage(error: AxiosError<ErrorResponse>): string {
   }
   
   return errorMessage;
+}
+
+/**
+ * Совместимый хелпер для обработки неизвестных ошибок в UI-слое.
+ *
+ * @param error - Ошибка любого типа
+ * @returns Сообщение для отображения пользователю
+ */
+export function getErrorMessage(error: unknown): string {
+  if (isAxiosError<ErrorResponse>(error)) {
+    return formatErrorMessage(error);
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return ERROR_MESSAGES.UNKNOWN_ERROR;
 }
 
 /**

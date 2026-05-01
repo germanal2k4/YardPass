@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
@@ -122,7 +123,6 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	validFromUTC := req.ValidFrom.UTC()
 	validToUTC := req.ValidTo.UTC()
-	localLocation := resolveLocationForPassTimes(req.ValidFrom, req.ValidTo)
 
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
 	if validToUTC.Sub(validFromUTC) > maxDuration {
@@ -133,6 +133,19 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	if req.ResidentID == nil {
 		return nil, errors.New("resident_id is required")
 	}
+
+	resident, err := s.residentRepo.GetByID(ctx, *req.ResidentID)
+	if err != nil {
+		return nil, fmt.Errorf("get resident: %w", err)
+	}
+	if resident == nil {
+		return nil, errors.New("resident not found")
+	}
+	if resident.ApartmentID != req.ApartmentID {
+		return nil, errors.New("resident does not belong to the specified apartment")
+	}
+
+	localLocation := locationForResidentRules(resident)
 
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
 		validFromLocal := validFromUTC.In(localLocation)
@@ -252,16 +265,49 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 		return nil, fmt.Errorf("get pass by car plate: %w", err)
 	}
 
-	result := &domain.PassValidationResult{
-		Valid: false,
-	}
-
 	if pass == nil {
-		result.Reason = "PASS_NOT_FOUND"
-		return result, nil
+		return s.validateResidentCarPlate(ctx, normalizedCarPlate, buildingID)
 	}
 
 	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+// validateResidentCarPlate checks permanent resident vehicle registration when no guest pass matches.
+func (s *PassService) validateResidentCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.PassValidationResult, error) {
+	residents, err := s.residentRepo.ListActiveWithCarPlate(ctx, buildingID)
+	if err != nil {
+		return nil, fmt.Errorf("list residents by car plate: %w", err)
+	}
+
+	result := &domain.PassValidationResult{Valid: false}
+
+	for i := range residents {
+		res := &residents[i]
+		if res.CarPlate == nil {
+			continue
+		}
+		if normalizeCarPlate(*res.CarPlate) != normalizedCarPlate {
+			continue
+		}
+
+		apartment, err := s.apartmentRepo.GetByID(ctx, res.ApartmentID)
+		if err != nil || apartment == nil {
+			return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+		}
+		if buildingID != nil && apartment.BuildingID != *buildingID {
+			result.Reason = "BUILDING_MISMATCH"
+			return result, nil
+		}
+
+		return &domain.PassValidationResult{
+			Valid:     true,
+			CarPlate:  normalizedCarPlate,
+			Apartment: apartment.Number,
+		}, nil
+	}
+
+	result.Reason = "PASS_NOT_FOUND"
+	return result, nil
 }
 
 func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
@@ -360,7 +406,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-				localLocation := resolveLocationForPassTimes(pass.ValidFrom, pass.ValidTo)
+				localLocation := s.quietHoursLocation(ctx, pass)
 				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
 					s.opsTotal.WithLabelValues("validate", "invalid").Inc()
@@ -496,76 +542,115 @@ func NormalizeCarPlate(plate string) string {
 	return result.String()
 }
 
+// quietHoursWindowOnDay returns [q0, q1) for the quiet-hours rule on local calendar day d (end may be next calendar day).
+func quietHoursWindowOnDay(d time.Time, startClock, endClock time.Time) (q0, q1 time.Time) {
+	loc := d.Location()
+	startMin := startClock.Hour()*60 + startClock.Minute()
+	endMin := endClock.Hour()*60 + endClock.Minute()
+	q0 = time.Date(d.Year(), d.Month(), d.Day(), startClock.Hour(), startClock.Minute(), 0, 0, loc)
+	if endMin <= startMin {
+		q1 = time.Date(d.Year(), d.Month(), d.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc).Add(24 * time.Hour)
+	} else {
+		q1 = time.Date(d.Year(), d.Month(), d.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc)
+		if !q1.After(q0) {
+			q1 = q1.Add(24 * time.Hour)
+		}
+	}
+	return q0, q1
+}
+
+// intervalsOverlapHalfOpen reports whether [a0, a1) and [b0, b1) overlap.
+func intervalsOverlapHalfOpen(a0, a1, b0, b1 time.Time) bool {
+	return a0.Before(b1) && b0.Before(a1)
+}
+
 func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time, startTime, endTime string) error {
-	start, err := parseTime(startTime)
+	startClock, err := parseTime(startTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours start: %w", err)
 	}
-	end, err := parseTime(endTime)
+	endClock, err := parseTime(endTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours end: %w", err)
 	}
 
-	fromHour := validFromLocal.Hour()*60 + validFromLocal.Minute()
-	toHour := validToLocal.Hour()*60 + validToLocal.Minute()
-	startMin := start.Hour()*60 + start.Minute()
-	endMin := end.Hour()*60 + end.Minute()
-
-	if endMin < startMin {
-		endMin += 24 * 60
-		if toHour < startMin {
-			toHour += 24 * 60
-		}
+	loc := validFromLocal.Location()
+	passA := validFromLocal
+	passB := validToLocal
+	if !passB.After(passA) {
+		return errors.New("pass valid_to must be after valid_from")
 	}
 
-	if (fromHour < endMin && toHour > startMin) || (fromHour+24*60 < endMin && toHour+24*60 > startMin) {
-		return errors.New("pass cannot overlap with quiet hours")
+	fromDay := time.Date(passA.Year(), passA.Month(), passA.Day(), 0, 0, 0, 0, loc)
+	toDay := time.Date(passB.Year(), passB.Month(), passB.Day(), 0, 0, 0, 0, loc)
+
+	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
+		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
+		if intervalsOverlapHalfOpen(passA, passB, q0, q1) {
+			return errors.New("pass cannot overlap with quiet hours")
+		}
 	}
 
 	return nil
 }
 
 func (s *PassService) isQuietHours(nowLocal time.Time, startTime, endTime string) bool {
-	start, err := parseTime(startTime)
+	startClock, err := parseTime(startTime)
 	if err != nil {
 		return false
 	}
-	end, err := parseTime(endTime)
+	endClock, err := parseTime(endTime)
 	if err != nil {
 		return false
 	}
-
-	nowMin := nowLocal.Hour()*60 + nowLocal.Minute()
-	startMin := start.Hour()*60 + start.Minute()
-	endMin := end.Hour()*60 + end.Minute()
-
-	if endMin < startMin {
-		return nowMin >= startMin || nowMin < endMin
-	}
-
-	return nowMin >= startMin && nowMin < endMin
+	d := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, nowLocal.Location())
+	q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
+	return !nowLocal.Before(q0) && nowLocal.Before(q1)
 }
 
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
 }
 
-func resolveLocationFromTimestamp(ts time.Time) *time.Location {
-	if ts.IsZero() {
-		return nil
+// locationForResidentRules returns the wall-clock zone for interpreting rule quiet hours
+// and calendar-day limits. Pass validity is always stored in UTC; rules are edited in
+// the resident's local time (IANA name on resident, default Europe/Moscow).
+func locationForResidentRules(resident *domain.Resident) *time.Location {
+	if resident != nil && resident.Timezone != nil {
+		name := strings.TrimSpace(*resident.Timezone)
+		if name != "" {
+			if loc, err := time.LoadLocation(name); err == nil {
+				return loc
+			}
+		}
 	}
-	if loc := ts.Location(); loc != nil {
-		return loc
-	}
-	return nil
+	return europeMoscowOrMSK()
 }
 
-func resolveLocationForPassTimes(validFrom, validTo time.Time) *time.Location {
-	if loc := resolveLocationFromTimestamp(validFrom); loc != nil {
-		return loc
+func europeMoscowOrMSK() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.FixedZone("MSK", 3*3600)
 	}
-	if loc := resolveLocationFromTimestamp(validTo); loc != nil {
-		return loc
+	return loc
+}
+
+func (s *PassService) quietHoursLocation(ctx context.Context, pass *domain.Pass) *time.Location {
+	if pass.ResidentID != nil {
+		resident, err := s.residentRepo.GetByID(ctx, *pass.ResidentID)
+		if err == nil && resident != nil {
+			return locationForResidentRules(resident)
+		}
+		if err != nil {
+			lgr := logger.FromContext(ctx)
+			if lgr == nil {
+				lgr = s.fallbackLogger
+			}
+			lgr.Warn("failed to load resident for quiet-hours zone; using default",
+				zap.Error(err),
+				zap.String("pass_id", pass.ID.String()),
+			)
+		}
 	}
-	return time.UTC
+	return locationForResidentRules(nil)
 }

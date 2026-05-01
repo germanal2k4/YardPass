@@ -76,8 +76,7 @@ func NewBot(
 ) *Bot {
 	location, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
-		logger.Warn("Failed to load Europe/Moscow timezone, using UTC", zap.Error(err))
-		location = time.UTC
+		location = time.FixedZone("MSK", 3*3600)
 	}
 
 	updatesTotal := prometheus.NewCounterVec(

@@ -33,6 +33,7 @@ type Resident struct {
 	Name            *string   `json:"name,omitempty"`
 	Phone           *string   `json:"phone,omitempty"`
 	CarPlate        *string   `json:"car_plate,omitempty"`
+	Timezone        *string   `json:"timezone,omitempty"`
 	Status          string    `json:"status"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`

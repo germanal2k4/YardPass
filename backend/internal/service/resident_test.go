@@ -86,7 +86,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		residentRepo.AssertExpectations(t)
 	})
 
-	t.Run("update existing resident", func(t *testing.T) {
+	t.Run("duplicate telegram_id returns error", func(t *testing.T) {
 		residentRepo := new(mockResidentRepo)
 		apartmentRepo := new(MockApartmentRepo)
 		svc := NewResidentService(residentRepo, apartmentRepo, logger, noopMetrics)
@@ -96,16 +96,17 @@ func TestResidentService_CreateResident(t *testing.T) {
 		existing := &domain.Resident{ID: 1, TelegramID: 456, ApartmentID: 1}
 		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{ID: apartmentID}, nil)
 		residentRepo.On("GetByTelegramID", ctx, int64(456)).Return(existing, nil)
-		residentRepo.On("Update", ctx, mock.AnythingOfType("*domain.Resident")).Return(nil)
 
 		req := domain.CreateResidentRequest{
 			ApartmentID: &apartmentID,
 			TelegramID:  456,
 		}
 		resident, err := svc.CreateResident(ctx, req)
-		assert.NoError(t, err)
-		assert.NotNil(t, resident)
-		assert.Equal(t, apartmentID, resident.ApartmentID)
+		assert.Error(t, err)
+		assert.Nil(t, resident)
+		assert.Contains(t, err.Error(), "telegram_id already exists")
+		residentRepo.AssertNotCalled(t, "Update")
+		residentRepo.AssertNotCalled(t, "Create")
 		residentRepo.AssertExpectations(t)
 	})
 

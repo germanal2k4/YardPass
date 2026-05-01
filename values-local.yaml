@@ -34,7 +34,7 @@ bot:
   secrets:
     databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
     redisUrl: "redis://host.minikube.internal:6379/0"
-    telegramToken: ""
+    telegramToken: "8290145906:AAFNo9es7mBaCuTaemGAOziIj6CIP6pN3wQ"
   env:
     LOG_TRANSPORT: stdout
     TRACER_ENABLED: "true"

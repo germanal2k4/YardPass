@@ -77,11 +77,15 @@ class AudioContextStub {
     return 0;
   }
 }
-(window as any).AudioContext = AudioContextStub;
-(window as any).webkitAudioContext = AudioContextStub;
+const win = window as Window & {
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+};
+win.AudioContext = AudioContextStub as unknown as typeof AudioContext;
+win.webkitAudioContext = AudioContextStub as unknown as typeof AudioContext;
 
 // Polyfill: scrollTo
-window.scrollTo = vi.fn() as any;
+window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 
 // Polyfill: HTMLElement.scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();

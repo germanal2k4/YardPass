@@ -84,14 +84,14 @@ func TestIntegration_PassFlow(t *testing.T) {
 	assert.Equal(t, "A123BC", *pass.CarPlate)
 	assert.Equal(t, "active", pass.Status)
 
-	// Validate pass
-	result, err := passService.ValidatePass(ctx, pass.ID, 1)
+	// Validate pass (guard scoped to pass building)
+	result, err := passService.ValidatePass(ctx, pass.ID, 1, &buildingID)
 	require.NoError(t, err)
 	assert.True(t, result.Valid)
 	assert.Equal(t, "A123BC", result.CarPlate)
 
 	// Second validation should fail (already used)
-	result2, err := passService.ValidatePass(ctx, pass.ID, 1)
+	result2, err := passService.ValidatePass(ctx, pass.ID, 1, &buildingID)
 	require.NoError(t, err)
 	assert.False(t, result2.Valid)
 	assert.Equal(t, "PASS_ALREADY_USED", result2.Reason)

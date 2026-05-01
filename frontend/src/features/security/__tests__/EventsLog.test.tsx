@@ -3,7 +3,6 @@ import { http, HttpResponse } from 'msw';
 import { renderWithProviders } from '@/test/helpers';
 import { EventsLog } from '../EventsLog';
 import { server } from '@/test/msw/server';
-import { mockScanEvents } from '@/test/msw/handlers';
 
 const API_BASE = 'http://localhost:8080';
 

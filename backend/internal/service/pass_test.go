@@ -331,6 +331,7 @@ func TestPassService_ValidatePass(t *testing.T) {
 		passID := uuid.New()
 		apartmentID := int64(1)
 		buildingID := int64(1)
+		guardBuildingID := int64(1)
 		now := time.Now()
 
 		carPlate := "A123BC"
@@ -349,11 +350,11 @@ func TestPassService_ValidatePass(t *testing.T) {
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
-		}, nil)
+		}, nil).Times(2)
 		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
 		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
 
-		result, err := service.ValidatePass(ctx, passID, 1)
+		result, err := service.ValidatePass(ctx, passID, 1, &guardBuildingID)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -363,6 +364,7 @@ func TestPassService_ValidatePass(t *testing.T) {
 	t.Run("expired pass", func(t *testing.T) {
 		passID := uuid.New()
 		now := time.Now()
+		guardBuildingID := int64(1)
 
 		pass := &domain.Pass{
 			ID:          passID,
@@ -373,10 +375,14 @@ func TestPassService_ValidatePass(t *testing.T) {
 		}
 
 		passRepo.On("GetByID", ctx, passID).Return(pass, nil)
+		apartmentRepo.On("GetByID", ctx, int64(1)).Return(&domain.Apartment{
+			ID:         1,
+			BuildingID: guardBuildingID,
+		}, nil)
 		passRepo.On("Update", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
 		scanEventRepo.On("Create", ctx, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
 
-		result, err := service.ValidatePass(ctx, passID, 1)
+		result, err := service.ValidatePass(ctx, passID, 1, &guardBuildingID)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -388,6 +394,7 @@ func TestPassService_ValidatePass(t *testing.T) {
 		passID := uuid.New()
 		apartmentID := int64(1)
 		buildingID := int64(1)
+		guardBuildingID := int64(1)
 		now := time.Now()
 
 		pass := &domain.Pass{
@@ -404,21 +411,53 @@ func TestPassService_ValidatePass(t *testing.T) {
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
-		}, nil)
+		}, nil).Times(3)
 		ruleRepo.On("GetByBuildingID", mock.Anything, buildingID).Return(&domain.Rule{}, nil)
 		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
 
 		// First validation should be successful
-		firstResult, err := service.ValidatePass(ctx, passID, 1)
+		firstResult, err := service.ValidatePass(ctx, passID, 1, &guardBuildingID)
 		assert.NoError(t, err)
 		assert.NotNil(t, firstResult)
 		assert.True(t, firstResult.Valid)
 
 		// Second validation should be rejected as already used
-		secondResult, err := service.ValidatePass(ctx, passID, 1)
+		secondResult, err := service.ValidatePass(ctx, passID, 1, &guardBuildingID)
 		assert.NoError(t, err)
 		assert.NotNil(t, secondResult)
 		assert.False(t, secondResult.Valid)
 		assert.Equal(t, "PASS_ALREADY_USED", secondResult.Reason)
+	})
+
+	t.Run("building mismatch rejects without consuming pass", func(t *testing.T) {
+		passID := uuid.New()
+		apartmentID := int64(1)
+		passBuildingID := int64(1)
+		guardBuildingID := int64(2)
+		now := time.Now()
+
+		pass := &domain.Pass{
+			ID:          passID,
+			ApartmentID: apartmentID,
+			Status:      "active",
+			ValidFrom:   now.Add(-1 * time.Hour),
+			ValidTo:     now.Add(1 * time.Hour),
+		}
+
+		passRepo.On("GetByID", ctx, passID).Return(pass, nil)
+		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+			ID:         apartmentID,
+			BuildingID: passBuildingID,
+			Number:     "101",
+		}, nil)
+		scanEventRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.ScanEvent")).Return(nil)
+
+		result, err := service.ValidatePass(ctx, passID, 1, &guardBuildingID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "BUILDING_MISMATCH", result.Reason)
+		passRepo.AssertNotCalled(t, "Update")
 	})
 }

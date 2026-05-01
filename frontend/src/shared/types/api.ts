@@ -238,7 +238,7 @@ export interface ScanEventWithDetails {
   ApartmentNumber?: string;
   BuildingID?: number;
   BuildingName?: string;
-  Meta?: any;
+  Meta?: Record<string, unknown>;
 }
 
 export interface GetScanEventsRequest {

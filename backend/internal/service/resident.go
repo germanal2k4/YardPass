@@ -73,23 +73,14 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 	if err != nil {
 		return nil, fmt.Errorf("check telegram_id: %w", err)
 	}
+	if existing != nil {
+		s.opsTotal.WithLabelValues("create", "error").Inc()
+		return nil, errors.New("resident with this telegram_id already exists")
+	}
 
 	chatID := req.TelegramID
 	if req.ChatID != nil {
 		chatID = *req.ChatID
-	}
-
-	if existing != nil {
-		existing.ApartmentID = apartmentID
-		existing.ChatID = chatID
-		existing.Name = req.Name
-		existing.Phone = req.Phone
-		if err := s.residentRepo.Update(ctx, existing); err != nil {
-			s.opsTotal.WithLabelValues("update", "error").Inc()
-			return nil, fmt.Errorf("update resident: %w", err)
-		}
-		s.opsTotal.WithLabelValues("update", "success").Inc()
-		return existing, nil
 	}
 
 	resident := &domain.Resident{

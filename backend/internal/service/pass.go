@@ -204,7 +204,7 @@ func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64
 	return fmt.Sprintf("resident:%d:%s", residentTelegramID, s.signResidentToken(residentTelegramID))
 }
 
-func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
+func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
 		return nil, fmt.Errorf("get pass: %w", err)
@@ -216,6 +216,22 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 			Reason: "PASS_NOT_FOUND",
 		}
 		return result, nil
+	}
+
+	if buildingID != nil {
+		apartment, err := s.apartmentRepo.GetByID(ctx, pass.ApartmentID)
+		if err != nil {
+			return nil, fmt.Errorf("get apartment: %w", err)
+		}
+		if apartment == nil {
+			return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+		}
+		if apartment.BuildingID != *buildingID {
+			result := &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}
+			s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+			s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
+			return result, nil
+		}
 	}
 
 	return s.validatePassInternal(ctx, pass, guardUserID)

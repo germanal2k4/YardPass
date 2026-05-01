@@ -61,7 +61,9 @@ export function SecurityPage() {
   const playFeedbackSound = (success: boolean) => {
     // Create simple beep sound using Web Audio API
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const Ctx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      const audioContext = new Ctx();
       const oscillator = audioContext.createOscillator();
       const gainNode = audioContext.createGain();
 

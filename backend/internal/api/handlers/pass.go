@@ -125,6 +125,14 @@ func (h *PassHandler) Validate(c *gin.Context) {
 		}
 	}
 
+	role, _ := c.Get("role")
+	if rs, ok := role.(string); ok && (rs == "guard" || rs == "admin") {
+		if bID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for guard and admin")
+			return
+		}
+	}
+
 	var result *domain.PassValidationResult
 	var err error
 
@@ -133,7 +141,7 @@ func (h *PassHandler) Validate(c *gin.Context) {
 	} else if req.QRUUID != "" {
 		passID, parseErr := uuid.Parse(req.QRUUID)
 		if parseErr == nil {
-			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID, bID)
 		} else {
 			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), req.QRUUID, guardUserID, bID)
 		}

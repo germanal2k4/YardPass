@@ -27,7 +27,7 @@ describe('residentsApi', () => {
 
   it('create sends POST with resident data', async () => {
     const data = {
-      apartment_id: 101,
+      apartment_number: '101',
       telegram_id: 999,
       chat_id: 999,
       name: 'Test',
@@ -35,13 +35,13 @@ describe('residentsApi', () => {
 
     const result = await residentsApi.create(data);
     expect(result).toHaveProperty('id');
-    expect(result.apartment_id).toBe(101);
+    expect(result.telegram_id).toBe(999);
   });
 
   it('createBulk sends POST to /residents/bulk', async () => {
     const data = [
-      { apartment_id: 101, telegram_id: 111, chat_id: 111 },
-      { apartment_id: 102, telegram_id: 222, chat_id: 222 },
+      { apartment_number: '101', telegram_id: 111, chat_id: 111 },
+      { apartment_number: '102', telegram_id: 222, chat_id: 222 },
     ];
 
     const result = await residentsApi.createBulk(data);
@@ -52,7 +52,7 @@ describe('residentsApi', () => {
   it('importFromCSV constructs FormData with file and building_id', async () => {
     const { apiClient } = await import('../client');
     const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({
-      data: { imported: 3, errors: [] },
+      data: { created: 3, errors: [] },
     });
 
     const file = new File(['col1,col2\n1,2'], 'test.csv', { type: 'text/csv' });
@@ -66,7 +66,7 @@ describe('residentsApi', () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       }),
     );
-    expect(result.imported).toBe(3);
+    expect(result.created).toBe(3);
 
     postSpy.mockRestore();
   });

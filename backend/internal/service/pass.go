@@ -2,8 +2,12 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,8 +23,10 @@ import (
 type PassService struct {
 	passRepo        domain.PassRepository
 	apartmentRepo   domain.ApartmentRepository
+	residentRepo    domain.ResidentRepository
 	ruleRepo        domain.RuleRepository
 	scanEventRepo   domain.ScanEventRepository
+	personalPassKey []byte
 	fallbackLogger  *zap.Logger
 	opsTotal        *prometheus.CounterVec
 	createdByType   *prometheus.CounterVec
@@ -30,11 +36,17 @@ type PassService struct {
 func NewPassService(
 	passRepo domain.PassRepository,
 	apartmentRepo domain.ApartmentRepository,
+	residentRepo domain.ResidentRepository,
 	ruleRepo domain.RuleRepository,
 	scanEventRepo domain.ScanEventRepository,
+	personalPassSecret string,
 	logger *zap.Logger,
 	m *metrics.Metrics,
 ) *PassService {
+	if strings.TrimSpace(personalPassSecret) == "" {
+		personalPassSecret = "yardpass-personal-pass-secret"
+	}
+
 	opsTotal := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "yardpass_pass_service",
@@ -67,8 +79,10 @@ func NewPassService(
 	return &PassService{
 		passRepo:        passRepo,
 		apartmentRepo:   apartmentRepo,
+		residentRepo:    residentRepo,
 		ruleRepo:        ruleRepo,
 		scanEventRepo:   scanEventRepo,
+		personalPassKey: []byte(personalPassSecret),
 		fallbackLogger:  logger,
 		opsTotal:        opsTotal,
 		createdByType:   createdByType,
@@ -174,6 +188,10 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	return pass, nil
 }
 
+func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64) string {
+	return fmt.Sprintf("resident:%d:%s", residentTelegramID, s.signResidentToken(residentTelegramID))
+}
+
 func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
@@ -216,6 +234,46 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 	}
 
 	return s.validatePassInternal(ctx, pass, guardUserID)
+}
+
+func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	const prefix = "resident:"
+	if !strings.HasPrefix(token, prefix) {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	parts := strings.Split(token, ":")
+	if len(parts) != 3 {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	telegramID, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+	if !hmac.Equal([]byte(parts[2]), []byte(s.signResidentToken(telegramID))) {
+		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
+	}
+
+	resident, err := s.residentRepo.GetByTelegramID(ctx, telegramID)
+	if err != nil || resident == nil || resident.Status != "active" {
+		return &domain.PassValidationResult{Valid: false, Reason: "RESIDENT_NOT_FOUND"}, nil
+	}
+
+	apartment, err := s.apartmentRepo.GetByID(ctx, resident.ApartmentID)
+	if err != nil || apartment == nil {
+		return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+	}
+
+	if buildingID != nil && apartment.BuildingID != *buildingID {
+		return &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}, nil
+	}
+
+	return &domain.PassValidationResult{
+		Valid:     true,
+		CarPlate:  "",
+		Apartment: apartment.Number,
+	}, nil
 }
 
 func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pass, guardUserID int64) (*domain.PassValidationResult, error) {
@@ -364,6 +422,12 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 			zap.String("reason", reason),
 		)
 	}
+}
+
+func (s *PassService) signResidentToken(telegramID int64) string {
+	mac := hmac.New(sha256.New, s.personalPassKey)
+	mac.Write([]byte(strconv.FormatInt(telegramID, 10)))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
 var russianToEnglish = map[rune]rune{

@@ -64,7 +64,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	userID := msg.From.ID
 	text := msg.Text
 
-	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" {
+	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" || text == "/personal" {
 		switch text {
 		case "/start":
 			b.commandsTotal.WithLabelValues("start").Inc()
@@ -96,6 +96,9 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 				Data:    "revoke_pass",
 			}
 			b.handleCallbackQuery(ctx, cb)
+		case "/personal":
+			b.commandsTotal.WithLabelValues("personal").Inc()
+			b.sendPersonalPass(ctx, msg.Chat.ID, msg.From.ID)
 		}
 		return
 	}
@@ -143,6 +146,9 @@ func (b *Bot) handleStart(ctx context.Context, msg Message) {
 			{
 				{"text": "Отозвать пропуск", "callback_data": "revoke_pass"},
 			},
+			{
+				{"text": "Личный постоянный пропуск", "callback_data": "personal_pass"},
+			},
 		},
 	}
 
@@ -179,6 +185,10 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 
 	case "revoke_pass":
 		b.showPassesForRevoke(ctx, cb.Message.Chat.ID, userID)
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "personal_pass":
+		b.sendPersonalPass(ctx, cb.Message.Chat.ID, userID)
 		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "guest_car":
@@ -594,6 +604,24 @@ func (b *Bot) revokePass(ctx context.Context, chatID int64, userID int64, passID
 	_ = b.sendMessage(ctx, chatID, fmt.Sprintf("✅ Пропуск отозван:\n%s\n\nID: %s", passInfo, passID.String()[:8]))
 }
 
+func (b *Bot) sendPersonalPass(ctx context.Context, chatID int64, userID int64) {
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		return
+	}
+
+	token := b.passService.GenerateResidentPersonalPassToken(resident.TelegramID)
+	qrPNG, err := b.qrGen.GenerateRawQR(ctx, token)
+	if err != nil {
+		_ = b.sendMessage(ctx, chatID, "Не удалось сгенерировать личный пропуск")
+		return
+	}
+
+	caption := "🔐 Ваш личный постоянный пропуск.\nОн не имеет срока действия, а проходы по нему не записываются в журнал."
+	_ = b.sendPhoto(ctx, chatID, qrPNG, caption)
+}
+
 func (b *Bot) getState(userID int64) *UserState {
 	key := fmt.Sprintf("bot_state:%d", userID)
 	stateJSON, err := b.redis.Get(context.Background(), key)
@@ -789,6 +817,7 @@ func (b *Bot) SetMyCommands(ctx context.Context) error {
 		{"command": "create", "description": "Выдать пропуск гостю"},
 		{"command": "list", "description": "Мои активные пропуска"},
 		{"command": "revoke", "description": "Отозвать пропуск"},
+		{"command": "personal", "description": "Личный постоянный пропуск"},
 	}
 
 	payload := map[string]interface{}{

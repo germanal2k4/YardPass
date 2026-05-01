@@ -119,17 +119,55 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Reside
 
 func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	ctx = queryNameToContext(ctx, "ResidentRepo.List")
-	rows, err := r.queries.ListResidents(ctx, db.ListResidentsParams{
-		FilterApartmentID: filters.ApartmentID,
-		FilterBuildingID:  filters.BuildingID,
-		FilterStatus:      filters.Status,
-		MaxResults:        intToInt32Ptr(filters.Limit),
-		ResultsOffset:     intToInt32Ptr(filters.Offset),
-	})
+	const listResidentsWithApartmentNumberQuery = `
+		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.status, r.created_at, r.updated_at
+		FROM residents r
+		INNER JOIN apartments a ON a.id = r.apartment_id
+		WHERE ($1::bigint IS NULL OR r.apartment_id = $1)
+		  AND ($2::bigint IS NULL OR a.building_id = $2)
+		  AND ($3::varchar IS NULL OR r.status = $3)
+		ORDER BY r.created_at DESC
+		LIMIT $4
+		OFFSET $5
+	`
+
+	rows, err := r.pool.Query(
+		ctx,
+		listResidentsWithApartmentNumberQuery,
+		filters.ApartmentID,
+		filters.BuildingID,
+		filters.Status,
+		intToInt32Ptr(filters.Limit),
+		intToInt32Ptr(filters.Offset),
+	)
 	if err != nil {
 		return nil, err
 	}
-	return residentsFromDB(rows), nil
+	defer rows.Close()
+
+	var result []domain.Resident
+	for rows.Next() {
+		var resident domain.Resident
+		if err := rows.Scan(
+			&resident.ID,
+			&resident.ApartmentID,
+			&resident.ApartmentNumber,
+			&resident.TelegramID,
+			&resident.ChatID,
+			&resident.Name,
+			&resident.Phone,
+			&resident.Status,
+			&resident.CreatedAt,
+			&resident.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, resident)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
@@ -138,14 +176,16 @@ func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
 }
 
 func residentFromDB(row db.Resident) *domain.Resident {
-	res := domain.Resident(row)
-	return &res
+	return &domain.Resident{
+		ID:          row.ID,
+		ApartmentID: row.ApartmentID,
+		TelegramID:  row.TelegramID,
+		ChatID:      row.ChatID,
+		Name:        row.Name,
+		Phone:       row.Phone,
+		Status:      row.Status,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+	}
 }
 
-func residentsFromDB(rows []db.Resident) []domain.Resident {
-	result := make([]domain.Resident, len(rows))
-	for i, row := range rows {
-		result[i] = domain.Resident(row)
-	}
-	return result
-}

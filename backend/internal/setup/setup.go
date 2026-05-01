@@ -12,6 +12,7 @@ import (
 	"yardpass/internal/auth"
 	"yardpass/internal/config"
 	"yardpass/internal/domain"
+	"yardpass/internal/mailer"
 	"yardpass/internal/observability/logger"
 	"yardpass/internal/observability/metrics"
 	"yardpass/internal/observability/tracer"
@@ -52,7 +53,42 @@ func SetupApi(configPath string) (*fx.App, error) {
 			redis.NewClient,
 
 			fx.Annotate(auth.NewJWTService, fx.As(new(domain.AuthService))),
-			fx.Annotate(service.NewPassService, fx.As(new(domain.PassService))),
+			fx.Annotate(mailer.NewSMTPMailer, fx.As(new(service.EmailSender))),
+			fx.Annotate(
+				func(
+					passRepo domain.PassRepository,
+					apartmentRepo domain.ApartmentRepository,
+					residentRepo domain.ResidentRepository,
+					ruleRepo domain.RuleRepository,
+					scanEventRepo domain.ScanEventRepository,
+					logger *zap.Logger,
+					m *metrics.Metrics,
+					cfg *config.Config,
+				) domain.PassService {
+					return service.NewPassService(
+						passRepo,
+						apartmentRepo,
+						residentRepo,
+						ruleRepo,
+						scanEventRepo,
+						cfg.JWT.Secret,
+						logger,
+						m,
+					)
+				},
+				fx.As(new(domain.PassService)),
+			),
+			fx.Annotate(
+				func(
+					buildingRepo domain.BuildingRepository,
+					ruleRepo domain.RuleRepository,
+					userRepo domain.UserRepository,
+					emailSender service.EmailSender,
+				) domain.SubscriptionService {
+					return service.NewSubscriptionService(buildingRepo, ruleRepo, userRepo, emailSender)
+				},
+				fx.As(new(domain.SubscriptionService)),
+			),
 			service.NewUserService,
 			service.NewResidentService,
 
@@ -60,6 +96,7 @@ func SetupApi(configPath string) (*fx.App, error) {
 			handlers.NewPassHandler,
 			handlers.NewRuleHandler,
 			handlers.NewUserHandler,
+			handlers.NewBuildingHandler,
 			handlers.NewResidentHandler,
 			handlers.NewScanEventHandler,
 			handlers.NewReportHandler,
@@ -110,7 +147,30 @@ func SetupBot(configPath string) (*fx.App, error) {
 
 			redis.NewClient,
 
-			fx.Annotate(service.NewPassService, fx.As(new(domain.PassService))),
+			fx.Annotate(
+				func(
+					passRepo domain.PassRepository,
+					apartmentRepo domain.ApartmentRepository,
+					residentRepo domain.ResidentRepository,
+					ruleRepo domain.RuleRepository,
+					scanEventRepo domain.ScanEventRepository,
+					logger *zap.Logger,
+					m *metrics.Metrics,
+					cfg *config.Config,
+				) domain.PassService {
+					return service.NewPassService(
+						passRepo,
+						apartmentRepo,
+						residentRepo,
+						ruleRepo,
+						scanEventRepo,
+						cfg.JWT.Secret,
+						logger,
+						m,
+					)
+				},
+				fx.As(new(domain.PassService)),
+			),
 			qr.NewGenerator,
 
 			telegram.NewBot,

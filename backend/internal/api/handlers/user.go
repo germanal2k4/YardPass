@@ -43,12 +43,20 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	var filters domain.UserFilters
+	role, _ := c.Get("role")
+	buildingIDCtx, hasBuildingID := c.Get("building_id")
 
 	if role := c.Query("role"); role != "" {
 		filters.Role = &role
 	}
 
-	if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+	if role == "admin" {
+		if hasBuildingID {
+			if id, ok := buildingIDCtx.(int64); ok {
+				filters.BuildingID = &id
+			}
+		}
+	} else if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 		var buildingID int64
 		if _, err := fmt.Sscanf(buildingIDStr, "%d", &buildingID); err == nil {
 			filters.BuildingID = &buildingID

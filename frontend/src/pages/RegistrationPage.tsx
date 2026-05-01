@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -9,27 +9,25 @@ import {
   Box,
   Alert,
   IconButton,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
   Link,
+  Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
 import { APP_ROUTES } from '@/shared/config/constants';
+import { authApi } from '@/shared/api/auth';
+import { getErrorMessage } from '@/shared/utils/errors';
 
 export function RegistrationPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const preselectedRole = searchParams.get('role') as 'admin' | 'guard' | null;
-  
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [buildingName, setBuildingName] = useState('');
+  const [apartmentCount, setApartmentCount] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'admin' | 'guard'>(preselectedRole || 'guard');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,43 +37,47 @@ export function RegistrationPage() {
     setError('');
     setSuccess(false);
 
-    // Validation
-    if (password !== confirmPassword) {
-      setError('Пароли не совпадают');
+    if (!buildingName.trim()) {
+      setError('Укажите название здания');
       return;
     }
 
-    if (password.length < 6) {
-      setError('Пароль должен содержать минимум 6 символов');
+    if (!email.trim()) {
+      setError('Укажите email');
+      return;
+    }
+    const parsedApartmentCount = Number(apartmentCount);
+    if (!apartmentCount.trim() || !Number.isInteger(parsedApartmentCount) || parsedApartmentCount <= 0) {
+      setError('Укажите корректное количество апартаментов');
       return;
     }
 
-    if (username.length < 3) {
-      setError('Имя пользователя должно содержать минимум 3 символа');
+    if (!cardNumber.trim() || !cardHolder.trim() || !expiry.trim() || !cvv.trim()) {
+      setError('Заполните все поля карты');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      // PLACEHOLDER: Backend endpoint не реализован
-      // Требуется: POST /auth/register
-      // Body: { username, password, email?, role }
-      // Response: { message: "User created", user_id: number }
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Имитация запроса
-      
-      // Симуляция успешной регистрации
+      await authApi.purchaseSubscription({
+        email: email.trim(),
+        building_name: buildingName.trim(),
+        apartment_count: parsedApartmentCount,
+        card_number: cardNumber.trim(),
+        card_holder: cardHolder.trim(),
+        expiry: expiry.trim(),
+        cvv: cvv.trim(),
+      });
+
       setSuccess(true);
       setError('');
-      
-      // Показываем сообщение и перенаправляем на логин через 2 секунды
+
       setTimeout(() => {
-        navigate(`${APP_ROUTES.LOGIN}?role=${role}`);
-      }, 2000);
-      
+        navigate(APP_ROUTES.LOGIN);
+      }, 2200);
     } catch (err) {
-      setError('Ошибка при регистрации. Попробуйте позже.');
+      setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +137,7 @@ export function RegistrationPage() {
                 },
               }}
             />
-            <PersonAddIcon 
+            <CreditCardIcon
               sx={{ 
                 fontSize: 56, 
                 color: '#FF6D00',
@@ -156,26 +158,22 @@ export function RegistrationPage() {
                 WebkitTextFillColor: 'transparent',
               }}
             >
-              Регистрация
+              Оплата подписки
             </Typography>
             <Typography variant="body1" color="text.secondary" fontWeight="600">
-              Создание нового пользователя
+              Тариф: 200 000 ₽ в год
             </Typography>
           </Box>
 
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            <Typography variant="body2" sx={{ mb: 1 }}>
-              <strong>Внимание:</strong> Функция регистрации находится в разработке.
-            </Typography>
-            <Typography variant="caption">
-              Backend endpoint <code>POST /auth/register</code> еще не реализован.
-              Форма работает в режиме демонстрации.
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2">
+              После оплаты на указанный email отправим логины и пароли для аккаунтов администратора и охранника вашего здания.
             </Typography>
           </Alert>
 
           {success && (
             <Alert severity="success" sx={{ mb: 2 }}>
-              Пользователь успешно зарегистрирован! Перенаправление на страницу входа...
+              Оплата прошла успешно! Данные для входа отправлены на email. Перенаправление на вход...
             </Alert>
           )}
 
@@ -187,22 +185,23 @@ export function RegistrationPage() {
 
           <form onSubmit={handleSubmit}>
             <TextField
-              label="Имя пользователя"
+              label="Здание"
               type="text"
               fullWidth
               required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={buildingName}
+              onChange={(e) => setBuildingName(e.target.value)}
               sx={{ mb: 2 }}
               autoFocus
-              helperText="Минимум 3 символа"
+              helperText="Для какого здания подключаем сервис"
               disabled={isLoading || success}
             />
 
             <TextField
-              label="Email (опционально)"
+              label="Email для получения доступов"
               type="email"
               fullWidth
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               sx={{ mb: 2 }}
@@ -210,52 +209,70 @@ export function RegistrationPage() {
             />
 
             <TextField
-              label="Пароль"
-              type="password"
+              label="Количество апартаментов"
+              type="number"
               fullWidth
               required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={apartmentCount}
+              onChange={(e) => setApartmentCount(e.target.value)}
               sx={{ mb: 2 }}
-              helperText="Минимум 6 символов"
               disabled={isLoading || success}
-              inputProps={{ 'data-testid': 'password-input' }}
+              inputProps={{ min: 1, step: 1 }}
+            />
+
+            <Divider sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary">
+                Платежная карта
+              </Typography>
+            </Divider>
+
+            <TextField
+              label="Номер карты"
+              type="text"
+              fullWidth
+              required
+              value={cardNumber}
+              onChange={(e) => setCardNumber(e.target.value)}
+              sx={{ mb: 2 }}
+              placeholder="4111 1111 1111 1111"
+              disabled={isLoading || success}
+              inputProps={{ 'data-testid': 'card-number-input' }}
             />
 
             <TextField
-              label="Подтвердите пароль"
-              type="password"
+              label="Владелец карты"
+              type="text"
               fullWidth
               required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={cardHolder}
+              onChange={(e) => setCardHolder(e.target.value)}
               sx={{ mb: 2 }}
               disabled={isLoading || success}
-              inputProps={{ 'data-testid': 'confirm-password-input' }}
+              placeholder="IVAN PETROV"
             />
 
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>Роль</InputLabel>
-              <Select
-                value={role}
-                label="Роль"
-                onChange={(e) => setRole(e.target.value as 'admin' | 'guard')}
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <TextField
+                label="Срок (MM/YY)"
+                type="text"
+                fullWidth
+                required
+                value={expiry}
+                onChange={(e) => setExpiry(e.target.value)}
                 disabled={isLoading || success}
-              >
-                <MenuItem value="guard">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="Охранник" color="secondary" size="small" />
-                    <Typography variant="body2">Сканирование пропусков</Typography>
-                  </Box>
-                </MenuItem>
-                <MenuItem value="admin">
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Chip label="Администратор" color="primary" size="small" />
-                    <Typography variant="body2">Управление системой</Typography>
-                  </Box>
-                </MenuItem>
-              </Select>
-            </FormControl>
+                placeholder="12/30"
+              />
+              <TextField
+                label="CVV"
+                type="password"
+                fullWidth
+                required
+                value={cvv}
+                onChange={(e) => setCvv(e.target.value)}
+                disabled={isLoading || success}
+                inputProps={{ maxLength: 4 }}
+              />
+            </Box>
 
             <Button
               type="submit"
@@ -263,15 +280,15 @@ export function RegistrationPage() {
               fullWidth
               size="large"
               disabled={isLoading || success}
-              startIcon={<PersonAddIcon />}
-              color={role === 'admin' ? 'primary' : 'secondary'}
+              startIcon={<CreditCardIcon />}
+              color="primary"
               sx={{
                 py: 1.5,
                 fontSize: '1.1rem',
                 fontWeight: 700,
               }}
             >
-              {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
+              {isLoading ? 'Проводим оплату...' : 'Оплатить 200 000 ₽ / год'}
             </Button>
           </form>
 
@@ -281,7 +298,7 @@ export function RegistrationPage() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => navigate(`${APP_ROUTES.LOGIN}?role=${role}`)}
+                onClick={() => navigate(APP_ROUTES.LOGIN)}
                 sx={{ 
                   cursor: 'pointer',
                   color: '#E53935',

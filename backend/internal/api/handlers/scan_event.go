@@ -80,11 +80,16 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 			}
 		}
 	case "admin", "guard":
-		if buildingID != nil {
-			if id, ok := buildingID.(int64); ok {
-				bID = &id
-			}
+		if buildingID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			return
 		}
+		id, ok := buildingID.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
+		bID = &id
 	}
 
 	events, err := h.scanEventRepo.GetEventsWithDetails(c.Request.Context(), filters, bID)

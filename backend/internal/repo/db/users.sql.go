@@ -11,18 +11,19 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, email, password_hash, role, building_id, status)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (username, email, password_hash, role, building_id, apartment_number, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, created_at, updated_at
 `
 
 type CreateUserParams struct {
-	Username     string
-	Email        *string
-	PasswordHash string
-	Role         string
-	BuildingID   *int64
-	Status       string
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
 }
 
 type CreateUserRow struct {
@@ -38,6 +39,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		arg.PasswordHash,
 		arg.Role,
 		arg.BuildingID,
+		arg.ApartmentNumber,
 		arg.Status,
 	)
 	var i CreateUserRow
@@ -46,21 +48,22 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
+SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID           int64
-	Username     string
-	Email        *string
-	PasswordHash string
-	Role         string
-	BuildingID   *int64
-	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              int64
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
@@ -73,6 +76,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.PasswordHash,
 		&i.Role,
 		&i.BuildingID,
+		&i.ApartmentNumber,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -81,21 +85,22 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
+SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
 FROM users
 WHERE username = $1
 `
 
 type GetUserByUsernameRow struct {
-	ID           int64
-	Username     string
-	Email        *string
-	PasswordHash string
-	Role         string
-	BuildingID   *int64
-	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              int64
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
@@ -108,6 +113,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 		&i.PasswordHash,
 		&i.Role,
 		&i.BuildingID,
+		&i.ApartmentNumber,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -116,7 +122,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUs
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, password_hash, role, building_id, status, created_at, updated_at
+SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
 FROM users
 WHERE ($1::varchar IS NULL OR role = $1)
   AND ($2::bigint IS NULL OR building_id = $2)
@@ -135,15 +141,16 @@ type ListUsersParams struct {
 }
 
 type ListUsersRow struct {
-	ID           int64
-	Username     string
-	Email        *string
-	PasswordHash string
-	Role         string
-	BuildingID   *int64
-	Status       string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              int64
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
@@ -168,6 +175,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 			&i.PasswordHash,
 			&i.Role,
 			&i.BuildingID,
+			&i.ApartmentNumber,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -184,19 +192,20 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
-SET username = $2, email = $3, password_hash = $4, role = $5, building_id = $6, status = $7
+SET username = $2, email = $3, password_hash = $4, role = $5, building_id = $6, apartment_number = $7, status = $8
 WHERE id = $1
 RETURNING updated_at
 `
 
 type UpdateUserParams struct {
-	ID           int64
-	Username     string
-	Email        *string
-	PasswordHash string
-	Role         string
-	BuildingID   *int64
-	Status       string
+	ID              int64
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (time.Time, error) {
@@ -207,6 +216,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (time.Ti
 		arg.PasswordHash,
 		arg.Role,
 		arg.BuildingID,
+		arg.ApartmentNumber,
 		arg.Status,
 	)
 	var updated_at time.Time

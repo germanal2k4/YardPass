@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package integration
 
 import (
@@ -52,6 +55,7 @@ func TestIntegration_PassFlow(t *testing.T) {
 	pgRepo := repo.NewPostgresRepoFromPool(pool, zap.NewNop())
 	passRepo := repo.NewPassRepo(pgRepo)
 	apartmentRepo := repo.NewApartmentRepo(pgRepo)
+	residentRepo := repo.NewResidentRepo(pgRepo)
 	ruleRepo := repo.NewRuleRepo(pgRepo)
 	scanEventRepo := repo.NewScanEventRepo(pgRepo)
 
@@ -60,7 +64,7 @@ func TestIntegration_PassFlow(t *testing.T) {
 	residentID := insertTestResident(t, ctx, pool, apartmentID)
 
 	noopMetrics := &metrics.Metrics{}
-	passService := service.NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, zap.NewNop(), noopMetrics)
+	passService := service.NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", zap.NewNop(), noopMetrics)
 
 	// Create pass
 	now := time.Now().UTC()

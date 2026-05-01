@@ -55,6 +55,18 @@ func testAuthConfig() *config.Config {
 	}
 }
 
+type mockSubscriptionService struct {
+	mock.Mock
+}
+
+func (m *mockSubscriptionService) Purchase(ctx context.Context, req domain.PurchaseSubscriptionRequest) (*domain.PurchaseSubscriptionResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.PurchaseSubscriptionResponse), args.Error(1)
+}
+
 func TestAuthHandler_Login(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -151,5 +163,51 @@ func TestAuthHandler_Refresh(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		svc.AssertExpectations(t)
+	})
+}
+
+func TestAuthHandler_PurchaseSubscription(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("purchase success", func(t *testing.T) {
+		authSvc := new(mockAuthService)
+		subSvc := new(mockSubscriptionService)
+		h := NewAuthHandlerWithServices(authSvc, subSvc, testAuthConfig())
+
+		r := gin.New()
+		r.POST("/purchase-subscription", h.PurchaseSubscription)
+
+		reqBody := domain.PurchaseSubscriptionRequest{
+			Email:          "client@example.com",
+			BuildingName:   "ЖК Тестовый",
+			ApartmentCount: 120,
+			CardNumber:     "4111111111111111",
+			CardHolder:     "IVAN PETROV",
+			Expiry:         "12/30",
+			CVV:            "123",
+		}
+
+		subSvc.On("Purchase", mock.Anything, reqBody).Return(&domain.PurchaseSubscriptionResponse{
+			BuildingID:      10,
+			BuildingName:    "ЖК Тестовый",
+			ApartmentCount:  120,
+			SubscriptionFee: 200000,
+			Period:          "1 year",
+			Email:           "client@example.com",
+			Accounts: []domain.AccountCredentials{
+				{Username: "admin_test_1234", Password: "secretA"},
+				{Username: "guard_test_1234", Password: "secretG"},
+			},
+			Message: "ok",
+		}, nil)
+
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest(http.MethodPost, "/purchase-subscription", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		subSvc.AssertExpectations(t)
 	})
 }

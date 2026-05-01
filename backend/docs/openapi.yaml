@@ -213,7 +213,9 @@ paths:
       summary: Валидировать пропуск (по QR коду или номеру машины)
       description: |
         Валидация пропуска может быть выполнена двумя способами:
-        1. По QR коду (qr_uuid) - UUID из QR кода
+        1. По QR коду (qr_uuid):
+           - UUID обычного гостевого пропуска, или
+           - персональный токен резидента (формат `resident:<telegram_id>:<signature>`)
         2. По номеру машины (car_plate) - номер машины (можно вводить на русском, автоматически конвертируется)
         
         Можно указать только один из параметров.
@@ -228,8 +230,7 @@ paths:
               properties:
                 qr_uuid:
                   type: string
-                  format: uuid
-                  description: UUID из QR кода (опционально, если указан car_plate)
+                  description: UUID гостевого пропуска или персональный токен резидента (опционально, если указан car_plate)
                 car_plate:
                   type: string
                   description: Номер машины (опционально, если указан qr_uuid). Можно вводить на русском, автоматически конвертируется в английский
@@ -260,7 +261,7 @@ paths:
                         example: false
                       reason:
                         type: string
-                        enum: [PASS_NOT_FOUND, PASS_EXPIRED, PASS_REVOKED, PASS_NOT_YET_VALID, QUIET_HOURS, INVALID_CAR_PLATE]
+                        enum: [PASS_NOT_FOUND, PASS_EXPIRED, PASS_REVOKED, PASS_NOT_YET_VALID, QUIET_HOURS, INVALID_CAR_PLATE, INVALID_PERSONAL_PASS, RESIDENT_NOT_FOUND, APARTMENT_NOT_FOUND, BUILDING_MISMATCH]
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -330,7 +331,7 @@ paths:
         Создание нового пользователя. Доступно для admin и superuser.
         - Admin может создавать только admin и guard для своего ЖК (building_id должен совпадать с building_id админа)
         - Superuser может создавать всех, кроме superuser, для любого ЖК
-        - Для admin/guard обязательно указать building_id
+        - Для admin/guard обязательно указать `building_id` или `building_name`
       tags:
         - Users
       requestBody:
@@ -398,6 +399,9 @@ paths:
   /api/v1/residents:
     post:
       summary: Создать жителя
+      description: |
+        - Для роли `admin` нужно передавать `apartment_number`; `apartment_id` определится автоматически в пределах здания админа.
+        - Для `superuser` можно передавать либо `apartment_id`, либо пару `building_id + apartment_number`.
       tags:
         - Residents
       requestBody:
@@ -549,6 +553,13 @@ paths:
       summary: Импорт жителей из CSV
       tags:
         - Residents
+      parameters:
+        - name: building_id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: ID здания, в которое импортируются жители
       requestBody:
         required: true
         content:
@@ -568,7 +579,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  imported:
+                  created:
                     type: integer
                   errors:
                     type: array
@@ -619,10 +630,19 @@ paths:
   /api/v1/scan-events:
     get:
       summary: Получить журнал событий сканирования
-      description: Возвращает список событий сканирования с возможностью фильтрации
+      description: |
+        Возвращает список событий сканирования с возможностью фильтрации.
+        - `admin` и `guard` получают события только своего здания (по `building_id` из токена).
+        - При отсутствии `building_id` в токене для этих ролей запрос отклоняется.
+        - `superuser` может получить все события или отфильтровать по `building_id`.
       tags:
         - Scan Events
       parameters:
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: ID здания для фильтрации (только для superuser)
         - name: limit
           in: query
           schema:
@@ -719,7 +739,10 @@ paths:
   /api/v1/reports/export:
     get:
       summary: Экспортировать события в Excel
-      description: Экспортирует события сканирования в файл Excel (.xlsx)
+      description: |
+        Экспортирует события сканирования в файл Excel (.xlsx).
+        - `admin` и `guard` получают только события своего здания.
+        - `superuser` может дополнительно фильтровать по `building_id`.
       tags:
         - Reports
       parameters:
@@ -969,7 +992,11 @@ components:
         building_id:
           type: integer
           nullable: true
-          description: ID здания (обязательно для guard и admin)
+          description: ID здания (обязательно для guard и admin, если не указан building_name)
+        building_name:
+          type: string
+          nullable: true
+          description: Название здания (альтернатива building_id для guard и admin)
 
     Resident:
       type: object
@@ -1001,12 +1028,20 @@ components:
     CreateResidentRequest:
       type: object
       required:
-        - apartment_id
         - telegram_id
       properties:
         apartment_id:
           type: integer
-          description: ID квартиры
+          nullable: true
+          description: ID квартиры (обычно для superuser)
+        apartment_number:
+          type: string
+          nullable: true
+          description: Номер квартиры в здании (для admin обязателен)
+        building_id:
+          type: integer
+          nullable: true
+          description: ID здания (используется вместе с apartment_number, обычно для superuser)
         telegram_id:
           type: integer
           description: Telegram ID пользователя

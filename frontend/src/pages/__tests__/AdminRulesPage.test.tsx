@@ -48,6 +48,27 @@ describe('AdminRulesPage', () => {
     });
   });
 
+  it('updates apartment count and shows success', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderWithProviders(<AdminRulesPage />, {
+      auth: { user: adminUser },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('22:00')).toBeInTheDocument();
+    });
+
+    const apartmentCountInput = screen.getByLabelText(/Новое количество апартаментов/i);
+    await user.clear(apartmentCountInput);
+    await user.type(apartmentCountInput, '120');
+
+    await user.click(screen.getByRole('button', { name: /Увеличить количество апартаментов/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Количество апартаментов обновлено:/i)).toBeInTheDocument();
+    });
+  });
+
   it('submits updated rules and shows success', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderWithProviders(<AdminRulesPage />, {

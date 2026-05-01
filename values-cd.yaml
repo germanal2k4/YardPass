@@ -11,6 +11,13 @@ backend:
     pullPolicy: Always
   imagePullSecrets:
     - name: ghcr-pull-secret
+  # Override in values-cd-override.yaml or external secret management.
+  secrets:
+    smtpHost: ""
+    smtpPort: "587"
+    smtpUsername: ""
+    smtpPassword: ""
+    smtpFrom: ""
   env:
     LOG_TRANSPORT: elastic
     TRACER_ENABLED: "true"

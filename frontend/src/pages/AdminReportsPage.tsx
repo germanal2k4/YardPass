@@ -355,7 +355,7 @@ export function AdminReportsPage() {
                       <TableCell>Статус</TableCell>
                       <TableCell>Номер авто</TableCell>
                       <TableCell>Гость</TableCell>
-                      <TableCell>Квартира</TableCell>
+                      <TableCell>Апартамент</TableCell>
                       <TableCell>Охранник</TableCell>
                       <TableCell>Причина</TableCell>
                     </TableRow>

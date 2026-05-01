@@ -113,6 +113,51 @@ type MockRuleRepo struct {
 	mock.Mock
 }
 
+type MockResidentRepo struct {
+	mock.Mock
+}
+
+func (m *MockResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Resident), args.Error(1)
+}
+
+func (m *MockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Resident, error) {
+	args := m.Called(ctx, telegramID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Resident), args.Error(1)
+}
+
+func (m *MockResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
+	args := m.Called(ctx, resident)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) Update(ctx context.Context, resident *domain.Resident) error {
+	args := m.Called(ctx, resident)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) BulkCreate(ctx context.Context, residents []domain.Resident) error {
+	args := m.Called(ctx, residents)
+	return args.Error(0)
+}
+
+func (m *MockResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
+	args := m.Called(ctx, filters)
+	return args.Get(0).([]domain.Resident), args.Error(1)
+}
+
 func (m *MockRuleRepo) GetByBuildingID(ctx context.Context, buildingID int64) (*domain.Rule, error) {
 	args := m.Called(ctx, buildingID)
 	if args.Get(0) == nil {
@@ -167,10 +212,11 @@ func TestPassService_CreatePass(t *testing.T) {
 	passRepo := new(MockPassRepo)
 	apartmentRepo := new(MockApartmentRepo)
 	ruleRepo := new(MockRuleRepo)
+	residentRepo := new(MockResidentRepo)
 	scanEventRepo := new(MockScanEventRepo)
 
 	noopMetrics := &metrics.Metrics{}
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger, noopMetrics)
+	service := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", logger, noopMetrics)
 
 	t.Run("successful creation", func(t *testing.T) {
 		apartmentID := int64(1)
@@ -219,8 +265,9 @@ func TestPassService_CreatePass(t *testing.T) {
 		passRepo2 := new(MockPassRepo)
 		apartmentRepo2 := new(MockApartmentRepo)
 		ruleRepo2 := new(MockRuleRepo)
+		residentRepo2 := new(MockResidentRepo)
 		scanEventRepo2 := new(MockScanEventRepo)
-		service2 := NewPassService(passRepo2, apartmentRepo2, ruleRepo2, scanEventRepo2, logger, noopMetrics)
+		service2 := NewPassService(passRepo2, apartmentRepo2, residentRepo2, ruleRepo2, scanEventRepo2, "test-secret", logger, noopMetrics)
 
 		apartmentID := int64(1)
 		buildingID := int64(1)
@@ -270,10 +317,11 @@ func TestPassService_ValidatePass(t *testing.T) {
 	passRepo := new(MockPassRepo)
 	apartmentRepo := new(MockApartmentRepo)
 	ruleRepo := new(MockRuleRepo)
+	residentRepo := new(MockResidentRepo)
 	scanEventRepo := new(MockScanEventRepo)
 	noopMetrics := &metrics.Metrics{}
 
-	service := NewPassService(passRepo, apartmentRepo, ruleRepo, scanEventRepo, logger, noopMetrics)
+	service := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, "test-secret", logger, noopMetrics)
 
 	t.Run("valid pass", func(t *testing.T) {
 		passID := uuid.New()

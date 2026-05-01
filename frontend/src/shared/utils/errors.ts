@@ -1,4 +1,4 @@
-import { AxiosError } from 'axios';
+import { AxiosError, isAxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
 import { ERROR_MESSAGES } from '@/shared/config/constants';
 
@@ -24,6 +24,10 @@ const MESSAGE_TRANSLATIONS: Record<string, string> = {
   'invalid telegram_id': 'Некорректный Telegram ID',
   'invalid chat_id': 'Некорректный Chat ID',
   'invalid apartment_id': 'Некорректный ID квартиры',
+  'apartment_number is required for admin': 'Для администратора обязателен номер квартиры',
+  'apartment_number is required when apartment_id is not provided': 'Требуется номер квартиры',
+  'building_id is required when apartment_id is not provided': 'Требуется ID здания',
+  'apartment not found in building': 'Квартира не найдена в указанном здании',
   'missing required fields': 'Отсутствуют обязательные поля',
   'invalid phone format': 'Неверный формат телефона',
   
@@ -78,6 +82,24 @@ export function formatErrorMessage(error: AxiosError<ErrorResponse>): string {
   }
   
   return errorMessage;
+}
+
+/**
+ * Совместимый хелпер для обработки неизвестных ошибок в UI-слое.
+ *
+ * @param error - Ошибка любого типа
+ * @returns Сообщение для отображения пользователю
+ */
+export function getErrorMessage(error: unknown): string {
+  if (isAxiosError<ErrorResponse>(error)) {
+    return formatErrorMessage(error);
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return ERROR_MESSAGES.UNKNOWN_ERROR;
 }
 
 /**

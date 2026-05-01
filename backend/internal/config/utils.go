@@ -10,7 +10,7 @@ import (
 )
 
 func processValue(v reflect.Value) error {
-	for v.Kind() == reflect.Ptr {
+	for v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return nil
 		}
@@ -37,7 +37,7 @@ func processValue(v reflect.Value) error {
 			continue
 		}
 
-		if field.Kind() == reflect.Ptr && field.Type().Elem().Kind() == reflect.Struct {
+		if field.Kind() == reflect.Pointer && field.Type().Elem().Kind() == reflect.Struct {
 			if !field.IsNil() {
 				if err := processValue(field); err != nil {
 					return err
@@ -81,7 +81,7 @@ func isZero(v reflect.Value) bool {
 		return !v.Bool()
 	case reflect.Slice, reflect.Map:
 		return v.IsNil() || v.Len() == 0
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		return v.IsNil()
 	default:
 		return reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
@@ -107,7 +107,7 @@ func buildDefaultsMap(t reflect.Type, v reflect.Value) map[string]any {
 			continue
 		}
 
-		if field.Type.Kind() == reflect.Ptr && field.Type.Elem().Kind() == reflect.Struct {
+		if field.Type.Kind() == reflect.Pointer && field.Type.Elem().Kind() == reflect.Struct {
 			// Create zero value of the pointed type
 			elemType := field.Type.Elem()
 			result[yamlKey] = buildDefaultsMap(elemType, reflect.Zero(elemType))

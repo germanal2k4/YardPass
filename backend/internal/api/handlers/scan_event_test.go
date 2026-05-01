@@ -73,4 +73,22 @@ func TestScanEventHandler_ListEvents(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		repo.AssertExpectations(t)
 	})
+
+	t.Run("guard without building_id is rejected", func(t *testing.T) {
+		repo := new(mockScanEventRepo)
+		h := NewScanEventHandler(repo)
+
+		r := gin.New()
+		r.GET("/events", func(c *gin.Context) {
+			c.Set("role", "guard")
+			h.ListEvents(c)
+		})
+
+		req := httptest.NewRequest(http.MethodGet, "/events", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		repo.AssertNotCalled(t, "GetEventsWithDetails")
+	})
 }

@@ -5,6 +5,7 @@ export interface User {
   username: string;
   email?: string;
   role: 'guard' | 'admin';
+  apartment_number?: number;
   status: string;
   created_at: string;
   updated_at: string;
@@ -14,6 +15,7 @@ export interface Building {
   id: number;
   name: string;
   address: string;
+  apartment_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -63,6 +65,7 @@ export interface Rule {
 export interface Resident {
   id: number;
   apartment_id: number;
+  apartment_number?: string;
   telegram_id: number;
   chat_id: number;
   name?: string;
@@ -90,6 +93,30 @@ export interface MeResponse {
   building_id?: number; // ID здания, к которому привязан пользователь
 }
 
+export interface PurchaseSubscriptionRequest {
+  email: string;
+  building_name: string;
+  apartment_count: number;
+  card_number: string;
+  card_holder: string;
+  expiry: string;
+  cvv: string;
+}
+
+export interface PurchaseSubscriptionResponse {
+  building_id: number;
+  building_name: string;
+  apartment_count: number;
+  subscription_fee: number;
+  period: string;
+  email: string;
+  accounts: Array<{
+    username: string;
+    password: string;
+  }>;
+  message: string;
+}
+
 export interface CreatePassRequest {
   apartment_id: number;
   car_plate: string;
@@ -108,7 +135,17 @@ export interface ValidatePassResponse {
   car_plate?: string;
   apartment?: string;
   valid_to?: string; // ISO datetime
-  reason?: 'PASS_NOT_FOUND' | 'PASS_EXPIRED' | 'PASS_REVOKED' | 'PASS_NOT_YET_VALID' | 'QUIET_HOURS';
+  reason?:
+    | 'PASS_NOT_FOUND'
+    | 'PASS_EXPIRED'
+    | 'PASS_REVOKED'
+    | 'PASS_NOT_YET_VALID'
+    | 'QUIET_HOURS'
+    | 'INVALID_CAR_PLATE'
+    | 'INVALID_PERSONAL_PASS'
+    | 'RESIDENT_NOT_FOUND'
+    | 'APARTMENT_NOT_FOUND'
+    | 'BUILDING_MISMATCH';
 }
 
 export interface GetActivePassesResponse {
@@ -122,10 +159,16 @@ export interface UpdateRuleRequest {
   max_pass_duration_hours?: number;
 }
 
+export interface UpdateApartmentCountRequest {
+  apartment_count: number;
+}
+
 export interface CreateResidentRequest {
-  apartment_id: number;
+  apartment_id?: number;
+  apartment_number?: string;
+  building_id?: number;
   telegram_id: number;
-  chat_id: number;
+  chat_id?: number;
   name?: string;
   phone?: string;
 }

@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   LOGIN: '/auth/login',
   REFRESH: '/auth/refresh',
   LOGOUT: '/auth/logout',
+  PURCHASE_SUBSCRIPTION: '/auth/purchase-subscription',
   ME: '/api/v1/me',
   
   // Passes
@@ -26,6 +27,7 @@ export const API_ENDPOINTS = {
   
   // Rules
   RULES: '/api/v1/rules',
+  BUILDING_APARTMENT_COUNT: (id: number) => `/api/v1/buildings/${id}/apartment-count`,
   
   // Residents
   RESIDENTS: '/api/v1/residents',

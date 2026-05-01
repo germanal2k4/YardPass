@@ -1,0 +1,42 @@
+# Local K8s overrides for minikube + podman (CRI-O)
+# Postgres/Redis: docker compose -f docker-compose.data.yml up -d
+
+backend:
+  image:
+    repository: localhost/yardpass/backend
+    tag: latest
+    pullPolicy: Never
+  secrets:
+    databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+    redisUrl: "redis://host.minikube.internal:6379/0"
+    smtpHost: "mailhog.yardpass.svc.cluster.local"
+    smtpPort: "1025"
+    smtpUsername: ""
+    smtpPassword: ""
+    smtpFrom: "noreply@yardpass.local"
+  env:
+    LOG_TRANSPORT: stdout
+    TRACER_ENABLED: "true"
+    TRACER_URL: "jaeger-collector.istio-system:4317"
+    ELASTIC_URL: ""
+
+frontend:
+  image:
+    repository: localhost/yardpass/frontend
+    tag: latest
+    pullPolicy: Never
+
+bot:
+  image:
+    repository: localhost/yardpass/bot
+    tag: latest
+    pullPolicy: Never
+  secrets:
+    databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+    redisUrl: "redis://host.minikube.internal:6379/0"
+    telegramToken: ""
+  env:
+    LOG_TRANSPORT: stdout
+    TRACER_ENABLED: "true"
+    TRACER_URL: "jaeger-collector.istio-system:4317"
+    ELASTIC_URL: ""

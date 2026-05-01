@@ -16,10 +16,10 @@ build:
 	@go build -o bin/bot ./cmd/bot
 
 run-api:
-	@go run ./cmd/api
+	@go run ./cmd/api -c config/config.yaml
 
 run-bot:
-	@go run ./cmd/bot
+	@go run ./cmd/bot -c config/config.yaml
 
 test:
 	@go test -v -race -coverprofile=coverage.out ./...
@@ -28,10 +28,10 @@ lint:
 	@golangci-lint run
 
 migrate-up:
-	@echo "Migrations should be run by infrastructure team"
+	@go run ./cmd/migrate up
 
 migrate-down:
-	@echo "Migrations should be run by infrastructure team"
+	@go run ./cmd/migrate down-to 0
 
 clean:
 	@rm -rf bin/

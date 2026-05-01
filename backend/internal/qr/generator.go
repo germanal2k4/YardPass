@@ -16,10 +16,13 @@ func NewGenerator() *Generator {
 
 func (g *Generator) GenerateQR(ctx context.Context, passID uuid.UUID) ([]byte, error) {
 	qrData := fmt.Sprintf("yardpass://pass/%s", passID.String())
-	
-	png, err := qrcode.Encode(qrData, qrcode.Medium, 256)
+	return g.GenerateRawQR(ctx, qrData)
+}
+
+func (g *Generator) GenerateRawQR(ctx context.Context, payload string) ([]byte, error) {
+	png, err := qrcode.Encode(payload, qrcode.Medium, 256)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate QR code: %w", err)
+		return nil, fmt.Errorf("generate QR code: %w", err)
 	}
 
 	return png, nil
@@ -40,4 +43,3 @@ func (g *Generator) ParseQR(ctx context.Context, qrData string) (uuid.UUID, erro
 
 	return passID, nil
 }
-

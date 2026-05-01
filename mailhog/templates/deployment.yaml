@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mailhog.fullname" . }}
+  labels:
+    {{ include "mailhog.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{ include "mailhog.labels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{ include "mailhog.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mailhog
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: smtp
+              containerPort: {{ .Values.service.smtpPort }}
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}

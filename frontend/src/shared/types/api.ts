@@ -5,6 +5,7 @@ export interface User {
   username: string;
   email?: string;
   role: 'guard' | 'admin';
+  apartment_number?: number;
   status: string;
   created_at: string;
   updated_at: string;
@@ -14,6 +15,7 @@ export interface Building {
   id: number;
   name: string;
   address: string;
+  apartment_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +62,19 @@ export interface Rule {
   updated_at: string;
 }
 
+export interface Resident {
+  id: number;
+  apartment_id: number;
+  apartment_number?: string;
+  telegram_id: number;
+  chat_id: number;
+  name?: string;
+  phone?: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
 // API Request/Response DTOs
 
 export interface LoginRequest {
@@ -68,19 +83,38 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
   expires_in: number;
   token_type: 'Bearer';
-}
-
-export interface RefreshRequest {
-  refresh_token: string;
 }
 
 export interface MeResponse {
   user_id: number;
   role: 'guard' | 'admin';
+  building_id?: number; // ID здания, к которому привязан пользователь
+}
+
+export interface PurchaseSubscriptionRequest {
+  email: string;
+  building_name: string;
+  apartment_count: number;
+  card_number: string;
+  card_holder: string;
+  expiry: string;
+  cvv: string;
+}
+
+export interface PurchaseSubscriptionResponse {
+  building_id: number;
+  building_name: string;
+  apartment_count: number;
+  subscription_fee: number;
+  period: string;
+  email: string;
+  accounts: Array<{
+    username: string;
+    password: string;
+  }>;
+  message: string;
 }
 
 export interface RegisterUserRequest {
@@ -104,7 +138,8 @@ export interface CreatePassRequest {
 }
 
 export interface ValidatePassRequest {
-  qr_uuid: string; // UUID from QR code
+  qr_uuid?: string; // UUID from QR code (optional if car_plate is provided)
+  car_plate?: string; // Car plate number (optional if qr_uuid is provided)
 }
 
 export interface ValidatePassResponse {
@@ -112,7 +147,17 @@ export interface ValidatePassResponse {
   car_plate?: string;
   apartment?: string;
   valid_to?: string; // ISO datetime
-  reason?: 'PASS_NOT_FOUND' | 'PASS_EXPIRED' | 'PASS_REVOKED' | 'PASS_NOT_YET_VALID' | 'QUIET_HOURS';
+  reason?:
+    | 'PASS_NOT_FOUND'
+    | 'PASS_EXPIRED'
+    | 'PASS_REVOKED'
+    | 'PASS_NOT_YET_VALID'
+    | 'QUIET_HOURS'
+    | 'INVALID_CAR_PLATE'
+    | 'INVALID_PERSONAL_PASS'
+    | 'RESIDENT_NOT_FOUND'
+    | 'APARTMENT_NOT_FOUND'
+    | 'BUILDING_MISMATCH';
 }
 
 export interface GetActivePassesResponse {
@@ -124,6 +169,32 @@ export interface UpdateRuleRequest {
   quiet_hours_end?: string; // HH:mm
   daily_pass_limit_per_apartment?: number;
   max_pass_duration_hours?: number;
+}
+
+export interface UpdateApartmentCountRequest {
+  apartment_count: number;
+}
+
+export interface CreateResidentRequest {
+  apartment_id?: number;
+  apartment_number?: string;
+  building_id?: number;
+  telegram_id: number;
+  chat_id?: number;
+  name?: string;
+  phone?: string;
+}
+
+export interface GetResidentsRequest {
+  apartment_id?: number;
+  building_id?: number;
+  status?: 'active' | 'inactive';
+  limit?: number;
+  offset?: number;
+}
+
+export interface GetResidentsResponse {
+  residents: Resident[];
 }
 
 export interface RevokePassResponse {
@@ -150,5 +221,63 @@ export interface ScanEventFilters {
   to?: string; // ISO datetime
   limit?: number;
   offset?: number;
+}
+
+// Scan event with full details (for reports and logs)
+// Backend returns PascalCase field names
+export interface ScanEventWithDetails {
+  ID: number;
+  PassID: string; // UUID
+  GuardUserID: number;
+  GuardUsername: string;
+  ScannedAt: string; // ISO datetime
+  Result: 'valid' | 'invalid';
+  Reason?: string;
+  CarPlate?: string;
+  GuestName?: string;
+  ApartmentNumber?: string;
+  BuildingID?: number;
+  BuildingName?: string;
+  Meta?: any;
+}
+
+export interface GetScanEventsRequest {
+  limit?: number;
+  offset?: number;
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
+  result?: 'valid' | 'invalid';
+}
+
+export interface GetScanEventsResponse {
+  events: ScanEventWithDetails[];
+  limit: number;
+  offset: number;
+}
+
+// Statistics for reports
+
+export interface Statistics {
+  total_scans: number;
+  valid_scans: number;
+  invalid_scans: number;
+  unique_passes: number;
+  top_reasons?: Array<{
+    reason: string;
+    count: number;
+  }>;
+}
+
+export interface GetStatisticsRequest {
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
+}
+
+// Export reports
+
+export interface ExportReportRequest {
+  format: 'xlsx';
+  from?: string; // RFC3339 datetime
+  to?: string; // RFC3339 datetime
 }
 

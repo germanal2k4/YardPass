@@ -1,30 +1,49 @@
 package api
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"yardpass/internal/api/handlers"
 	"yardpass/internal/api/middleware"
-	"yardpass/internal/auth"
 	"yardpass/internal/config"
+	"yardpass/internal/domain"
+	"yardpass/internal/observability/metrics"
+	"yardpass/internal/observability/tracer"
 	"yardpass/internal/redis"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
-func SetupRouter(
+type Router struct {
+	cfg    *config.Config
+	srv    *http.Server
+	logger *zap.Logger
+	router *gin.Engine
+}
+
+func NewRouter(
+	lf fx.Lifecycle,
 	cfg *config.Config,
 	authHandler *handlers.AuthHandler,
 	passHandler *handlers.PassHandler,
 	ruleHandler *handlers.RuleHandler,
 	userHandler *handlers.UserHandler,
+	buildingHandler *handlers.BuildingHandler,
 	residentHandler *handlers.ResidentHandler,
 	scanEventHandler *handlers.ScanEventHandler,
 	reportHandler *handlers.ReportHandler,
 	parkingHandler *handlers.ParkingHandler,
-	jwtService *auth.JWTService,
+	jwtService domain.AuthService,
 	redisClient *redis.Client,
-) *gin.Engine {
+	logger *zap.Logger,
+	tracer *tracer.Tracer,
+	metrics *metrics.Metrics,
+) *Router {
 	if cfg.Log.Level == "debug" {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -32,8 +51,14 @@ func SetupRouter(
 	}
 
 	r := gin.New()
-	r.Use(gin.Recovery())
+	r.Use(middleware.CORSMiddleware(cfg.CORS.AllowedOrigins))
 	r.Use(middleware.InMemoryRateLimit(100, 200))
+	r.Use(middleware.TracingMiddleware(tracer))
+	r.Use(middleware.LoggingMiddleware(logger, cfg.Log))
+	r.Use(middleware.MetricsMiddleware(metrics))
+	r.Use(middleware.RecoveryMiddleware(logger))
+
+	registerSwaggerRoutes(r)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -43,6 +68,8 @@ func SetupRouter(
 	{
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+		auth.POST("/logout", authHandler.Logout)
+		auth.POST("/purchase-subscription", authHandler.PurchaseSubscription)
 	}
 
 	api := r.Group("/api/v1")
@@ -74,6 +101,12 @@ func SetupRouter(
 			users.GET("", userHandler.ListUsers)
 		}
 
+		buildings := api.Group("/buildings")
+		buildings.Use(middleware.RequireRole("admin", "superuser"))
+		{
+			buildings.PUT("/:id/apartment-count", buildingHandler.UpdateApartmentCount)
+		}
+
 		residents := api.Group("/residents")
 		residents.Use(middleware.RequireRole("admin", "superuser"))
 		{
@@ -81,6 +114,7 @@ func SetupRouter(
 			residents.POST("/bulk", residentHandler.BulkCreateResidents)
 			residents.POST("/import", residentHandler.ImportFromCSV)
 			residents.GET("", residentHandler.ListResidents)
+			residents.DELETE("/:id", residentHandler.DeleteResident)
 		}
 
 		scanEvents := api.Group("/scan-events")
@@ -112,5 +146,51 @@ func SetupRouter(
 		service.GET("/passes/active", passHandler.GetActive)
 	}
 
-	return r
+	router := &Router{
+		cfg:    cfg,
+		logger: logger,
+		router: r,
+	}
+
+	lf.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			return router.Start(ctx)
+		},
+		OnStop: func(ctx context.Context) error {
+			return router.Stop(ctx)
+		},
+	})
+
+	return router
+}
+
+func (r *Router) Start(ctx context.Context) error {
+	addr := fmt.Sprintf("%s:%s", r.cfg.Server.Host, r.cfg.Server.Port)
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r.router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		r.logger.Info("API server listening", zap.String("address", addr))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			r.logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	r.srv = srv
+
+	return nil
+}
+
+func (r *Router) Stop(ctx context.Context) error {
+	if err := r.srv.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown server: %w", err)
+	}
+
+	r.logger.Info("Server exited")
+	return nil
 }

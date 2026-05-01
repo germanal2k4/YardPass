@@ -8,10 +8,10 @@ import type {
 } from '@/shared/types/api';
 
 export const passesApi = {
-  validate: async (qr_uuid: string): Promise<ValidatePassResponse> => {
+  validate: async (params: { qr_uuid?: string; car_plate?: string }): Promise<ValidatePassResponse> => {
     const response = await apiClient.post<ValidatePassResponse>(
       API_ENDPOINTS.VALIDATE_PASS,
-      { qr_uuid } as ValidatePassRequest
+      params as ValidatePassRequest
     );
     return response.data;
   },

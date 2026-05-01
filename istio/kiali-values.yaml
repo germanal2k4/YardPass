@@ -1,0 +1,23 @@
+auth:
+  strategy: anonymous
+
+deployment:
+  ingress:
+    enabled: false
+
+server:
+  web_root: /
+  port: 20001
+
+external_services:
+  prometheus:
+    url: http://prometheus-kube-prometheus-prometheus.istio-system:9090
+  grafana:
+    enabled: true
+    in_cluster_url: http://prometheus-grafana.istio-system
+    url: http://localhost:3001
+  tracing:
+    enabled: true
+    in_cluster_url: http://jaeger-query.istio-system:16686
+    use_grpc: false
+    url: ""

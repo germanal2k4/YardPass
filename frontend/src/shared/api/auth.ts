@@ -1,6 +1,12 @@
 import { apiClient } from './client';
 import { API_ENDPOINTS } from '@/shared/config/constants';
-import type { LoginRequest, LoginResponse, MeResponse } from '@/shared/types/api';
+import type {
+  LoginRequest,
+  LoginResponse,
+  MeResponse,
+  PurchaseSubscriptionRequest,
+  PurchaseSubscriptionResponse,
+} from '@/shared/types/api';
 
 export const authApi = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
@@ -13,10 +19,20 @@ export const authApi = {
     return response.data;
   },
 
-  logout: () => {
-    // Clear tokens from storage
+  purchaseSubscription: async (
+    payload: PurchaseSubscriptionRequest
+  ): Promise<PurchaseSubscriptionResponse> => {
+    const response = await apiClient.post<PurchaseSubscriptionResponse>(
+      API_ENDPOINTS.PURCHASE_SUBSCRIPTION,
+      payload
+    );
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await apiClient.post(API_ENDPOINTS.LOGOUT, {});
+    // Keep local cleanup for backward compatibility with old flows.
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
   },
 };
-

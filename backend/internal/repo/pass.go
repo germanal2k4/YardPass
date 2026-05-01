@@ -2,11 +2,13 @@ package repo
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+	"yardpass/internal/repo/db"
+
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -19,319 +21,195 @@ func NewPassRepo(repo *PostgresRepo) *PassRepo {
 }
 
 func (r *PassRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Pass, error) {
-	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
-		FROM passes
-		WHERE id = $1
-	`
-
-	var pass domain.Pass
-	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&pass.ID,
-		&pass.ApartmentID,
-		&pass.CarPlate,
-		&pass.GuestName,
-		&pass.ValidFrom,
-		&pass.ValidTo,
-		&pass.Status,
-		&pass.CreatedAt,
-		&pass.UpdatedAt,
-	)
-
+	ctx = queryNameToContext(ctx, "PassRepo.GetByID")
+	row, err := r.queries.GetPassByID(ctx, id)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	return &pass, nil
+	return passFromRow(row), nil
 }
 
-func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]*domain.Pass, error) {
-	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
-		FROM passes
-		WHERE apartment_id = $1 AND status = $2
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, apartmentID, status)
+func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, status string) ([]domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetByApartmentID")
+	rows, err := r.queries.GetPassesByApartmentIDAndStatus(ctx, db.GetPassesByApartmentIDAndStatusParams{
+		ApartmentID: apartmentID,
+		Status:      status,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var passes []*domain.Pass
-	for rows.Next() {
-		var pass domain.Pass
-		if err := rows.Scan(
-			&pass.ID,
-			&pass.ApartmentID,
-			&pass.CarPlate,
-			&pass.GuestName,
-			&pass.ValidFrom,
-			&pass.ValidTo,
-			&pass.Status,
-			&pass.CreatedAt,
-			&pass.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		passes = append(passes, &pass)
-	}
-
-	return passes, rows.Err()
+	return passesFromRows(rows), nil
 }
 
-func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
-	now := time.Now().UTC()
-	query := `
-		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
-		FROM passes
-		WHERE apartment_id = $1 
-			AND status = 'active'
-			AND valid_from <= $2
-			AND valid_to >= $2
-		ORDER BY created_at DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, apartmentID, now)
+func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByApartmentID")
+	now := time.Now()
+	rows, err := r.queries.GetActivePassesByApartmentID(ctx, db.GetActivePassesByApartmentIDParams{
+		ApartmentID: apartmentID,
+		ValidFrom:   now,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return passesFromRows(rows), nil
+}
 
-	var passes []*domain.Pass
-	for rows.Next() {
-		var pass domain.Pass
-		if err := rows.Scan(
-			&pass.ID,
-			&pass.ApartmentID,
-			&pass.CarPlate,
-			&pass.GuestName,
-			&pass.ValidFrom,
-			&pass.ValidTo,
-			&pass.Status,
-			&pass.CreatedAt,
-			&pass.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		passes = append(passes, &pass)
+func (r *PassRepo) GetActiveByResidentID(ctx context.Context, residentID int64) ([]domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByResidentID")
+	now := time.Now()
+	rows, err := r.queries.GetActivePassesByResidentID(ctx, db.GetActivePassesByResidentIDParams{
+		ResidentID: &residentID,
+		ValidFrom:  now,
+	})
+	if err != nil {
+		return nil, err
 	}
+	return passesFromRows(rows), nil
+}
 
-	return passes, rows.Err()
+func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByBuildingID")
+	now := time.Now()
+	rows, err := r.queries.GetActivePassesByBuildingID(ctx, db.GetActivePassesByBuildingIDParams{
+		BuildingID: buildingID,
+		ValidFrom:  now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return passesFromRows(rows), nil
+}
+
+func (r *PassRepo) GetActiveByCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.GetActiveByCarPlate")
+	now := time.Now()
+	row, err := r.queries.GetActivePassByCarPlate(ctx, db.GetActivePassByCarPlateParams{
+		CarPlate:         &normalizedCarPlate,
+		ValidFrom:        now,
+		FilterBuildingID: buildingID,
+	})
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return passFromRow(row), nil
+}
+
+func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]domain.Pass, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.SearchByCarPlate")
+	pattern := "%" + strings.ToUpper(strings.ReplaceAll(carPlate, " ", "")) + "%"
+	rows, err := r.queries.SearchPassesByCarPlate(ctx, db.SearchPassesByCarPlateParams{
+		CarPlatePattern:  pattern,
+		MaxResults:       int32(limit),
+		FilterBuildingID: buildingID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return passesFromRows(rows), nil
 }
 
 func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
-	nowUTC := time.Now().UTC()
-	today := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
-	query := `
-		SELECT COUNT(*)
-		FROM passes
-		WHERE apartment_id = $1
-			AND status = 'active'
-			AND created_at >= $2
-	`
+	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByApartmentID")
+	// Use local day boundary in Europe/Moscow to count daily limits
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := time.Now().In(location)
+	todayLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, location)
+	today := todayLocal.UTC()
+	count, err := r.queries.CountActiveTodayByApartmentID(ctx, db.CountActiveTodayByApartmentIDParams{
+		ApartmentID: apartmentID,
+		CreatedAt:   today,
+	})
+	return int(count), err
+}
 
-	var count int
-	err := r.pool.QueryRow(ctx, query, apartmentID, today).Scan(&count)
-	return count, err
+func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.CountActiveTodayByResidentID")
+	// Use local day boundary in Europe/Moscow to count daily limits
+	location, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		location = time.UTC
+	}
+	nowLocal := time.Now().In(location)
+	todayLocal := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, location)
+	today := todayLocal.UTC()
+	count, err := r.queries.CountActiveTodayByResidentID(ctx, db.CountActiveTodayByResidentIDParams{
+		ResidentID: &residentID,
+		CreatedAt:  today,
+	})
+	return int(count), err
 }
 
 func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
-	query := `
-		INSERT INTO passes (id, apartment_id, car_plate, guest_name, valid_from, valid_to, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING created_at, updated_at
-	`
-
-	err := r.pool.QueryRow(ctx, query,
-		pass.ID,
-		pass.ApartmentID,
-		pass.CarPlate,
-		pass.GuestName,
-		pass.ValidFrom,
-		pass.ValidTo,
-		pass.Status,
-	).Scan(&pass.CreatedAt, &pass.UpdatedAt)
-
-	return err
-}
-
-func (r *PassRepo) CreateWithDailyLimit(
-	ctx context.Context,
-	pass *domain.Pass,
-	dayStartUTC, dayEndUTC time.Time,
-	dailyLimit int,
-) (bool, error) {
-	tx, err := r.pool.Begin(ctx)
+	ctx = queryNameToContext(ctx, "PassRepo.Create")
+	row, err := r.queries.CreatePass(ctx, db.CreatePassParams{
+		ID:          pass.ID,
+		ApartmentID: pass.ApartmentID,
+		ResidentID:  pass.ResidentID,
+		CarPlate:    pass.CarPlate,
+		GuestName:   pass.GuestName,
+		ValidFrom:   pass.ValidFrom,
+		ValidTo:     pass.ValidTo,
+		Status:      pass.Status,
+	})
 	if err != nil {
-		return false, err
+		return err
 	}
-	defer tx.Rollback(ctx)
-
-	// Serialize pass creation per apartment to avoid limit races.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, pass.ApartmentID); err != nil {
-		return false, err
-	}
-
-	var count int
-	countQuery := `
-		SELECT COUNT(*)
-		FROM passes
-		WHERE apartment_id = $1
-			AND status = 'active'
-			AND created_at >= $2
-			AND created_at < $3
-	`
-	if err := tx.QueryRow(ctx, countQuery, pass.ApartmentID, dayStartUTC, dayEndUTC).Scan(&count); err != nil {
-		return false, err
-	}
-	if count >= dailyLimit {
-		return false, nil
-	}
-
-	insertQuery := `
-		INSERT INTO passes (id, apartment_id, car_plate, guest_name, valid_from, valid_to, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING created_at, updated_at
-	`
-	if err := tx.QueryRow(ctx, insertQuery,
-		pass.ID,
-		pass.ApartmentID,
-		pass.CarPlate,
-		pass.GuestName,
-		pass.ValidFrom,
-		pass.ValidTo,
-		pass.Status,
-	).Scan(&pass.CreatedAt, &pass.UpdatedAt); err != nil {
-		return false, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	pass.CreatedAt = row.CreatedAt
+	pass.UpdatedAt = row.UpdatedAt
+	return nil
 }
 
 func (r *PassRepo) Update(ctx context.Context, pass *domain.Pass) error {
-	query := `
-		UPDATE passes
-		SET apartment_id = $2, car_plate = $3, guest_name = $4, valid_from = $5, valid_to = $6, status = $7
-		WHERE id = $1
-		RETURNING updated_at
-	`
-
-	return r.pool.QueryRow(ctx, query,
-		pass.ID,
-		pass.ApartmentID,
-		pass.CarPlate,
-		pass.GuestName,
-		pass.ValidFrom,
-		pass.ValidTo,
-		pass.Status,
-	).Scan(&pass.UpdatedAt)
+	ctx = queryNameToContext(ctx, "PassRepo.Update")
+	updatedAt, err := r.queries.UpdatePass(ctx, db.UpdatePassParams{
+		ID:          pass.ID,
+		ApartmentID: pass.ApartmentID,
+		CarPlate:    pass.CarPlate,
+		GuestName:   pass.GuestName,
+		ValidFrom:   pass.ValidFrom,
+		ValidTo:     pass.ValidTo,
+		Status:      pass.Status,
+	})
+	if err != nil {
+		return err
+	}
+	pass.UpdatedAt = updatedAt
+	return nil
 }
 
 func (r *PassRepo) Revoke(ctx context.Context, id uuid.UUID) error {
-	query := `
-		UPDATE passes
-		SET status = 'revoked'
-		WHERE id = $1
-	`
-
-	_, err := r.pool.Exec(ctx, query, id)
-	return err
+	ctx = queryNameToContext(ctx, "PassRepo.Revoke")
+	return r.queries.RevokePass(ctx, id)
 }
 
-func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*domain.Pass, error) {
-	query := `
-		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
-		FROM passes p
-		INNER JOIN apartments a ON p.apartment_id = a.id
-		WHERE UPPER(REPLACE(p.car_plate, ' ', '')) LIKE UPPER(REPLACE($1, ' ', ''))
-	`
-	args := []interface{}{"%" + carPlate + "%"}
-	argPos := 2
-
-	if buildingID != nil {
-		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
-		args = append(args, *buildingID)
-		argPos++
-	}
-
-	query += ` ORDER BY p.created_at DESC LIMIT $` + fmt.Sprintf("%d", argPos)
-	args = append(args, limit)
-
-	rows, err := r.pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var passes []*domain.Pass
-	for rows.Next() {
-		var pass domain.Pass
-		if err := rows.Scan(
-			&pass.ID,
-			&pass.ApartmentID,
-			&pass.CarPlate,
-			&pass.GuestName,
-			&pass.ValidFrom,
-			&pass.ValidTo,
-			&pass.Status,
-			&pass.CreatedAt,
-			&pass.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		passes = append(passes, &pass)
-	}
-
-	return passes, rows.Err()
+type passRow interface {
+	db.GetPassByIDRow |
+		db.GetActivePassByCarPlateRow |
+		db.GetActivePassesByApartmentIDRow |
+		db.GetActivePassesByResidentIDRow |
+		db.GetActivePassesByBuildingIDRow |
+		db.SearchPassesByCarPlateRow |
+		db.GetPassesByApartmentIDAndStatusRow
 }
 
-func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
-	now := time.Now().UTC()
-	query := `
-		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
-		FROM passes p
-		INNER JOIN apartments a ON p.apartment_id = a.id
-		WHERE a.building_id = $1
-			AND p.status = 'active'
-			AND p.valid_from <= $2
-			AND p.valid_to >= $2
-		ORDER BY p.created_at DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, buildingID, now)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var passes []*domain.Pass
-	for rows.Next() {
-		var pass domain.Pass
-		if err := rows.Scan(
-			&pass.ID,
-			&pass.ApartmentID,
-			&pass.CarPlate,
-			&pass.GuestName,
-			&pass.ValidFrom,
-			&pass.ValidTo,
-			&pass.Status,
-			&pass.CreatedAt,
-			&pass.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		passes = append(passes, &pass)
-	}
-
-	return passes, rows.Err()
+func passFromRow[T passRow](r T) *domain.Pass {
+	res := domain.Pass(r)
+	return &res
 }
 
+func passesFromRows[T passRow](rows []T) []domain.Pass {
+	result := make([]domain.Pass, len(rows))
+	for i, r := range rows {
+		result[i] = domain.Pass(r)
+	}
+	return result
+}

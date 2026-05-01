@@ -1,10 +1,6 @@
--- YardPass Database Schema
--- This schema should be reviewed and potentially adjusted by the infrastructure team
-
--- Extensions
+-- +goose Up
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Buildings table
 CREATE TABLE buildings (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -15,7 +11,23 @@ CREATE TABLE buildings (
 
 CREATE INDEX idx_buildings_name ON buildings(name);
 
--- Apartments table
+CREATE TABLE users (
+    id BIGSERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    email VARCHAR(255),
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'guard',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT check_role CHECK (role IN ('guard', 'admin')),
+    CONSTRAINT check_status CHECK (status IN ('active', 'inactive'))
+);
+
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_status ON users(status);
+
 CREATE TABLE apartments (
     id BIGSERIAL PRIMARY KEY,
     building_id BIGINT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
@@ -29,7 +41,6 @@ CREATE TABLE apartments (
 CREATE INDEX idx_apartments_building_id ON apartments(building_id);
 CREATE INDEX idx_apartments_number ON apartments(number);
 
--- Residents table
 CREATE TABLE residents (
     id BIGSERIAL PRIMARY KEY,
     apartment_id BIGINT NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
@@ -47,7 +58,6 @@ CREATE INDEX idx_residents_apartment_id ON residents(apartment_id);
 CREATE INDEX idx_residents_telegram_id ON residents(telegram_id);
 CREATE INDEX idx_residents_status ON residents(status);
 
--- Passes table
 CREATE TABLE passes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     apartment_id BIGINT NOT NULL REFERENCES apartments(id) ON DELETE CASCADE,
@@ -67,7 +77,20 @@ CREATE INDEX idx_passes_valid_to ON passes(valid_to);
 CREATE INDEX idx_passes_car_plate ON passes(car_plate);
 CREATE INDEX idx_passes_created_at ON passes(created_at);
 
--- Scan events table
+CREATE TABLE rules (
+    id BIGSERIAL PRIMARY KEY,
+    building_id BIGINT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
+    quiet_hours_start VARCHAR(5),
+    quiet_hours_end VARCHAR(5),
+    daily_pass_limit_per_apartment INTEGER NOT NULL DEFAULT 5,
+    max_pass_duration_hours INTEGER NOT NULL DEFAULT 24,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(building_id)
+);
+
+CREATE INDEX idx_rules_building_id ON rules(building_id);
+
 CREATE TABLE scan_events (
     id BIGSERIAL PRIMARY KEY,
     pass_id UUID NOT NULL REFERENCES passes(id) ON DELETE CASCADE,
@@ -84,40 +107,7 @@ CREATE INDEX idx_scan_events_guard_user_id ON scan_events(guard_user_id);
 CREATE INDEX idx_scan_events_scanned_at ON scan_events(scanned_at);
 CREATE INDEX idx_scan_events_result ON scan_events(result);
 
--- Rules table
-CREATE TABLE rules (
-    id BIGSERIAL PRIMARY KEY,
-    building_id BIGINT NOT NULL REFERENCES buildings(id) ON DELETE CASCADE,
-    quiet_hours_start VARCHAR(5), -- HH:MM format
-    quiet_hours_end VARCHAR(5),   -- HH:MM format
-    daily_pass_limit_per_apartment INTEGER NOT NULL DEFAULT 5,
-    max_pass_duration_hours INTEGER NOT NULL DEFAULT 24,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(building_id)
-);
-
-CREATE INDEX idx_rules_building_id ON rules(building_id);
-
--- Users table (for web: guards/admins)
-CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,
-    username VARCHAR(100) NOT NULL UNIQUE,
-    email VARCHAR(255),
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) NOT NULL DEFAULT 'guard',
-    status VARCHAR(20) NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    CONSTRAINT check_role CHECK (role IN ('guard', 'admin')),
-    CONSTRAINT check_status CHECK (status IN ('active', 'inactive'))
-);
-
-CREATE INDEX idx_users_username ON users(username);
-CREATE INDEX idx_users_role ON users(role);
-CREATE INDEX idx_users_status ON users(status);
-
--- Function to update updated_at timestamp
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -125,8 +115,8 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+-- +goose StatementEnd
 
--- Triggers for updated_at
 CREATE TRIGGER update_buildings_updated_at BEFORE UPDATE ON buildings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -145,3 +135,22 @@ CREATE TRIGGER update_rules_updated_at BEFORE UPDATE ON rules
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- +goose Down
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+DROP TRIGGER IF EXISTS update_rules_updated_at ON rules;
+DROP TRIGGER IF EXISTS update_passes_updated_at ON passes;
+DROP TRIGGER IF EXISTS update_residents_updated_at ON residents;
+DROP TRIGGER IF EXISTS update_apartments_updated_at ON apartments;
+DROP TRIGGER IF EXISTS update_buildings_updated_at ON buildings;
+
+DROP FUNCTION IF EXISTS update_updated_at_column();
+
+DROP TABLE IF EXISTS scan_events CASCADE;
+DROP TABLE IF EXISTS rules CASCADE;
+DROP TABLE IF EXISTS passes CASCADE;
+DROP TABLE IF EXISTS residents CASCADE;
+DROP TABLE IF EXISTS apartments CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS buildings CASCADE;
+
+DROP EXTENSION IF EXISTS "uuid-ossp";

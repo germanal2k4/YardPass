@@ -3,11 +3,13 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 	"yardpass/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type ResidentHandler struct {
@@ -21,10 +23,30 @@ func NewResidentHandler(residentService *service.ResidentService) *ResidentHandl
 }
 
 func (h *ResidentHandler) CreateResident(c *gin.Context) {
-	var req service.CreateResidentRequest
+	var req domain.CreateResidentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
+	}
+
+	role, _ := c.Get("role")
+	if role == "admin" {
+		buildingIDValue, hasBuildingID := c.Get("building_id")
+		if !hasBuildingID {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for admin")
+			return
+		}
+		buildingID, ok := buildingIDValue.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
+		req.BuildingID = &buildingID
+		req.ApartmentID = nil
+		if req.ApartmentNumber == nil || strings.TrimSpace(*req.ApartmentNumber) == "" {
+			errors.BadRequest(c, "MISSING_APARTMENT_NUMBER", "apartment_number is required for admin")
+			return
+		}
 	}
 
 	resident, err := h.residentService.CreateResident(c.Request.Context(), req)
@@ -37,7 +59,7 @@ func (h *ResidentHandler) CreateResident(c *gin.Context) {
 }
 
 func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
-	var requests []service.CreateResidentRequest
+	var requests []domain.CreateResidentRequest
 	if err := c.ShouldBindJSON(&requests); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
@@ -47,7 +69,10 @@ func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
 
 	response := gin.H{
 		"created": len(residents),
-		"residents": residents,
+	}
+
+	if len(residents) > 0 {
+		response["residents"] = residents
 	}
 
 	if len(createErrors) > 0 {
@@ -55,6 +80,24 @@ func (h *ResidentHandler) BulkCreateResidents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *ResidentHandler) DeleteResident(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		errors.BadRequest(c, "INVALID_ID", "Invalid resident ID format")
+		return
+	}
+
+	if err := h.residentService.DeleteResident(c.Request.Context(), id); err != nil {
+		errors.BadRequest(c, "DELETE_FAILED", err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Resident deleted successfully",
+	})
 }
 
 func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {
@@ -81,7 +124,11 @@ func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {
 		errors.BadRequest(c, "FILE_OPEN_ERROR", err.Error())
 		return
 	}
-	defer src.Close()
+	defer func() {
+		if errClose := src.Close(); errClose != nil {
+			errors.InternalServerError(c, "FILE_OPEN_ERROR", errClose.Error())
+		}
+	}()
 
 	created, importErrors := h.residentService.ImportFromCSV(c.Request.Context(), src, buildingID)
 
@@ -98,6 +145,8 @@ func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {
 
 func (h *ResidentHandler) ListResidents(c *gin.Context) {
 	var filters domain.ResidentFilters
+	role, _ := c.Get("role")
+	buildingIDCtx, hasBuildingID := c.Get("building_id")
 
 	if apartmentIDStr := c.Query("apartment_id"); apartmentIDStr != "" {
 		if id, err := strconv.ParseInt(apartmentIDStr, 10, 64); err == nil {
@@ -105,7 +154,13 @@ func (h *ResidentHandler) ListResidents(c *gin.Context) {
 		}
 	}
 
-	if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+	if role == "admin" {
+		if hasBuildingID {
+			if id, ok := buildingIDCtx.(int64); ok {
+				filters.BuildingID = &id
+			}
+		}
+	} else if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 		if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
 			filters.BuildingID = &id
 		}
@@ -132,4 +187,3 @@ func (h *ResidentHandler) ListResidents(c *gin.Context) {
 		"residents": residents,
 	})
 }
-

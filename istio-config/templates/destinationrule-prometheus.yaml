@@ -1,0 +1,15 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: yardpass-backend-prometheus
+  namespace: yardpass
+spec:
+  host: yardpass-backend
+  trafficPolicy:
+    portLevelSettings:
+      - port:
+          number: 5050
+        tls:
+          mode: DISABLE
+{{- end }}

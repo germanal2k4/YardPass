@@ -1,0 +1,23 @@
+meshConfig:
+  accessLogFile: /dev/stdout
+  accessLogEncoding: JSON
+  enableTracing: true
+  defaultConfig:
+    tracing:
+      zipkin:
+        address: jaeger-collector.istio-system:9411
+      sampling: 100.0
+    proxyStatsMatcher:
+      inclusionRegexps:
+        - ".*circuit_breakers.*"
+        - ".*upstream_rq_retry.*"
+        - ".*upstream_rq_timeout.*"
+      inclusionPrefixes:
+        - "cluster_manager"
+        - "listener_manager"
+        - "server"
+        - "cluster.xds-grpc"
+
+pilot:
+  env:
+    PILOT_ENABLE_WORKLOAD_ENTRY_CROSS_CLUSTER: "false"

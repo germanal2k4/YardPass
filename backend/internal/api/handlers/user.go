@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
 	"yardpass/internal/service"
+
+	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
@@ -21,17 +22,13 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 }
 
 func (h *UserHandler) RegisterUser(c *gin.Context) {
-	var req service.RegisterUserRequest
+	var req domain.RegisterUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		errors.Unauthorized(c, "MISSING_USER_ID", "User ID not found in token")
-		return
-	}
+	userID, _ := c.Get("user_id")
 	createdBy := userID.(int64)
 
 	user, err := h.userService.RegisterUser(c.Request.Context(), req, createdBy)
@@ -46,22 +43,18 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	var filters domain.UserFilters
-	roleValue, _ := c.Get("role")
-	role, _ := roleValue.(string)
+	role, _ := c.Get("role")
+	buildingIDCtx, hasBuildingID := c.Get("building_id")
 
 	if role := c.Query("role"); role != "" {
 		filters.Role = &role
 	}
 
 	if role == "admin" {
-		if buildingIDValue, exists := c.Get("building_id"); exists {
-			if buildingID, ok := buildingIDValue.(int64); ok {
-				filters.BuildingID = &buildingID
+		if hasBuildingID {
+			if id, ok := buildingIDCtx.(int64); ok {
+				filters.BuildingID = &id
 			}
-		}
-		if filters.BuildingID == nil {
-			errors.Forbidden(c, "MISSING_BUILDING_SCOPE", "Admin is not scoped to a building")
-			return
 		}
 	} else if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 		var buildingID int64
@@ -95,4 +88,3 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		"users": users,
 	})
 }
-

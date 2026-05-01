@@ -8,7 +8,7 @@ import { SecurityPage } from '@/pages/SecurityPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminRulesPage } from '@/pages/AdminRulesPage';
 import { AdminReportsPage } from '@/pages/AdminReportsPage';
-import { AdminGuardsPage } from '@/pages/AdminGuardsPage';
+import { AdminResidentsPage } from '@/pages/AdminResidentsPage';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
 
 interface ProtectedRouteProps {
@@ -94,12 +94,12 @@ export function AppRouter() {
           </ProtectedRoute>
         }
       />
-
+      
       <Route
-        path={APP_ROUTES.ADMIN_GUARDS}
+        path={APP_ROUTES.ADMIN_RESIDENTS}
         element={
           <ProtectedRoute requiredRole="admin">
-            <AdminGuardsPage />
+            <AdminResidentsPage />
           </ProtectedRoute>
         }
       />

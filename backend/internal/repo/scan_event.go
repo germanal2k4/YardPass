@@ -2,11 +2,10 @@ package repo
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"yardpass/internal/domain"
+	"yardpass/internal/repo/db"
 )
 
 type ScanEventRepo struct {
@@ -18,278 +17,108 @@ func NewScanEventRepo(repo *PostgresRepo) *ScanEventRepo {
 }
 
 func (r *ScanEventRepo) Create(ctx context.Context, event *domain.ScanEvent) error {
-	query := `
-		INSERT INTO scan_events (pass_id, guard_user_id, scanned_at, result, reason, meta)
-		VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-		RETURNING id
-	`
+	ctx = queryNameToContext(ctx, "ScanEventRepo.Create")
 
-	err := r.pool.QueryRow(ctx, query,
-		event.PassID,
-		event.GuardUserID,
-		event.ScannedAt,
-		event.Result,
-		event.Reason,
-		event.Meta,
-	).Scan(&event.ID)
-
-	return err
+	id, err := r.queries.CreateScanEvent(ctx, db.CreateScanEventParams{
+		PassID:      event.PassID,
+		GuardUserID: event.GuardUserID,
+		ScannedAt:   event.ScannedAt,
+		Result:      event.Result,
+		Reason:      event.Reason,
+		Meta:        event.Meta,
+	})
+	if err != nil {
+		return err
+	}
+	event.ID = id
+	return nil
 }
 
-func (r *ScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]*domain.ScanEvent, error) {
-	query := `
-		SELECT id, pass_id, guard_user_id, scanned_at, result, reason, meta
-		FROM scan_events
-		WHERE 1=1
-	`
-	args := []interface{}{}
-	argPos := 1
-
-	if filters.PassID != nil {
-		query += fmt.Sprintf(` AND pass_id = $%d`, argPos)
-		args = append(args, *filters.PassID)
-		argPos++
-	}
-
-	if filters.GuardUserID != nil {
-		query += fmt.Sprintf(` AND guard_user_id = $%d`, argPos)
-		args = append(args, *filters.GuardUserID)
-		argPos++
-	}
-
-	if filters.Result != nil {
-		query += fmt.Sprintf(` AND result = $%d`, argPos)
-		args = append(args, *filters.Result)
-		argPos++
-	}
-
-	if filters.From != nil {
-		query += fmt.Sprintf(` AND scanned_at >= $%d`, argPos)
-		args = append(args, *filters.From)
-		argPos++
-	}
-
-	if filters.To != nil {
-		query += fmt.Sprintf(` AND scanned_at <= $%d`, argPos)
-		args = append(args, *filters.To)
-		argPos++
-	}
-
-	query += ` ORDER BY scanned_at DESC`
-
-	if filters.Limit > 0 {
-		query += fmt.Sprintf(` LIMIT $%d`, argPos)
-		args = append(args, filters.Limit)
-		argPos++
-	}
-
-	if filters.Offset > 0 {
-		query += fmt.Sprintf(` OFFSET $%d`, argPos)
-		args = append(args, filters.Offset)
-	}
-
-	rows, err := r.pool.Query(ctx, query, args...)
+func (r *ScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilters) ([]domain.ScanEvent, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.List")
+	rows, err := r.queries.ListScanEvents(ctx, db.ListScanEventsParams{
+		FilterPassID:      uuidToPgtype(filters.PassID),
+		FilterGuardUserID: filters.GuardUserID,
+		FilterResult:      filters.Result,
+		FilterFrom:        timeToPgtypeTimestamp(filters.From),
+		FilterTo:          timeToPgtypeTimestamp(filters.To),
+		MaxResults:        intToInt32Ptr(filters.Limit),
+		ResultsOffset:     intToInt32Ptr(filters.Offset),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var events []*domain.ScanEvent
-	for rows.Next() {
-		var event domain.ScanEvent
-		if err := rows.Scan(
-			&event.ID,
-			&event.PassID,
-			&event.GuardUserID,
-			&event.ScannedAt,
-			&event.Result,
-			&event.Reason,
-			&event.Meta,
-		); err != nil {
-			return nil, err
-		}
-		events = append(events, &event)
-	}
-
-	return events, rows.Err()
+	return scanEventsFromDB(rows), nil
 }
 
 func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
-	nowUTC := time.Now().UTC()
-	today := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
-	query := `
-		SELECT COUNT(*)
-		FROM scan_events
-		WHERE result = 'valid' AND scanned_at >= $1
-	`
-
-	var count int
-	err := r.pool.QueryRow(ctx, query, today).Scan(&count)
-	return count, err
+	ctx = queryNameToContext(ctx, "ScanEventRepo.CountValidScansToday")
+	today := time.Now().Truncate(24 * time.Hour)
+	count, err := r.queries.CountValidScansToday(ctx, today)
+	return int(count), err
 }
 
-func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*Statistics, error) {
-	query := `
-		SELECT 
-			COUNT(*) as total_scans,
-			COUNT(*) FILTER (WHERE result = 'valid') as valid_scans,
-			COUNT(*) FILTER (WHERE result = 'invalid') as invalid_scans,
-			COUNT(DISTINCT pass_id) as unique_passes,
-			COUNT(DISTINCT guard_user_id) as unique_guards
-		FROM scan_events se
-		INNER JOIN passes p ON se.pass_id = p.id
-		INNER JOIN apartments a ON p.apartment_id = a.id
-		WHERE 1=1
-	`
-	args := []interface{}{}
-	argPos := 1
-
-	if from != nil {
-		query += fmt.Sprintf(` AND se.scanned_at >= $%d`, argPos)
-		args = append(args, *from)
-		argPos++
-	}
-
-	if to != nil {
-		query += fmt.Sprintf(` AND se.scanned_at <= $%d`, argPos)
-		args = append(args, *to)
-		argPos++
-	}
-
-	if buildingID != nil {
-		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
-		args = append(args, *buildingID)
-		argPos++
-	}
-
-	var stats Statistics
-	err := r.pool.QueryRow(ctx, query, args...).Scan(
-		&stats.TotalScans,
-		&stats.ValidScans,
-		&stats.InvalidScans,
-		&stats.UniquePasses,
-		&stats.UniqueGuards,
-	)
-
-	return &stats, err
-}
-
-type Statistics struct {
-	TotalScans   int
-	ValidScans   int
-	InvalidScans int
-	UniquePasses int
-	UniqueGuards int
-}
-
-func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]*ScanEventWithDetails, error) {
-	query := `
-		SELECT 
-			se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,
-			p.car_plate, a.number as apartment_number, a.building_id,
-			u.username as guard_username
-		FROM scan_events se
-		INNER JOIN passes p ON se.pass_id = p.id
-		INNER JOIN apartments a ON p.apartment_id = a.id
-		LEFT JOIN users u ON se.guard_user_id = u.id
-		WHERE 1=1
-	`
-	args := []interface{}{}
-	argPos := 1
-
-	if buildingID != nil {
-		query += fmt.Sprintf(` AND a.building_id = $%d`, argPos)
-		args = append(args, *buildingID)
-		argPos++
-	}
-
-	if filters.PassID != nil {
-		query += fmt.Sprintf(` AND se.pass_id = $%d`, argPos)
-		args = append(args, *filters.PassID)
-		argPos++
-	}
-
-	if filters.GuardUserID != nil {
-		query += fmt.Sprintf(` AND se.guard_user_id = $%d`, argPos)
-		args = append(args, *filters.GuardUserID)
-		argPos++
-	}
-
-	if filters.Result != nil {
-		query += fmt.Sprintf(` AND se.result = $%d`, argPos)
-		args = append(args, *filters.Result)
-		argPos++
-	}
-
-	if filters.From != nil {
-		query += fmt.Sprintf(` AND se.scanned_at >= $%d`, argPos)
-		args = append(args, *filters.From)
-		argPos++
-	}
-
-	if filters.To != nil {
-		query += fmt.Sprintf(` AND se.scanned_at <= $%d`, argPos)
-		args = append(args, *filters.To)
-		argPos++
-	}
-
-	query += ` ORDER BY se.scanned_at DESC`
-
-	if filters.Limit > 0 {
-		query += fmt.Sprintf(` LIMIT $%d`, argPos)
-		args = append(args, filters.Limit)
-		argPos++
-	}
-
-	if filters.Offset > 0 {
-		query += fmt.Sprintf(` OFFSET $%d`, argPos)
-		args = append(args, filters.Offset)
-	}
-
-	rows, err := r.pool.Query(ctx, query, args...)
+func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, buildingID *int64) (*domain.Statistics, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.GetStatistics")
+	row, err := r.queries.GetScanEventStatistics(ctx, db.GetScanEventStatisticsParams{
+		FilterFrom:       timeToPgtypeTimestamp(from),
+		FilterTo:         timeToPgtypeTimestamp(to),
+		FilterBuildingID: buildingID,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var events []*ScanEventWithDetails
-	for rows.Next() {
-		var event ScanEventWithDetails
-		var guardUsername *string
-		if err := rows.Scan(
-			&event.ID,
-			&event.PassID,
-			&event.GuardUserID,
-			&event.ScannedAt,
-			&event.Result,
-			&event.Reason,
-			&event.Meta,
-			&event.CarPlate,
-			&event.ApartmentNumber,
-			&event.BuildingID,
-			&guardUsername,
-		); err != nil {
-			return nil, err
-		}
-		if guardUsername != nil {
-			event.GuardUsername = *guardUsername
-		}
-		events = append(events, &event)
-	}
-
-	return events, rows.Err()
+	return &domain.Statistics{
+		TotalScans:   int(row.TotalScans),
+		ValidScans:   int(row.ValidScans),
+		InvalidScans: int(row.InvalidScans),
+		UniquePasses: int(row.UniquePasses),
+		UniqueGuards: int(row.UniqueGuards),
+	}, nil
 }
 
-type ScanEventWithDetails struct {
-	ID              int64
-	PassID          uuid.UUID
-	GuardUserID     int64
-	GuardUsername   string
-	ScannedAt       time.Time
-	Result          string
-	Reason          *string
-	Meta            *string
-	CarPlate        string
-	ApartmentNumber string
-	BuildingID      int64
+func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]domain.ScanEventWithDetails, error) {
+	ctx = queryNameToContext(ctx, "ScanEventRepo.GetEventsWithDetails")
+	rows, err := r.queries.GetScanEventsWithDetails(ctx, db.GetScanEventsWithDetailsParams{
+		FilterBuildingID:  buildingID,
+		FilterPassID:      uuidToPgtype(filters.PassID),
+		FilterGuardUserID: filters.GuardUserID,
+		FilterResult:      filters.Result,
+		FilterFrom:        timeToPgtypeTimestamp(filters.From),
+		FilterTo:          timeToPgtypeTimestamp(filters.To),
+		MaxResults:        intToInt32Ptr(filters.Limit),
+		ResultsOffset:     intToInt32Ptr(filters.Offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return scanEventsWithDetailsFromDB(rows), nil
+}
+
+func scanEventsFromDB(rows []db.ScanEvent) []domain.ScanEvent {
+	result := make([]domain.ScanEvent, len(rows))
+	for i, e := range rows {
+		result[i] = domain.ScanEvent(e)
+	}
+	return result
+}
+
+func scanEventsWithDetailsFromDB(rows []db.GetScanEventsWithDetailsRow) []domain.ScanEventWithDetails {
+	result := make([]domain.ScanEventWithDetails, len(rows))
+	for i, e := range rows {
+		result[i] = domain.ScanEventWithDetails{
+			ID:              e.ID,
+			PassID:          e.PassID,
+			GuardUserID:     e.GuardUserID,
+			GuardUsername:   e.GuardUsername,
+			ScannedAt:       e.ScannedAt,
+			Result:          e.Result,
+			Reason:          e.Reason,
+			Meta:            e.Meta,
+			CarPlate:        e.CarPlate,
+			ApartmentNumber: e.ApartmentNumber,
+			BuildingID:      e.BuildingID,
+		}
+	}
+	return result
 }

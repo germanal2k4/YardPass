@@ -1,0 +1,56 @@
+replicaCount: 1
+version: v1
+
+image:
+  repository: ghcr.io/germanal2k4/yardpass-backend
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+appLabel: yardpass-backend
+
+secrets:
+  databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
+  redisUrl: "redis://host.minikube.internal:6379/0"
+  smtpHost: ""
+  smtpPort: "587"
+  smtpUsername: ""
+  smtpPassword: ""
+  smtpFrom: ""
+
+env:
+  JWT_SECRET: your-secret-key-change-me
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL: 168h
+  SERVICE_TOKEN: your-service-token
+  RATE_LIMIT_CREATE_PASS_PER_HOUR: "10"
+  LOG_LEVEL: info
+  LOG_FORMAT: json
+  SERVER_HOST: "0.0.0.0"
+  LOG_TRANSPORT: elastic
+  TRACER_ENABLED: "true"
+  TRACER_URL: "jaeger-collector.istio-system:4317"
+  ELASTIC_URL: "http://elasticsearch:9200"
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  metricsPort: 5050
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5

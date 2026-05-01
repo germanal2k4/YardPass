@@ -1,0 +1,20 @@
+image:
+  repository: docker.elastic.co/elasticsearch/elasticsearch
+  tag: "8.12.2"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 1Gi
+    cpu: 500m
+
+storage:
+  size: 10Gi
+
+service:
+  port: 9200

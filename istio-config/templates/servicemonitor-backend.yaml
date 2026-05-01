@@ -1,0 +1,20 @@
+{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: yardpass-backend
+  namespace: istio-system
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - yardpass
+  selector:
+    matchLabels:
+      app: yardpass-backend
+  endpoints:
+    - targetPort: metrics
+      path: /metrics
+      interval: 15s
+{{- end }}

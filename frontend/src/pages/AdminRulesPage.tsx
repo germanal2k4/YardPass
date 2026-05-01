@@ -107,7 +107,7 @@ export function AdminRulesPage() {
     mutationFn: (data: UpdateApartmentCountRequest) => buildingsApi.updateApartmentCount(buildingId!, data),
     onSuccess: (building) => {
       queryClient.invalidateQueries({ queryKey: ['residents'] });
-      setSuccessMsg(`Количество квартир обновлено: ${building.apartment_count}`);
+      setSuccessMsg(`Количество апартаментов обновлено: ${building.apartment_count}`);
       setErrorMsg('');
       resetApartmentForm({ apartment_count: building.apartment_count });
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -249,7 +249,7 @@ export function AdminRulesPage() {
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="Лимит пропусков в день на квартиру"
+                      label="Лимит пропусков в день на апартамент"
                       type="number"
                       fullWidth
                       error={!!errors.daily_pass_limit_per_apartment}

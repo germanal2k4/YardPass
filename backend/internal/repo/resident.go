@@ -189,20 +189,3 @@ func residentFromDB(row db.Resident) *domain.Resident {
 	}
 }
 
-func residentsFromDB(rows []db.Resident) []domain.Resident {
-	result := make([]domain.Resident, len(rows))
-	for i, row := range rows {
-		result[i] = domain.Resident{
-			ID:          row.ID,
-			ApartmentID: row.ApartmentID,
-			TelegramID:  row.TelegramID,
-			ChatID:      row.ChatID,
-			Name:        row.Name,
-			Phone:       row.Phone,
-			Status:      row.Status,
-			CreatedAt:   row.CreatedAt,
-			UpdatedAt:   row.UpdatedAt,
-		}
-	}
-	return result
-}

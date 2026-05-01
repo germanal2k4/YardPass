@@ -24,6 +24,10 @@ const MESSAGE_TRANSLATIONS: Record<string, string> = {
   'invalid telegram_id': 'Некорректный Telegram ID',
   'invalid chat_id': 'Некорректный Chat ID',
   'invalid apartment_id': 'Некорректный ID квартиры',
+  'apartment_number is required for admin': 'Для администратора обязателен номер квартиры',
+  'apartment_number is required when apartment_id is not provided': 'Требуется номер квартиры',
+  'building_id is required when apartment_id is not provided': 'Требуется ID здания',
+  'apartment not found in building': 'Квартира не найдена в указанном здании',
   'missing required fields': 'Отсутствуют обязательные поля',
   'invalid phone format': 'Неверный формат телефона',
   

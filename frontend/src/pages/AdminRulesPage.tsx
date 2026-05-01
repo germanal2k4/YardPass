@@ -13,11 +13,12 @@ import {
 import { Layout } from '@/shared/ui/Layout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rulesApi } from '@/shared/api/rules';
+import { buildingsApi } from '@/shared/api/buildings';
 import { useAuth } from '@/features/auth/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { UpdateRuleRequest } from '@/shared/types/api';
+import type { UpdateApartmentCountRequest, UpdateRuleRequest } from '@/shared/types/api';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
 import { formatErrorMessage } from '@/shared/utils/errors';
@@ -30,6 +31,12 @@ const ruleSchema = z.object({
 });
 
 type RuleFormData = z.infer<typeof ruleSchema>;
+
+const apartmentCountSchema = z.object({
+  apartment_count: z.number().int().min(1).max(100000),
+});
+
+type ApartmentCountFormData = z.infer<typeof apartmentCountSchema>;
 
 export function AdminRulesPage() {
   const { user } = useAuth();
@@ -59,6 +66,18 @@ export function AdminRulesPage() {
     },
   });
 
+  const {
+    control: apartmentControl,
+    handleSubmit: handleApartmentSubmit,
+    reset: resetApartmentForm,
+    formState: { errors: apartmentErrors, isDirty: isApartmentDirty },
+  } = useForm<ApartmentCountFormData>({
+    resolver: zodResolver(apartmentCountSchema),
+    defaultValues: {
+      apartment_count: 1,
+    },
+  });
+
   useEffect(() => {
     if (rule) {
       reset({
@@ -84,6 +103,21 @@ export function AdminRulesPage() {
     },
   });
 
+  const updateApartmentCountMutation = useMutation({
+    mutationFn: (data: UpdateApartmentCountRequest) => buildingsApi.updateApartmentCount(buildingId!, data),
+    onSuccess: (building) => {
+      queryClient.invalidateQueries({ queryKey: ['residents'] });
+      setSuccessMsg(`Количество квартир обновлено: ${building.apartment_count}`);
+      setErrorMsg('');
+      resetApartmentForm({ apartment_count: building.apartment_count });
+      setTimeout(() => setSuccessMsg(''), 3000);
+    },
+    onError: (error: AxiosError<ErrorResponse>) => {
+      setErrorMsg(formatErrorMessage(error));
+      setSuccessMsg('');
+    },
+  });
+
   const onSubmit = (data: RuleFormData) => {
     const updateData: UpdateRuleRequest = {
       quiet_hours_start: data.quiet_hours_start || undefined,
@@ -92,6 +126,12 @@ export function AdminRulesPage() {
       max_pass_duration_hours: data.max_pass_duration_hours,
     };
     updateMutation.mutate(updateData);
+  };
+
+  const onApartmentCountSubmit = (data: ApartmentCountFormData) => {
+    updateApartmentCountMutation.mutate({
+      apartment_count: data.apartment_count,
+    });
   };
 
   if (!buildingId) {
@@ -258,6 +298,53 @@ export function AdminRulesPage() {
               </Grid>
             </Grid>
           </form>
+
+          <Box sx={{ mt: 5 }}>
+            <Typography variant="h6" gutterBottom>
+              Количество апартаментов
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Укажите новое общее количество апартаментов в здании. Доступно только увеличение текущего значения.
+            </Typography>
+
+            <form onSubmit={handleApartmentSubmit(onApartmentCountSubmit)}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Controller
+                    name="apartment_count"
+                    control={apartmentControl}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Новое количество апартаментов"
+                        type="number"
+                        fullWidth
+                        error={!!apartmentErrors.apartment_count}
+                        helperText={apartmentErrors.apartment_count?.message}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value === '' ? undefined : parseInt(value, 10));
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={!isApartmentDirty || updateApartmentCountMutation.isPending}
+                    >
+                      {updateApartmentCountMutation.isPending
+                        ? 'Обновление...'
+                        : 'Увеличить количество апартаментов'}
+                    </Button>
+                  </Box>
+                </Grid>
+              </Grid>
+            </form>
+          </Box>
         </Paper>
       </Container>
     </Layout>

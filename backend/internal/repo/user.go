@@ -44,12 +44,13 @@ func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*domain.
 func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
 	ctx = queryNameToContext(ctx, "UserRepo.Create")
 	row, err := r.queries.CreateUser(ctx, db.CreateUserParams{
-		Username:     user.Username,
-		Email:        user.Email,
-		PasswordHash: user.PasswordHash,
-		Role:         user.Role,
-		BuildingID:   user.BuildingID,
-		Status:       user.Status,
+		Username:        user.Username,
+		Email:           user.Email,
+		PasswordHash:    user.PasswordHash,
+		Role:            user.Role,
+		BuildingID:      user.BuildingID,
+		ApartmentNumber: user.ApartmentNumber,
+		Status:          user.Status,
 	})
 	if err != nil {
 		return err
@@ -63,13 +64,14 @@ func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
 func (r *UserRepo) Update(ctx context.Context, user *domain.User) error {
 	ctx = queryNameToContext(ctx, "UserRepo.Update")
 	updatedAt, err := r.queries.UpdateUser(ctx, db.UpdateUserParams{
-		ID:           user.ID,
-		Username:     user.Username,
-		Email:        user.Email,
-		PasswordHash: user.PasswordHash,
-		Role:         user.Role,
-		BuildingID:   user.BuildingID,
-		Status:       user.Status,
+		ID:              user.ID,
+		Username:        user.Username,
+		Email:           user.Email,
+		PasswordHash:    user.PasswordHash,
+		Role:            user.Role,
+		BuildingID:      user.BuildingID,
+		ApartmentNumber: user.ApartmentNumber,
+		Status:          user.Status,
 	})
 	if err != nil {
 		return err

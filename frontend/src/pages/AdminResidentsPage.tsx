@@ -52,10 +52,7 @@ import { ru } from 'date-fns/locale';
 const PHONE_REGEX = /^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$/;
 
 const residentSchema = z.object({
-  apartment_id: z.union([
-    z.string().min(1, 'ID квартиры обязателен').transform((val) => parseInt(val, 10)),
-    z.number().int().min(1, 'ID квартиры обязателен'),
-  ]),
+  apartment_number: z.string().min(1, 'Номер апартамента обязателен'),
   telegram_id: z.union([
     z.string().min(1, 'Telegram ID обязателен').transform((val) => parseInt(val, 10)),
     z.number().int().min(1, 'Telegram ID обязателен'),
@@ -88,7 +85,7 @@ export function AdminResidentsPage() {
   // CSV import state
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [csvResult, setCsvResult] = useState<{ imported: number; errors: any[] } | null>(null);
+  const [csvResult, setCsvResult] = useState<{ created: number; errors: any[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete state
@@ -116,7 +113,7 @@ export function AdminResidentsPage() {
   } = useForm<ResidentFormData>({
     resolver: zodResolver(residentSchema),
     defaultValues: {
-      apartment_id: '' as any, // Пустая строка для начального состояния
+      apartment_number: '',
       telegram_id: '' as any,
       name: '',
       phone: '',
@@ -163,7 +160,7 @@ export function AdminResidentsPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['residents'] });
       setCsvResult(result);
-      setSuccessMsg(`Импорт завершен: импортировано ${result.imported} жителей`);
+      setSuccessMsg(`Импорт завершен: создано ${result.created} жителей`);
       setErrorMsg('');
       setSelectedFile(null);
       setTimeout(() => setSuccessMsg(''), 5000);
@@ -197,7 +194,7 @@ export function AdminResidentsPage() {
 
   const onSubmit = (data: ResidentFormData) => {
     const createData: CreateResidentRequest = {
-      apartment_id: data.apartment_id as number,
+      apartment_number: data.apartment_number.trim(),
       telegram_id: data.telegram_id as number,
       chat_id: data.telegram_id as number, // Chat ID равен Telegram ID
       name: data.name?.trim() || undefined,
@@ -341,17 +338,15 @@ export function AdminResidentsPage() {
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
                 <Controller
-                  name="apartment_id"
+                  name="apartment_number"
                   control={control}
                   render={({ field }) => (
                     <TextField
                       {...field}
-                      label="ID квартиры *"
-                      type="number"
+                      label="Номер апартамента *"
                       fullWidth
-                      error={!!errors.apartment_id}
-                      helperText={errors.apartment_id?.message}
-                      onChange={(e) => field.onChange(e.target.value || '')}
+                      error={!!errors.apartment_number}
+                      helperText={errors.apartment_number?.message}
                     />
                   )}
                 />
@@ -573,7 +568,7 @@ export function AdminResidentsPage() {
                     <TableHead>
                       <TableRow>
                         <TableCell><strong>ID</strong></TableCell>
-                        <TableCell><strong>Квартира ID</strong></TableCell>
+                        <TableCell><strong>Апартамент</strong></TableCell>
                         <TableCell><strong>Имя</strong></TableCell>
                         <TableCell><strong>Телефон</strong></TableCell>
                         <TableCell><strong>Telegram ID</strong></TableCell>
@@ -586,7 +581,7 @@ export function AdminResidentsPage() {
                       {residents.map((resident: Resident) => (
                         <TableRow key={resident.id} hover>
                           <TableCell>{resident.id}</TableCell>
-                          <TableCell>{resident.apartment_id}</TableCell>
+                          <TableCell>{resident.apartment_number || resident.apartment_id}</TableCell>
                           <TableCell>{resident.name || '—'}</TableCell>
                           <TableCell>{resident.phone || '—'}</TableCell>
                           <TableCell>{resident.telegram_id}</TableCell>
@@ -638,13 +633,13 @@ export function AdminResidentsPage() {
               <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
 {`[
   {
-    "apartment_id": 101,
+    "apartment_number": "101",
     "telegram_id": 123456789,
     "name": "Иван Петров",
     "phone": "+7 900 123 45 67"
   },
   {
-    "apartment_id": 102,
+    "apartment_number": "102",
     "telegram_id": 111222333,
     "name": "Мария Иванова",
     "phone": "89001234567"
@@ -659,7 +654,7 @@ export function AdminResidentsPage() {
               rows={12}
               value={bulkJson}
               onChange={(e) => setBulkJson(e.target.value)}
-              placeholder='[{"apartment_id": 101, "telegram_id": 123456789, ...}]'
+              placeholder='[{"apartment_number":"101","telegram_id":123456789,...}]'
               sx={{ fontFamily: 'monospace' }}
             />
 
@@ -716,7 +711,7 @@ export function AdminResidentsPage() {
             </Typography>
             <Paper elevation={0} sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 3 }}>
               <Typography variant="body2" component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-{`apartment_id,telegram_id,name,phone
+{`apartment,telegram_id,name,phone
 101,123456789,Иван Петров,+79001234567
 102,111222333,Мария Иванова,89001234567`}
               </Typography>
@@ -748,7 +743,7 @@ export function AdminResidentsPage() {
               {csvResult && (
                 <Alert severity={csvResult.errors.length > 0 ? 'warning' : 'success'}>
                   <Typography variant="body2">
-                    Импортировано: {csvResult.imported}
+                    Создано: {csvResult.created}
                   </Typography>
                   {csvResult.errors.length > 0 && (
                     <>
@@ -807,7 +802,7 @@ export function AdminResidentsPage() {
                     <strong>Имя:</strong> {residentToDelete.name || '—'}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>Квартира:</strong> {residentToDelete.apartment_id}
+                    <strong>Апартамент:</strong> {residentToDelete.apartment_number || residentToDelete.apartment_id}
                   </Typography>
                   <Typography variant="body2">
                     <strong>Telegram ID:</strong> {residentToDelete.telegram_id}

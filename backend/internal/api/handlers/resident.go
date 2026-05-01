@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
@@ -26,6 +27,26 @@ func (h *ResidentHandler) CreateResident(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
 		return
+	}
+
+	role, _ := c.Get("role")
+	if role == "admin" {
+		buildingIDValue, hasBuildingID := c.Get("building_id")
+		if !hasBuildingID {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for admin")
+			return
+		}
+		buildingID, ok := buildingIDValue.(int64)
+		if !ok {
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			return
+		}
+		req.BuildingID = &buildingID
+		req.ApartmentID = nil
+		if req.ApartmentNumber == nil || strings.TrimSpace(*req.ApartmentNumber) == "" {
+			errors.BadRequest(c, "MISSING_APARTMENT_NUMBER", "apartment_number is required for admin")
+			return
+		}
 	}
 
 	resident, err := h.residentService.CreateResident(c.Request.Context(), req)
@@ -124,6 +145,8 @@ func (h *ResidentHandler) ImportFromCSV(c *gin.Context) {
 
 func (h *ResidentHandler) ListResidents(c *gin.Context) {
 	var filters domain.ResidentFilters
+	role, _ := c.Get("role")
+	buildingIDCtx, hasBuildingID := c.Get("building_id")
 
 	if apartmentIDStr := c.Query("apartment_id"); apartmentIDStr != "" {
 		if id, err := strconv.ParseInt(apartmentIDStr, 10, 64); err == nil {
@@ -131,7 +154,13 @@ func (h *ResidentHandler) ListResidents(c *gin.Context) {
 		}
 	}
 
-	if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+	if role == "admin" {
+		if hasBuildingID {
+			if id, ok := buildingIDCtx.(int64); ok {
+				filters.BuildingID = &id
+			}
+		}
+	} else if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 		if id, err := strconv.ParseInt(buildingIDStr, 10, 64); err == nil {
 			filters.BuildingID = &id
 		}

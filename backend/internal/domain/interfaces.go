@@ -11,6 +11,7 @@ type BuildingRepository interface {
 	GetByID(ctx context.Context, id int64) (*Building, error)
 	List(ctx context.Context) ([]Building, error)
 	Create(ctx context.Context, building *Building) error
+	UpdateApartmentCount(ctx context.Context, id int64, apartmentCount int32) (*Building, error)
 }
 
 type ApartmentRepository interface {
@@ -126,8 +127,10 @@ type CreatePassRequest struct {
 // PassService is the interface for pass-related operations (used by handlers for testability).
 type PassService interface {
 	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
+	GenerateResidentPersonalPassToken(residentTelegramID int64) string
 	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
 	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
+	ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error
 	GetActivePasses(ctx context.Context, apartmentID int64) ([]Pass, error)
 	GetActivePassesByResident(ctx context.Context, residentID int64) ([]Pass, error)

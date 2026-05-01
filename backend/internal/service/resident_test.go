@@ -74,7 +74,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		residentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Resident")).Return(nil)
 
 		req := domain.CreateResidentRequest{
-			ApartmentID: apartmentID,
+			ApartmentID: &apartmentID,
 			TelegramID:  123,
 			Name:        &name,
 			Phone:       &phone,
@@ -99,7 +99,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		residentRepo.On("Update", ctx, mock.AnythingOfType("*domain.Resident")).Return(nil)
 
 		req := domain.CreateResidentRequest{
-			ApartmentID: apartmentID,
+			ApartmentID: &apartmentID,
 			TelegramID:  456,
 		}
 		resident, err := svc.CreateResident(ctx, req)
@@ -118,7 +118,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		apartmentRepo.On("GetByID", ctx, int64(999)).Return(nil, nil)
 
 		req := domain.CreateResidentRequest{
-			ApartmentID: 999,
+			ApartmentID: func() *int64 { v := int64(999); return &v }(),
 			TelegramID:  123,
 		}
 		resident, err := svc.CreateResident(ctx, req)
@@ -127,6 +127,35 @@ func TestResidentService_CreateResident(t *testing.T) {
 		assert.Contains(t, err.Error(), "apartment not found")
 		residentRepo.AssertNotCalled(t, "Create")
 	})
+}
+
+func TestResidentService_CreateResident_ByApartmentNumber(t *testing.T) {
+	logger := zap.NewNop()
+	noopMetrics := &metrics.Metrics{}
+	residentRepo := new(mockResidentRepo)
+	apartmentRepo := new(MockApartmentRepo)
+	svc := NewResidentService(residentRepo, apartmentRepo, logger, noopMetrics)
+	ctx := context.Background()
+
+	buildingID := int64(10)
+	apartmentID := int64(2)
+	apartmentNumber := "102"
+	apartmentRepo.On("GetByBuildingID", ctx, buildingID).Return([]domain.Apartment{
+		{ID: apartmentID, Number: apartmentNumber, BuildingID: buildingID},
+	}, nil)
+	apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{ID: apartmentID, BuildingID: buildingID}, nil)
+	residentRepo.On("GetByTelegramID", ctx, int64(999)).Return(nil, nil)
+	residentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Resident")).Return(nil)
+
+	req := domain.CreateResidentRequest{
+		ApartmentNumber: &apartmentNumber,
+		BuildingID:      &buildingID,
+		TelegramID:      999,
+	}
+	resident, err := svc.CreateResident(ctx, req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resident)
+	assert.Equal(t, apartmentID, resident.ApartmentID)
 }
 
 func TestResidentService_ImportFromCSV(t *testing.T) {

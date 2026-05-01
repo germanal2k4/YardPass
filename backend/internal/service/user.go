@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"yardpass/internal/auth"
 	"yardpass/internal/domain"
@@ -17,11 +18,18 @@ import (
 type UserService struct {
 	userRepo       domain.UserRepository
 	buildingRepo   domain.BuildingRepository
+	ruleRepo       domain.RuleRepository
 	fallbackLogger *zap.Logger
 	opsTotal       *prometheus.CounterVec
 }
 
-func NewUserService(userRepo domain.UserRepository, buildingRepo domain.BuildingRepository, logger *zap.Logger, m *metrics.Metrics) *UserService {
+func NewUserService(
+	userRepo domain.UserRepository,
+	buildingRepo domain.BuildingRepository,
+	ruleRepo domain.RuleRepository,
+	logger *zap.Logger,
+	m *metrics.Metrics,
+) *UserService {
 	opsTotal := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "yardpass_user",
@@ -36,6 +44,7 @@ func NewUserService(userRepo domain.UserRepository, buildingRepo domain.Building
 	return &UserService{
 		userRepo:       userRepo,
 		buildingRepo:   buildingRepo,
+		ruleRepo:       ruleRepo,
 		fallbackLogger: logger,
 		opsTotal:       opsTotal,
 	}
@@ -60,7 +69,14 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 	if req.Role == "guard" || req.Role == "admin" {
 		if req.BuildingID == nil {
-			return nil, errors.New("building_id is required for guard/admin")
+			if req.BuildingName == nil || strings.TrimSpace(*req.BuildingName) == "" {
+				return nil, errors.New("building_id or building_name is required for guard/admin")
+			}
+			resolvedBuildingID, err := s.resolveOrCreateBuildingByName(ctx, *req.BuildingName)
+			if err != nil {
+				return nil, err
+			}
+			req.BuildingID = &resolvedBuildingID
 		}
 
 		building, err := s.buildingRepo.GetByID(ctx, *req.BuildingID)
@@ -78,6 +94,13 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		}
 	}
 
+	if req.ApartmentNumber != nil && *req.ApartmentNumber <= 0 {
+		return nil, errors.New("apartment_number must be greater than zero")
+	}
+	if creator.Role == "admin" && req.ApartmentNumber == nil {
+		return nil, errors.New("apartment_number is required when admin creates a user")
+	}
+
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		return nil, fmt.Errorf("check username: %w", err)
@@ -92,12 +115,13 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 	}
 
 	user := &domain.User{
-		Username:     req.Username,
-		Email:        req.Email,
-		PasswordHash: passwordHash,
-		Role:         req.Role,
-		BuildingID:   req.BuildingID,
-		Status:       "active",
+		Username:        req.Username,
+		Email:           req.Email,
+		PasswordHash:    passwordHash,
+		Role:            req.Role,
+		BuildingID:      req.BuildingID,
+		ApartmentNumber: req.ApartmentNumber,
+		Status:          "active",
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -122,4 +146,57 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 func (s *UserService) ListUsers(ctx context.Context, filters domain.UserFilters) ([]domain.User, error) {
 	return s.userRepo.List(ctx, filters)
+}
+
+func (s *UserService) resolveOrCreateBuildingByName(ctx context.Context, rawName string) (int64, error) {
+	normalized := normalizeBuildingName(rawName)
+	if normalized == "" {
+		return 0, errors.New("building_name is required")
+	}
+
+	buildings, err := s.buildingRepo.List(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list buildings: %w", err)
+	}
+	for _, b := range buildings {
+		if strings.EqualFold(normalizeBuildingName(b.Name), normalized) {
+			return b.ID, nil
+		}
+	}
+
+	building := &domain.Building{
+		Name:           normalized,
+		ApartmentCount: 1,
+	}
+	if err := s.buildingRepo.Create(ctx, building); err != nil {
+		return 0, fmt.Errorf("create building: %w", err)
+	}
+	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {
+		return 0, err
+	}
+	return building.ID, nil
+}
+
+func normalizeBuildingName(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+}
+
+func (s *UserService) ensureDefaultRule(ctx context.Context, buildingID int64) error {
+	existingRule, err := s.ruleRepo.GetByBuildingID(ctx, buildingID)
+	if err != nil {
+		return fmt.Errorf("get building rule: %w", err)
+	}
+	if existingRule != nil {
+		return nil
+	}
+
+	rule := &domain.Rule{
+		BuildingID:                 buildingID,
+		DailyPassLimitPerApartment: 5,
+		MaxPassDurationHours:       24,
+	}
+	if err := s.ruleRepo.Create(ctx, rule); err != nil {
+		return fmt.Errorf("create default rule: %w", err)
+	}
+	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"yardpass/internal/auth"
 	"yardpass/internal/domain"
@@ -25,17 +26,20 @@ type EmailSender interface {
 
 type SubscriptionService struct {
 	buildingRepo domain.BuildingRepository
+	ruleRepo     domain.RuleRepository
 	userRepo     domain.UserRepository
 	emailSender  EmailSender
 }
 
 func NewSubscriptionService(
 	buildingRepo domain.BuildingRepository,
+	ruleRepo domain.RuleRepository,
 	userRepo domain.UserRepository,
 	emailSender EmailSender,
 ) *SubscriptionService {
 	return &SubscriptionService{
 		buildingRepo: buildingRepo,
+		ruleRepo:     ruleRepo,
 		userRepo:     userRepo,
 		emailSender:  emailSender,
 	}
@@ -45,14 +49,22 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 	if strings.TrimSpace(req.BuildingName) == "" {
 		return nil, fmt.Errorf("building_name is required")
 	}
+	if req.ApartmentCount <= 0 {
+		return nil, fmt.Errorf("apartment_count must be greater than zero")
+	}
 
 	if err := validatePaymentFields(req); err != nil {
 		return nil, err
 	}
 
-	building := &domain.Building{Name: strings.TrimSpace(req.BuildingName)}
-	if err := s.buildingRepo.Create(ctx, building); err != nil {
-		return nil, fmt.Errorf("create building: %w", err)
+	normalizedBuildingName := normalizeBuildingName(req.BuildingName)
+	if normalizedBuildingName == "" {
+		return nil, fmt.Errorf("building_name is required")
+	}
+
+	building, err := s.findOrCreateBuilding(ctx, normalizedBuildingName, req.ApartmentCount)
+	if err != nil {
+		return nil, err
 	}
 
 	adminCreds, err := s.createUserForRole(ctx, building.ID, building.Name, req.Email, "admin")
@@ -82,6 +94,7 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 	return &domain.PurchaseSubscriptionResponse{
 		BuildingID:      building.ID,
 		BuildingName:    building.Name,
+		ApartmentCount:  building.ApartmentCount,
 		SubscriptionFee: subscriptionFeeRub,
 		Period:          subscriptionPeriod,
 		Email:           req.Email,
@@ -209,13 +222,90 @@ func randomDigits(length int) (string, error) {
 }
 
 func normalizeSlug(value string) string {
-	lower := strings.ToLower(strings.TrimSpace(value))
+	lower := strings.ToLower(transliterateCyrillic(strings.TrimSpace(value)))
 	normalized := nonAlnum.ReplaceAllString(lower, "_")
 	normalized = strings.Trim(normalized, "_")
 	if len(normalized) > 20 {
 		return normalized[:20]
 	}
 	return normalized
+}
+
+func transliterateCyrillic(value string) string {
+	var b strings.Builder
+	for _, r := range value {
+		if latin, ok := cyrillicToLatin[r]; ok {
+			b.WriteString(latin)
+			continue
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normalizedName string, apartmentCount int32) (*domain.Building, error) {
+	buildings, err := s.buildingRepo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list buildings: %w", err)
+	}
+
+	for _, existing := range buildings {
+		if strings.EqualFold(normalizeBuildingName(existing.Name), normalizedName) {
+			if apartmentCount > existing.ApartmentCount {
+				updated, err := s.buildingRepo.UpdateApartmentCount(ctx, existing.ID, apartmentCount)
+				if err != nil {
+					return nil, fmt.Errorf("update building apartment_count: %w", err)
+				}
+				if updated != nil {
+					return updated, nil
+				}
+			}
+			copy := existing
+			return &copy, nil
+		}
+	}
+
+	building := &domain.Building{
+		Name:           normalizedName,
+		ApartmentCount: apartmentCount,
+	}
+	if err := s.buildingRepo.Create(ctx, building); err != nil {
+		return nil, fmt.Errorf("create building: %w", err)
+	}
+	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {
+		return nil, err
+	}
+	return building, nil
+}
+
+func (s *SubscriptionService) ensureDefaultRule(ctx context.Context, buildingID int64) error {
+	existingRule, err := s.ruleRepo.GetByBuildingID(ctx, buildingID)
+	if err != nil {
+		return fmt.Errorf("get building rule: %w", err)
+	}
+	if existingRule != nil {
+		return nil
+	}
+
+	rule := &domain.Rule{
+		BuildingID:                 buildingID,
+		DailyPassLimitPerApartment: 5,
+		MaxPassDurationHours:       24,
+	}
+	if err := s.ruleRepo.Create(ctx, rule); err != nil {
+		return fmt.Errorf("create default rule: %w", err)
+	}
+	return nil
+}
+
+var cyrillicToLatin = map[rune]string{
+	'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'е': "e", 'ё': "e", 'ж': "zh",
+	'з': "z", 'и': "i", 'й': "y", 'к': "k", 'л': "l", 'м': "m", 'н': "n", 'о': "o",
+	'п': "p", 'р': "r", 'с': "s", 'т': "t", 'у': "u", 'ф': "f", 'х': "h", 'ц': "ts",
+	'ч': "ch", 'ш': "sh", 'щ': "sch", 'ы': "y", 'э': "e", 'ю': "yu", 'я': "ya",
+	'ь': "", 'ъ': "",
 }
 
 func onlyDigits(value string) string {

@@ -23,4 +23,9 @@ describe('passesApi', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('PASS_EXPIRED');
   });
+
+  it('validate with resident personal token returns valid pass', async () => {
+    const result = await passesApi.validate({ qr_uuid: 'resident:123:token' });
+    expect(result.valid).toBe(true);
+  });
 });

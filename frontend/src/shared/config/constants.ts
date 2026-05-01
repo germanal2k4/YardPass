@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   
   // Rules
   RULES: '/api/v1/rules',
+  BUILDING_APARTMENT_COUNT: (id: number) => `/api/v1/buildings/${id}/apartment-count`,
   
   // Residents
   RESIDENTS: '/api/v1/residents',

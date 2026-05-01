@@ -22,6 +22,7 @@ export function RegistrationPage() {
   const navigate = useNavigate();
 
   const [buildingName, setBuildingName] = useState('');
+  const [apartmentCount, setApartmentCount] = useState('');
   const [email, setEmail] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [cardHolder, setCardHolder] = useState('');
@@ -45,6 +46,11 @@ export function RegistrationPage() {
       setError('Укажите email');
       return;
     }
+    const parsedApartmentCount = Number(apartmentCount);
+    if (!apartmentCount.trim() || !Number.isInteger(parsedApartmentCount) || parsedApartmentCount <= 0) {
+      setError('Укажите корректное количество апартаментов');
+      return;
+    }
 
     if (!cardNumber.trim() || !cardHolder.trim() || !expiry.trim() || !cvv.trim()) {
       setError('Заполните все поля карты');
@@ -57,6 +63,7 @@ export function RegistrationPage() {
       await authApi.purchaseSubscription({
         email: email.trim(),
         building_name: buildingName.trim(),
+        apartment_count: parsedApartmentCount,
         card_number: cardNumber.trim(),
         card_holder: cardHolder.trim(),
         expiry: expiry.trim(),
@@ -199,6 +206,18 @@ export function RegistrationPage() {
               onChange={(e) => setEmail(e.target.value)}
               sx={{ mb: 2 }}
               disabled={isLoading || success}
+            />
+
+            <TextField
+              label="Количество апартаментов"
+              type="number"
+              fullWidth
+              required
+              value={apartmentCount}
+              onChange={(e) => setApartmentCount(e.target.value)}
+              sx={{ mb: 2 }}
+              disabled={isLoading || success}
+              inputProps={{ min: 1, step: 1 }}
             />
 
             <Divider sx={{ mb: 2 }}>

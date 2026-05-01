@@ -56,7 +56,12 @@ func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo do
 }
 
 func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateResidentRequest) (*domain.Resident, error) {
-	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
+	apartmentID, err := s.resolveApartmentID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	apartment, err := s.apartmentRepo.GetByID(ctx, apartmentID)
 	if err != nil {
 		return nil, fmt.Errorf("get apartment: %w", err)
 	}
@@ -75,7 +80,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 	}
 
 	if existing != nil {
-		existing.ApartmentID = req.ApartmentID
+		existing.ApartmentID = apartmentID
 		existing.ChatID = chatID
 		existing.Name = req.Name
 		existing.Phone = req.Phone
@@ -88,7 +93,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 	}
 
 	resident := &domain.Resident{
-		ApartmentID: req.ApartmentID,
+		ApartmentID: apartmentID,
 		TelegramID:  req.TelegramID,
 		ChatID:      chatID,
 		Name:        req.Name,
@@ -204,7 +209,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 		}
 
 		req := domain.CreateResidentRequest{
-			ApartmentID: apartmentID,
+			ApartmentID: &apartmentID,
 			TelegramID:  telegramID,
 			ChatID:      &chatID,
 		}
@@ -251,6 +256,31 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	}
 
 	return len(residents), errorList
+}
+
+func (s *ResidentService) resolveApartmentID(ctx context.Context, req domain.CreateResidentRequest) (int64, error) {
+	if req.ApartmentID != nil {
+		return *req.ApartmentID, nil
+	}
+	if req.BuildingID == nil {
+		return 0, errors.New("building_id is required when apartment_id is not provided")
+	}
+	if req.ApartmentNumber == nil || strings.TrimSpace(*req.ApartmentNumber) == "" {
+		return 0, errors.New("apartment_number is required when apartment_id is not provided")
+	}
+
+	apartments, err := s.apartmentRepo.GetByBuildingID(ctx, *req.BuildingID)
+	if err != nil {
+		return 0, fmt.Errorf("get apartments by building: %w", err)
+	}
+	targetNumber := strings.TrimSpace(*req.ApartmentNumber)
+	for _, apt := range apartments {
+		if strings.EqualFold(strings.TrimSpace(apt.Number), targetNumber) {
+			return apt.ID, nil
+		}
+	}
+
+	return 0, fmt.Errorf("apartment %s not found in building", targetNumber)
 }
 
 func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {

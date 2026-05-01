@@ -25,6 +25,7 @@ type ResidentRepository interface {
 	GetByTelegramID(ctx context.Context, telegramID int64) (*Resident, error)
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
+	SetCarPlate(ctx context.Context, id int64, carPlate *string) error
 	Delete(ctx context.Context, id int64) error
 	BulkCreate(ctx context.Context, residents []Resident) error
 	List(ctx context.Context, filters ResidentFilters) ([]Resident, error)

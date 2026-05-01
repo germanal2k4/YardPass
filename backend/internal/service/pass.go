@@ -265,12 +265,17 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 }
 
 func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	// Trim whitespace that QR scanners sometimes append
+	token = strings.TrimSpace(token)
+
 	const prefix = "resident:"
 	if !strings.HasPrefix(token, prefix) {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
 
-	parts := strings.Split(token, ":")
+	// Format: resident:<telegram_id>:<hmac>
+	// Use SplitN to limit to 3 parts so any unexpected colons don't break parsing
+	parts := strings.SplitN(token, ":", 3)
 	if len(parts) != 3 {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
@@ -279,7 +284,9 @@ func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token st
 	if err != nil {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
-	if !hmac.Equal([]byte(parts[2]), []byte(s.signResidentToken(telegramID))) {
+
+	expectedHMAC := s.signResidentToken(telegramID)
+	if !hmac.Equal([]byte(strings.TrimSpace(parts[2])), []byte(expectedHMAC)) {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
 
@@ -297,9 +304,14 @@ func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token st
 		return &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}, nil
 	}
 
+	carPlate := ""
+	if resident.CarPlate != nil {
+		carPlate = *resident.CarPlate
+	}
+
 	return &domain.PassValidationResult{
 		Valid:     true,
-		CarPlate:  "",
+		CarPlate:  carPlate,
 		Apartment: apartment.Number,
 	}, nil
 }

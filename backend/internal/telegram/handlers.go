@@ -64,7 +64,7 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 	userID := msg.From.ID
 	text := msg.Text
 
-	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" || text == "/personal" {
+	if text == "/start" || text == "/create" || text == "/list" || text == "/revoke" || text == "/personal" || text == "/mycar" {
 		switch text {
 		case "/start":
 			b.commandsTotal.WithLabelValues("start").Inc()
@@ -99,6 +99,15 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 		case "/personal":
 			b.commandsTotal.WithLabelValues("personal").Inc()
 			b.sendPersonalPass(ctx, msg.Chat.ID, msg.From.ID)
+		case "/mycar":
+			b.commandsTotal.WithLabelValues("mycar").Inc()
+			cb := CallbackQuery{
+				ID:      "",
+				From:    msg.From,
+				Message: &msg,
+				Data:    "my_car",
+			}
+			b.handleCallbackQuery(ctx, cb)
 		}
 		return
 	}
@@ -120,6 +129,8 @@ func (b *Bot) handleMessage(ctx context.Context, msg Message) {
 		b.handleCustomTime(ctx, msg, state)
 	case StateWaitingGuestName:
 		b.handleGuestName(ctx, msg, state)
+	case StateWaitingResidentCarPlate:
+		b.handleResidentCarPlate(ctx, msg, state)
 	default:
 		_ = b.sendMessage(ctx, msg.Chat.ID, "Неизвестное состояние. Используйте /start")
 		b.clearState(userID)
@@ -147,7 +158,10 @@ func (b *Bot) handleStart(ctx context.Context, msg Message) {
 				{"text": "Отозвать пропуск", "callback_data": "revoke_pass"},
 			},
 			{
-				{"text": "Личный постоянный пропуск", "callback_data": "personal_pass"},
+				{"text": "🔐 Личный постоянный пропуск", "callback_data": "personal_pass"},
+			},
+			{
+				{"text": "🚗 Моя машина (для пропуска)", "callback_data": "my_car"},
 			},
 		},
 	}
@@ -189,6 +203,23 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 
 	case "personal_pass":
 		b.sendPersonalPass(ctx, cb.Message.Chat.ID, userID)
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "my_car":
+		b.showMyCarMenu(ctx, cb.Message.Chat.ID, userID)
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "register_car":
+		b.setState(userID, &UserState{
+			Step:      StateWaitingResidentCarPlate,
+			Data:      make(map[string]interface{}),
+			ExpiresAt: time.Now().Add(10 * time.Minute),
+		})
+		_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер вашего автомобиля (например: А123ВС77 или A123BC77):")
+		_ = b.answerCallbackQuery(ctx, cb.ID, "")
+
+	case "remove_car":
+		b.removeResidentCar(ctx, cb.Message.Chat.ID, userID)
 		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "guest_car":
@@ -611,6 +642,12 @@ func (b *Bot) sendPersonalPass(ctx context.Context, chatID int64, userID int64) 
 		return
 	}
 
+	apartment, err := b.apartmentRepo.GetByID(ctx, resident.ApartmentID)
+	if err != nil || apartment == nil {
+		_ = b.sendMessage(ctx, chatID, "Ошибка: квартира не найдена")
+		return
+	}
+
 	token := b.passService.GenerateResidentPersonalPassToken(resident.TelegramID)
 	qrPNG, err := b.qrGen.GenerateRawQR(ctx, token)
 	if err != nil {
@@ -618,8 +655,101 @@ func (b *Bot) sendPersonalPass(ctx context.Context, chatID int64, userID int64) 
 		return
 	}
 
-	caption := "🔐 Ваш личный постоянный пропуск.\nОн не имеет срока действия, а проходы по нему не записываются в журнал."
+	caption := fmt.Sprintf(
+		"🔐 Личный постоянный пропуск резидента\n\n"+
+			"🏠 Квартира: %s\n",
+		apartment.Number,
+	)
+
+	if resident.CarPlate != nil && *resident.CarPlate != "" {
+		caption += fmt.Sprintf("🚗 Автомобиль: %s\n", *resident.CarPlate)
+	} else {
+		caption += "🚗 Автомобиль: не зарегистрирован\n"
+	}
+
+	if resident.Name != nil && *resident.Name != "" {
+		caption += fmt.Sprintf("👤 Жилец: %s\n", *resident.Name)
+	}
+
+	caption += "\n📋 Содержимое QR-кода (токен доступа):\n" + token +
+		"\n\nПропуск не имеет срока действия. Покажите охраннику для прохода."
+
 	_ = b.sendPhoto(ctx, chatID, qrPNG, caption)
+}
+
+func (b *Bot) showMyCarMenu(ctx context.Context, chatID int64, userID int64) {
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		return
+	}
+
+	var text string
+	var keyboard map[string]interface{}
+
+	if resident.CarPlate != nil && *resident.CarPlate != "" {
+		text = fmt.Sprintf(
+			"🚗 Ваш зарегистрированный автомобиль: *%s*\n\n"+
+				"Номер автомобиля отображается охраннику при проверке вашего личного QR-пропуска.",
+			*resident.CarPlate,
+		)
+		keyboard = map[string]interface{}{
+			"inline_keyboard": [][]map[string]interface{}{
+				{{"text": "✏️ Изменить номер", "callback_data": "register_car"}},
+				{{"text": "🗑 Удалить автомобиль", "callback_data": "remove_car"}},
+			},
+		}
+	} else {
+		text = "🚗 У вас не зарегистрирован автомобиль для постоянного пропуска.\n\n" +
+			"Зарегистрируйте ваш автомобиль, и его номер будет отображаться охраннику при проверке личного QR-пропуска."
+		keyboard = map[string]interface{}{
+			"inline_keyboard": [][]map[string]interface{}{
+				{{"text": "➕ Зарегистрировать автомобиль", "callback_data": "register_car"}},
+			},
+		}
+	}
+
+	_ = b.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
+}
+
+func (b *Bot) handleResidentCarPlate(ctx context.Context, msg Message, state *UserState) {
+	carPlateRaw := strings.TrimSpace(msg.Text)
+	userID := msg.From.ID
+	b.clearState(userID)
+
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Ошибка: житель не найден")
+		return
+	}
+
+	if err := b.residentRepo.SetCarPlate(ctx, resident.ID, &carPlateRaw); err != nil {
+		_ = b.sendMessage(ctx, msg.Chat.ID, fmt.Sprintf("Ошибка при сохранении номера: %s", err.Error()))
+		b.logger.Error("failed to set resident car plate", zap.Error(err), zap.Int64("user_id", userID))
+		return
+	}
+
+	_ = b.sendMessage(ctx, msg.Chat.ID, fmt.Sprintf(
+		"✅ Автомобиль зарегистрирован: *%s*\n\n"+
+			"Теперь при проверке вашего личного QR-пропуска охранник увидит номер автомобиля.\n\n"+
+			"Получите обновлённый QR-код: /personal",
+		carPlateRaw,
+	))
+}
+
+func (b *Bot) removeResidentCar(ctx context.Context, chatID int64, userID int64) {
+	resident, err := b.residentRepo.GetByTelegramID(ctx, userID)
+	if err != nil || resident == nil {
+		_ = b.sendMessage(ctx, chatID, "Ошибка: житель не найден")
+		return
+	}
+
+	if err := b.residentRepo.SetCarPlate(ctx, resident.ID, nil); err != nil {
+		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при удалении автомобиля: %s", err.Error()))
+		return
+	}
+
+	_ = b.sendMessage(ctx, chatID, "✅ Автомобиль удалён из вашего профиля.")
 }
 
 func (b *Bot) getState(userID int64) *UserState {
@@ -818,6 +948,7 @@ func (b *Bot) SetMyCommands(ctx context.Context) error {
 		{"command": "list", "description": "Мои активные пропуска"},
 		{"command": "revoke", "description": "Отозвать пропуск"},
 		{"command": "personal", "description": "Личный постоянный пропуск"},
+		{"command": "mycar", "description": "Мой автомобиль для постоянного пропуска"},
 	}
 
 	payload := map[string]interface{}{

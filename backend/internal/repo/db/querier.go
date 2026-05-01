@@ -45,6 +45,7 @@ type Querier interface {
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error)
 	RevokePass(ctx context.Context, id uuid.UUID) error
 	SearchPassesByCarPlate(ctx context.Context, arg SearchPassesByCarPlateParams) ([]SearchPassesByCarPlateRow, error)
+	SetResidentCarPlate(ctx context.Context, id int64, carPlate *string) error
 	UpdateBuildingApartmentCount(ctx context.Context, arg UpdateBuildingApartmentCountParams) (UpdateBuildingApartmentCountRow, error)
 	UpdatePass(ctx context.Context, arg UpdatePassParams) (time.Time, error)
 	UpdateResident(ctx context.Context, arg UpdateResidentParams) (time.Time, error)

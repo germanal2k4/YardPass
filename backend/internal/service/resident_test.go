@@ -41,6 +41,11 @@ func (m *mockResidentRepo) Update(ctx context.Context, resident *domain.Resident
 	return args.Error(0)
 }
 
+func (m *mockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
+	args := m.Called(ctx, id, carPlate)
+	return args.Error(0)
+}
+
 func (m *mockResidentRepo) Delete(ctx context.Context, id int64) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

@@ -6,6 +6,9 @@ image:
   tag: "latest"
   pullPolicy: IfNotPresent
 
+# Optional: init migrate job uses this image when set; defaults to image above (api image includes ./migrate).
+migrateImage: {}
+
 imagePullSecrets: []
 
 # Istio: init migrate runs before sidecar; exclude host Postgres/Redis from redirect (local + external DB).

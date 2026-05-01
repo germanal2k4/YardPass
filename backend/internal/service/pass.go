@@ -286,7 +286,7 @@ func (s *PassService) validateResidentCarPlate(ctx context.Context, normalizedCa
 		if res.CarPlate == nil {
 			continue
 		}
-		if normalizeCarPlate(*res.CarPlate) != normalizedCarPlate {
+		if NormalizeCarPlate(*res.CarPlate) != normalizedCarPlate {
 			continue
 		}
 

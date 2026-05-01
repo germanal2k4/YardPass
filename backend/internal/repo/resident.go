@@ -51,6 +51,7 @@ func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) er
 		ChatID:      resident.ChatID,
 		Name:        resident.Name,
 		Phone:       resident.Phone,
+		CarPlate:    resident.CarPlate,
 		Status:      resident.Status,
 	})
 	if err != nil {
@@ -71,6 +72,7 @@ func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) er
 		ChatID:      resident.ChatID,
 		Name:        resident.Name,
 		Phone:       resident.Phone,
+		CarPlate:    resident.CarPlate,
 		Status:      resident.Status,
 	})
 	if err != nil {
@@ -78,6 +80,11 @@ func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) er
 	}
 	resident.UpdatedAt = updatedAt
 	return nil
+}
+
+func (r *ResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.SetCarPlate")
+	return r.queries.SetResidentCarPlate(ctx, id, carPlate)
 }
 
 func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Resident) error {
@@ -104,6 +111,7 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Reside
 			ChatID:      resident.ChatID,
 			Name:        resident.Name,
 			Phone:       resident.Phone,
+			CarPlate:    resident.CarPlate,
 			Status:      resident.Status,
 		})
 		if err != nil {
@@ -120,7 +128,7 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Reside
 func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	ctx = queryNameToContext(ctx, "ResidentRepo.List")
 	const listResidentsWithApartmentNumberQuery = `
-		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.status, r.created_at, r.updated_at
+		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.car_plate, r.status, r.created_at, r.updated_at
 		FROM residents r
 		INNER JOIN apartments a ON a.id = r.apartment_id
 		WHERE ($1::bigint IS NULL OR r.apartment_id = $1)
@@ -156,6 +164,7 @@ func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters)
 			&resident.ChatID,
 			&resident.Name,
 			&resident.Phone,
+			&resident.CarPlate,
 			&resident.Status,
 			&resident.CreatedAt,
 			&resident.UpdatedAt,
@@ -183,9 +192,9 @@ func residentFromDB(row db.Resident) *domain.Resident {
 		ChatID:      row.ChatID,
 		Name:        row.Name,
 		Phone:       row.Phone,
+		CarPlate:    row.CarPlate,
 		Status:      row.Status,
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
 	}
 }
-

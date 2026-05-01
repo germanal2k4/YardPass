@@ -11,8 +11,8 @@ import (
 )
 
 const createResident = `-- name: CreateResident :one
-INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, car_plate, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, created_at, updated_at
 `
 
@@ -22,6 +22,7 @@ type CreateResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
 	Status      string
 }
 
@@ -38,6 +39,7 @@ func (q *Queries) CreateResident(ctx context.Context, arg CreateResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
 		arg.Status,
 	)
 	var i CreateResidentRow
@@ -55,7 +57,7 @@ func (q *Queries) DeleteResident(ctx context.Context, id int64) error {
 }
 
 const getResidentByID = `-- name: GetResidentByID :one
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, status, created_at, updated_at
 FROM residents
 WHERE id = $1
 `
@@ -70,6 +72,7 @@ func (q *Queries) GetResidentByID(ctx context.Context, id int64) (Resident, erro
 		&i.ChatID,
 		&i.Name,
 		&i.Phone,
+		&i.CarPlate,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -78,7 +81,7 @@ func (q *Queries) GetResidentByID(ctx context.Context, id int64) (Resident, erro
 }
 
 const getResidentByTelegramID = `-- name: GetResidentByTelegramID :one
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, status, created_at, updated_at
 FROM residents
 WHERE telegram_id = $1
 `
@@ -93,6 +96,7 @@ func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64)
 		&i.ChatID,
 		&i.Name,
 		&i.Phone,
+		&i.CarPlate,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -101,7 +105,7 @@ func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64)
 }
 
 const listResidents = `-- name: ListResidents :many
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, status, created_at, updated_at
 FROM residents
 WHERE ($1::bigint IS NULL OR apartment_id = $1)
   AND ($2::bigint IS NULL OR apartment_id IN (SELECT id FROM apartments WHERE building_id = $2))
@@ -141,6 +145,7 @@ func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([
 			&i.ChatID,
 			&i.Name,
 			&i.Phone,
+			&i.CarPlate,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -155,9 +160,20 @@ func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([
 	return items, nil
 }
 
+const setResidentCarPlate = `-- name: SetResidentCarPlate :exec
+UPDATE residents
+SET car_plate = $2
+WHERE id = $1
+`
+
+func (q *Queries) SetResidentCarPlate(ctx context.Context, id int64, carPlate *string) error {
+	_, err := q.db.Exec(ctx, setResidentCarPlate, id, carPlate)
+	return err
+}
+
 const updateResident = `-- name: UpdateResident :one
 UPDATE residents
-SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, status = $7
+SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, car_plate = $7, status = $8
 WHERE id = $1
 RETURNING updated_at
 `
@@ -169,6 +185,7 @@ type UpdateResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
 	Status      string
 }
 
@@ -180,6 +197,7 @@ func (q *Queries) UpdateResident(ctx context.Context, arg UpdateResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
 		arg.Status,
 	)
 	var updated_at time.Time
@@ -188,13 +206,14 @@ func (q *Queries) UpdateResident(ctx context.Context, arg UpdateResidentParams) 
 }
 
 const upsertResident = `-- name: UpsertResident :one
-INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, car_plate, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (telegram_id) DO UPDATE SET
     apartment_id = EXCLUDED.apartment_id,
     chat_id = EXCLUDED.chat_id,
     name = EXCLUDED.name,
     phone = EXCLUDED.phone,
+    car_plate = EXCLUDED.car_plate,
     status = EXCLUDED.status
 RETURNING id, created_at, updated_at
 `
@@ -205,6 +224,7 @@ type UpsertResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
 	Status      string
 }
 
@@ -221,6 +241,7 @@ func (q *Queries) UpsertResident(ctx context.Context, arg UpsertResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
 		arg.Status,
 	)
 	var i UpsertResidentRow

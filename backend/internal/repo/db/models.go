@@ -50,6 +50,7 @@ type Resident struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
 	Status      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

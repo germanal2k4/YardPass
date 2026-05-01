@@ -54,11 +54,12 @@ type UserState struct {
 }
 
 const (
-	StateWaitingGuestType  = "waiting_guest_type"
-	StateWaitingCarPlate   = "waiting_car_plate"
-	StateWaitingDuration   = "waiting_duration"
-	StateWaitingCustomTime = "waiting_custom_time"
-	StateWaitingGuestName  = "waiting_guest_name"
+	StateWaitingGuestType        = "waiting_guest_type"
+	StateWaitingCarPlate         = "waiting_car_plate"
+	StateWaitingDuration         = "waiting_duration"
+	StateWaitingCustomTime       = "waiting_custom_time"
+	StateWaitingGuestName        = "waiting_guest_name"
+	StateWaitingResidentCarPlate = "waiting_resident_car_plate"
 )
 
 func NewBot(

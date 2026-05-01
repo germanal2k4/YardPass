@@ -138,6 +138,11 @@ func (m *MockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64
 	return args.Get(0).(*domain.Resident), args.Error(1)
 }
 
+func (m *MockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
+	args := m.Called(ctx, id, carPlate)
+	return args.Error(0)
+}
+
 func (m *MockResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
 	args := m.Called(ctx, resident)
 	return args.Error(0)
@@ -459,5 +464,198 @@ func TestPassService_ValidatePass(t *testing.T) {
 		assert.False(t, result.Valid)
 		assert.Equal(t, "BUILDING_MISMATCH", result.Reason)
 		passRepo.AssertNotCalled(t, "Update")
+	})
+}
+
+func TestPassService_ValidateResidentPersonalPass(t *testing.T) {
+	logger := zap.NewNop()
+	ctx := context.Background()
+	const secret = "test-personal-pass-secret"
+
+	noopMetrics := &metrics.Metrics{}
+
+	newService := func() *PassService {
+		return NewPassService(
+			new(MockPassRepo),
+			new(MockApartmentRepo),
+			new(MockResidentRepo),
+			new(MockRuleRepo),
+			new(MockScanEventRepo),
+			secret,
+			logger,
+			noopMetrics,
+		)
+	}
+
+	t.Run("valid personal pass returns apartment and car plate", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		apartmentRepo := new(MockApartmentRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		telegramID := int64(123456789)
+		carPlate := "A123BC"
+		token := svc.GenerateResidentPersonalPassToken(telegramID)
+
+		buildingID := int64(1)
+		residentRepo.On("GetByTelegramID", ctx, telegramID).Return(&domain.Resident{
+			ID:          1,
+			ApartmentID: 10,
+			TelegramID:  telegramID,
+			CarPlate:    &carPlate,
+			Status:      "active",
+		}, nil)
+		apartmentRepo.On("GetByID", ctx, int64(10)).Return(&domain.Apartment{
+			ID:         10,
+			BuildingID: buildingID,
+			Number:     "42",
+		}, nil)
+
+		result, err := svc.ValidateResidentPersonalPass(ctx, token, 0, &buildingID)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, result)
+		assert.True(t, result.Valid)
+		assert.Equal(t, "42", result.Apartment)
+		assert.Equal(t, carPlate, result.CarPlate)
+	})
+
+	t.Run("valid personal pass without car plate", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		apartmentRepo := new(MockApartmentRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		telegramID := int64(987654321)
+		token := svc.GenerateResidentPersonalPassToken(telegramID)
+
+		buildingID := int64(1)
+		residentRepo.On("GetByTelegramID", ctx, telegramID).Return(&domain.Resident{
+			ID:          2,
+			ApartmentID: 20,
+			TelegramID:  telegramID,
+			CarPlate:    nil,
+			Status:      "active",
+		}, nil)
+		apartmentRepo.On("GetByID", ctx, int64(20)).Return(&domain.Apartment{
+			ID:         20,
+			BuildingID: buildingID,
+			Number:     "15",
+		}, nil)
+
+		result, err := svc.ValidateResidentPersonalPass(ctx, token, 0, &buildingID)
+
+		assert.NoError(t, err)
+		assert.True(t, result.Valid)
+		assert.Equal(t, "15", result.Apartment)
+		assert.Equal(t, "", result.CarPlate)
+	})
+
+	t.Run("token with leading/trailing whitespace is valid", func(t *testing.T) {
+		svc := newService()
+		telegramID := int64(111222333)
+		token := "  " + svc.GenerateResidentPersonalPassToken(telegramID) + "\n"
+
+		passRepo2 := new(MockPassRepo)
+		apartmentRepo2 := new(MockApartmentRepo)
+		residentRepo2 := new(MockResidentRepo)
+		ruleRepo2 := new(MockRuleRepo)
+		scanEventRepo2 := new(MockScanEventRepo)
+		svc2 := NewPassService(passRepo2, apartmentRepo2, residentRepo2, ruleRepo2, scanEventRepo2, secret, logger, noopMetrics)
+
+		buildingID := int64(1)
+		residentRepo2.On("GetByTelegramID", ctx, telegramID).Return(&domain.Resident{
+			ID: 3, ApartmentID: 30, TelegramID: telegramID, Status: "active",
+		}, nil)
+		apartmentRepo2.On("GetByID", ctx, int64(30)).Return(&domain.Apartment{
+			ID: 30, BuildingID: buildingID, Number: "7",
+		}, nil)
+
+		result, err := svc2.ValidateResidentPersonalPass(ctx, token, 0, &buildingID)
+
+		assert.NoError(t, err)
+		assert.True(t, result.Valid)
+	})
+
+	t.Run("invalid prefix returns INVALID_PERSONAL_PASS", func(t *testing.T) {
+		svc := newService()
+		result, err := svc.ValidateResidentPersonalPass(ctx, "yardpass://pass/some-uuid", 0, nil)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "INVALID_PERSONAL_PASS", result.Reason)
+	})
+
+	t.Run("tampered HMAC returns INVALID_PERSONAL_PASS", func(t *testing.T) {
+		svc := newService()
+		result, err := svc.ValidateResidentPersonalPass(ctx, "resident:123456789:tampered_hmac_value_here", 0, nil)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "INVALID_PERSONAL_PASS", result.Reason)
+	})
+
+	t.Run("wrong secret returns INVALID_PERSONAL_PASS", func(t *testing.T) {
+		svcGen := newService()
+		telegramID := int64(555666777)
+		token := svcGen.GenerateResidentPersonalPassToken(telegramID)
+
+		svcVal := NewPassService(
+			new(MockPassRepo), new(MockApartmentRepo), new(MockResidentRepo),
+			new(MockRuleRepo), new(MockScanEventRepo),
+			"different-secret", logger, noopMetrics,
+		)
+		result, err := svcVal.ValidateResidentPersonalPass(ctx, token, 0, nil)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "INVALID_PERSONAL_PASS", result.Reason)
+	})
+
+	t.Run("building mismatch returns BUILDING_MISMATCH", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		apartmentRepo := new(MockApartmentRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		telegramID := int64(444555666)
+		token := svc.GenerateResidentPersonalPassToken(telegramID)
+
+		guardBuildingID := int64(2)
+		residentRepo.On("GetByTelegramID", ctx, telegramID).Return(&domain.Resident{
+			ID: 4, ApartmentID: 40, TelegramID: telegramID, Status: "active",
+		}, nil)
+		apartmentRepo.On("GetByID", ctx, int64(40)).Return(&domain.Apartment{
+			ID: 40, BuildingID: int64(1), Number: "99",
+		}, nil)
+
+		result, err := svc.ValidateResidentPersonalPass(ctx, token, 0, &guardBuildingID)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "BUILDING_MISMATCH", result.Reason)
+	})
+
+	t.Run("inactive resident returns RESIDENT_NOT_FOUND", func(t *testing.T) {
+		passRepo := new(MockPassRepo)
+		apartmentRepo := new(MockApartmentRepo)
+		residentRepo := new(MockResidentRepo)
+		ruleRepo := new(MockRuleRepo)
+		scanEventRepo := new(MockScanEventRepo)
+		svc := NewPassService(passRepo, apartmentRepo, residentRepo, ruleRepo, scanEventRepo, secret, logger, noopMetrics)
+
+		telegramID := int64(777888999)
+		token := svc.GenerateResidentPersonalPassToken(telegramID)
+
+		residentRepo.On("GetByTelegramID", ctx, telegramID).Return(&domain.Resident{
+			ID: 5, ApartmentID: 50, TelegramID: telegramID, Status: "inactive",
+		}, nil)
+
+		result, err := svc.ValidateResidentPersonalPass(ctx, token, 0, nil)
+		assert.NoError(t, err)
+		assert.False(t, result.Valid)
+		assert.Equal(t, "RESIDENT_NOT_FOUND", result.Reason)
 	})
 }

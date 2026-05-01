@@ -6,6 +6,7 @@ export const APP_ROUTES = {
   ADMIN: '/admin',
   ADMIN_RULES: '/admin/rules',
   ADMIN_REPORTS: '/admin/reports',
+  ADMIN_GUARDS: '/admin/guards',
   ADMIN_RESIDENTS: '/admin/residents',
   FORBIDDEN: '/forbidden',
 } as const;

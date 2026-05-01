@@ -67,6 +67,25 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		return nil, errors.New("cannot create superuser")
 	}
 
+	switch creator.Role {
+	case "superuser":
+		// superuser may create admin/guard for specific building
+	case "admin":
+		if req.Role != "guard" {
+			return nil, errors.New("admin can only create guard accounts")
+		}
+		if creator.BuildingID == nil {
+			return nil, errors.New("admin is not linked to a building")
+		}
+		if req.BuildingID != nil && *req.BuildingID != *creator.BuildingID {
+			return nil, errors.New("admin can only create users for their own building")
+		}
+		// Admin always creates guards in own building.
+		req.BuildingID = creator.BuildingID
+	default:
+		return nil, errors.New("insufficient permissions to register users")
+	}
+
 	if req.Role == "guard" || req.Role == "admin" {
 		if req.BuildingID == nil {
 			if req.BuildingName == nil || strings.TrimSpace(*req.BuildingName) == "" {
@@ -87,18 +106,10 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 			return nil, errors.New("building not found")
 		}
 
-		if creator.Role == "admin" {
-			if creator.BuildingID == nil || *creator.BuildingID != *req.BuildingID {
-				return nil, errors.New("admin can only create users for their own building")
-			}
-		}
 	}
 
 	if req.ApartmentNumber != nil && *req.ApartmentNumber <= 0 {
 		return nil, errors.New("apartment_number must be greater than zero")
-	}
-	if creator.Role == "admin" && req.ApartmentNumber == nil {
-		return nil, errors.New("apartment_number is required when admin creates a user")
 	}
 
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)

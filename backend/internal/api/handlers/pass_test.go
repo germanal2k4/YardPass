@@ -217,7 +217,8 @@ func TestPassHandler_Create(t *testing.T) {
 			Status:      "active",
 		}
 		svc.On("CreatePass", mock.Anything, mock.MatchedBy(func(r domain.CreatePassRequest) bool {
-			return r.ApartmentID == 1 && r.CarPlate != nil && *r.CarPlate == carPlate
+			return r.ApartmentID == 1 && r.CarPlate != nil && *r.CarPlate == carPlate &&
+				r.ResidentID != nil && *r.ResidentID == 1
 		})).Return(pass, nil)
 
 		body, _ := json.Marshal(CreatePassRequest{

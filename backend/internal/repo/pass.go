@@ -148,6 +148,82 @@ func (r *PassRepo) CountActiveTodayByResidentID(ctx context.Context, residentID 
 	return int(count), err
 }
 
+func (r *PassRepo) CreateWithDailyLimit(
+	ctx context.Context,
+	pass *domain.Pass,
+	dayStartUTC, dayEndUTC time.Time,
+	dailyLimit int,
+) (bool, error) {
+	ctx = queryNameToContext(ctx, "PassRepo.CreateWithDailyLimit")
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, pass.ApartmentID); err != nil {
+		return false, err
+	}
+
+	var aptCount int
+	err = tx.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM passes
+		WHERE apartment_id = $1
+			AND status = 'active'
+			AND created_at >= $2
+			AND created_at < $3
+	`, pass.ApartmentID, dayStartUTC, dayEndUTC).Scan(&aptCount)
+	if err != nil {
+		return false, err
+	}
+	if aptCount >= dailyLimit {
+		return false, nil
+	}
+
+	if pass.ResidentID != nil {
+		var resCount int
+		err = tx.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM passes
+			WHERE resident_id = $1
+				AND status = 'active'
+				AND created_at >= $2
+				AND created_at < $3
+		`, *pass.ResidentID, dayStartUTC, dayEndUTC).Scan(&resCount)
+		if err != nil {
+			return false, err
+		}
+		if resCount >= dailyLimit {
+			return false, nil
+		}
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO passes (id, apartment_id, resident_id, car_plate, guest_name, valid_from, valid_to, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING created_at, updated_at
+	`,
+		pass.ID,
+		pass.ApartmentID,
+		pass.ResidentID,
+		pass.CarPlate,
+		pass.GuestName,
+		pass.ValidFrom,
+		pass.ValidTo,
+		pass.Status,
+	).Scan(&pass.CreatedAt, &pass.UpdatedAt)
+	if err != nil {
+		return false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	ctx = queryNameToContext(ctx, "PassRepo.Create")
 	row, err := r.queries.CreatePass(ctx, db.CreatePassParams{

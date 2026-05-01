@@ -23,9 +23,17 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- $migrateRepo := .Values.image.repository }}
+      {{- $migrateTag := .Values.image.tag }}
+      {{- if and .Values.migrateImage .Values.migrateImage.repository }}
+      {{- $migrateRepo = .Values.migrateImage.repository }}
+      {{- end }}
+      {{- if and .Values.migrateImage .Values.migrateImage.tag }}
+      {{- $migrateTag = .Values.migrateImage.tag }}
+      {{- end }}
       initContainers:
         - name: migrate
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          image: {{ $migrateRepo }}:{{ $migrateTag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["./migrate", "up"]
           env:

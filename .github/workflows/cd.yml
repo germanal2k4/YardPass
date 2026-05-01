@@ -10,6 +10,8 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/yardpass-backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/yardpass-frontend
+  BOT_IMAGE: ghcr.io/${{ github.repository_owner }}/yardpass-bot
+  MIGRATE_IMAGE: ghcr.io/${{ github.repository_owner }}/yardpass-migrate
 
 jobs:
   build-and-push:
@@ -52,6 +54,30 @@ jobs:
           tags: |
             ${{ env.BACKEND_IMAGE }}:${{ steps.meta.outputs.sha_short }}
             ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push bot
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: bot
+          push: true
+          tags: |
+            ${{ env.BOT_IMAGE }}:${{ steps.meta.outputs.sha_short }}
+            ${{ env.BOT_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & push migrate
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          target: migrate
+          push: true
+          tags: |
+            ${{ env.MIGRATE_IMAGE }}:${{ steps.meta.outputs.sha_short }}
+            ${{ env.MIGRATE_IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -116,7 +142,22 @@ jobs:
       - name: Generate image tag override
         run: |
           TAG="${{ needs.build-and-push.outputs.image_tag }}"
-          printf 'backend:\n  image:\n    tag: "%s"\nfrontend:\n  image:\n    tag: "%s"\n' "$TAG" "$TAG" > values-cd-override.yaml
+          OWNER="${{ github.repository_owner }}"
+          printf '%s\n' \
+            "backend:" \
+            "  image:" \
+            "    tag: \"${TAG}\"" \
+            "  migrateImage:" \
+            "    repository: ghcr.io/${OWNER}/yardpass-migrate" \
+            "    tag: \"${TAG}\"" \
+            "frontend:" \
+            "  image:" \
+            "    tag: \"${TAG}\"" \
+            "bot:" \
+            "  image:" \
+            "    repository: ghcr.io/${OWNER}/yardpass-bot" \
+            "    tag: \"${TAG}\"" \
+            > values-cd-override.yaml
           cat values-cd-override.yaml
 
       - name: Deploy with helmfile
@@ -126,6 +167,7 @@ jobs:
         run: |
           kubectl rollout status deployment/yardpass-backend -n yardpass --timeout=120s
           kubectl rollout status deployment/yardpass-frontend -n yardpass --timeout=120s
+          kubectl rollout status deployment/yardpass-bot -n yardpass --timeout=120s
 
       - name: Show deployment status
         if: always()

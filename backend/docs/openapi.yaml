@@ -118,6 +118,28 @@ paths:
               schema:
                 type: string
 
+  /auth/purchase-subscription:
+    post:
+      summary: Купить подписку и создать ЖК
+      security: []
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PurchaseSubscriptionRequest'
+      responses:
+        '201':
+          description: Подписка успешно оформлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseSubscriptionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /api/v1/me:
     get:
       summary: Информация о текущем пользователе
@@ -351,6 +373,72 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /api/v1/buildings/{id}:
+    get:
+      summary: Получить здание по ID
+      description: |
+        - `admin` получает только свое здание (ID из токена, path-параметр игнорируется).
+        - `superuser` может запрашивать любое здание по `id`.
+      tags:
+        - Buildings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID здания
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Building'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/buildings/{id}/apartment-count:
+    put:
+      summary: Обновить количество квартир в здании
+      description: |
+        - Поле `apartment_count` обязательно и должно быть больше 0.
+        - Уменьшение `apartment_count` запрещено.
+        - `admin` может обновлять только свое здание.
+        - `superuser` может обновлять любое здание по `id`.
+      tags:
+        - Buildings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID здания
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApartmentCountRequest'
+      responses:
+        '200':
+          description: Здание обновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Building'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
     get:
       summary: Список пользователей
@@ -702,7 +790,7 @@ paths:
       description: |
         Возвращает статистику по событиям сканирования за указанный период.
         - Superuser видит все данные по умолчанию
-        - Admin/guard видят только данные своего здания
+        - Admin видит только данные своего здания
         - Superuser может указать building_id в query для фильтрации
       tags:
         - Reports
@@ -741,7 +829,7 @@ paths:
       summary: Экспортировать события в Excel
       description: |
         Экспортирует события сканирования в файл Excel (.xlsx).
-        - `admin` и `guard` получают только события своего здания.
+        - `admin` получает только события своего здания.
         - `superuser` может дополнительно фильтровать по `building_id`.
       tags:
         - Reports
@@ -860,6 +948,96 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /service/v1/passes:
+    post:
+      summary: Создать пропуск (service API)
+      description: Сервисный эндпоинт для интеграций. Требуется заголовок `X-Service-Token`.
+      security:
+        - serviceTokenAuth: []
+      tags:
+        - Service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePassRequest'
+      responses:
+        '201':
+          description: Пропуск создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pass'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /service/v1/passes/{id}/revoke:
+    post:
+      summary: Отозвать пропуск (service API)
+      description: Сервисный эндпоинт для интеграций. Требуется заголовок `X-Service-Token`.
+      security:
+        - serviceTokenAuth: []
+      tags:
+        - Service
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Пропуск отозван
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  pass_id:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /service/v1/passes/active:
+    get:
+      summary: Список активных пропусков (service API)
+      description: Сервисный эндпоинт для интеграций. Требуется заголовок `X-Service-Token`.
+      security:
+        - serviceTokenAuth: []
+      tags:
+        - Service
+      parameters:
+        - name: apartment_id
+          in: query
+          schema:
+            type: integer
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pass'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   securitySchemes:
     cookieAuth:
@@ -867,6 +1045,11 @@ components:
       in: cookie
       name: access_token
       description: JWT access-токен в HttpOnly-cookie
+    serviceTokenAuth:
+      type: apiKey
+      in: header
+      name: X-Service-Token
+      description: Сервисный токен для интеграционных запросов
 
   schemas:
     AuthSessionMeta:
@@ -940,6 +1123,34 @@ components:
         valid_to:
           type: string
           format: date-time
+
+    Building:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: string
+          nullable: true
+        apartment_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateApartmentCountRequest:
+      type: object
+      required:
+        - apartment_count
+      properties:
+        apartment_count:
+          type: integer
+          minimum: 1
 
     User:
       type: object
@@ -1057,6 +1268,64 @@ components:
           type: string
           nullable: true
           description: Телефон
+
+    PurchaseSubscriptionRequest:
+      type: object
+      required:
+        - email
+        - building_name
+        - apartment_count
+        - card_number
+        - card_holder
+        - expiry
+        - cvv
+      properties:
+        email:
+          type: string
+          format: email
+        building_name:
+          type: string
+        apartment_count:
+          type: integer
+        card_number:
+          type: string
+        card_holder:
+          type: string
+        expiry:
+          type: string
+          description: Срок действия карты (MM/YY)
+        cvv:
+          type: string
+
+    AccountCredentials:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    PurchaseSubscriptionResponse:
+      type: object
+      properties:
+        building_id:
+          type: integer
+        building_name:
+          type: string
+        apartment_count:
+          type: integer
+        subscription_fee:
+          type: integer
+        period:
+          type: string
+        email:
+          type: string
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountCredentials'
+        message:
+          type: string
 
     Rule:
       type: object

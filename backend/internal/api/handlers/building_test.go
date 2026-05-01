@@ -105,3 +105,29 @@ func TestBuildingHandler_UpdateApartmentCount(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 }
+
+func TestBuildingHandler_GetByID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("returns building for admin from auth context", func(t *testing.T) {
+		repo := new(mockBuildingRepository)
+		handler := NewBuildingHandler(repo)
+
+		r := gin.New()
+		r.Use(func(c *gin.Context) {
+			c.Set("role", "admin")
+			c.Set("building_id", int64(1))
+			c.Next()
+		})
+		r.GET("/api/v1/buildings/:id", handler.GetByID)
+
+		repo.On("GetByID", mock.Anything, int64(1)).Return(&domain.Building{ID: 1, ApartmentCount: 10}, nil)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/buildings/999", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		repo.AssertExpectations(t)
+	})
+}

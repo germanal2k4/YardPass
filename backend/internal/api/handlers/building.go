@@ -22,6 +22,49 @@ type UpdateApartmentCountRequest struct {
 	ApartmentCount int32 `json:"apartment_count" binding:"required"`
 }
 
+func (h *BuildingHandler) GetByID(c *gin.Context) {
+	targetBuildingID, ok := resolveTargetBuildingID(c)
+	if !ok {
+		return
+	}
+
+	building, err := h.buildingRepo.GetByID(c.Request.Context(), targetBuildingID)
+	if err != nil {
+		errors.InternalServerError(c, "FETCH_BUILDING_FAILED", err.Error())
+		return
+	}
+	if building == nil {
+		errors.NotFound(c, "BUILDING_NOT_FOUND", "building not found")
+		return
+	}
+
+	c.JSON(http.StatusOK, building)
+}
+
+func resolveTargetBuildingID(c *gin.Context) (int64, bool) {
+	role, _ := c.Get("role")
+	buildingIDValue, hasBuildingID := c.Get("building_id")
+	if role == "admin" && !hasBuildingID {
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id is required for admin")
+		return 0, false
+	}
+
+	if role == "admin" {
+		return buildingIDValue.(int64), true
+	}
+	idParam := c.Param("id")
+	if idParam == "" {
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "building id is required")
+		return 0, false
+	}
+	var parsed int64
+	if _, err := fmt.Sscanf(idParam, "%d", &parsed); err != nil {
+		errors.BadRequest(c, "INVALID_BUILDING_ID", "building id must be a number")
+		return 0, false
+	}
+	return parsed, true
+}
+
 func (h *BuildingHandler) UpdateApartmentCount(c *gin.Context) {
 	var req UpdateApartmentCountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,28 +76,9 @@ func (h *BuildingHandler) UpdateApartmentCount(c *gin.Context) {
 		return
 	}
 
-	role, _ := c.Get("role")
-	buildingIDValue, hasBuildingID := c.Get("building_id")
-	if role == "admin" && !hasBuildingID {
-		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id is required for admin")
+	targetBuildingID, ok := resolveTargetBuildingID(c)
+	if !ok {
 		return
-	}
-
-	var targetBuildingID int64
-	if role == "admin" {
-		targetBuildingID = buildingIDValue.(int64)
-	} else {
-		idParam := c.Param("id")
-		if idParam == "" {
-			errors.BadRequest(c, "MISSING_BUILDING_ID", "building id is required")
-			return
-		}
-		var parsed int64
-		if _, err := fmt.Sscanf(idParam, "%d", &parsed); err != nil {
-			errors.BadRequest(c, "INVALID_BUILDING_ID", "building id must be a number")
-			return
-		}
-		targetBuildingID = parsed
 	}
 
 	currentBuilding, err := h.buildingRepo.GetByID(c.Request.Context(), targetBuildingID)

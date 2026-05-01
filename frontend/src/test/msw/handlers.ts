@@ -58,6 +58,15 @@ export const mockRule = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+export const mockBuilding = {
+  id: 1,
+  name: 'Дом 1',
+  address: 'Тестовый адрес',
+  apartment_count: 100,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+};
+
 export const mockScanEvents = {
   events: [
     {
@@ -229,6 +238,13 @@ export const handlers = [
   // Rules
   http.get(`${API_BASE}/api/v1/rules`, () => {
     return HttpResponse.json(mockRule);
+  }),
+
+  http.get(`${API_BASE}/api/v1/buildings/:id`, ({ params }) => {
+    return HttpResponse.json({
+      ...mockBuilding,
+      id: Number(params.id),
+    });
   }),
 
   http.put(`${API_BASE}/api/v1/rules`, () => {

@@ -57,10 +57,11 @@ describe('AdminRulesPage', () => {
     await waitFor(() => {
       expect(screen.getByDisplayValue('22:00')).toBeInTheDocument();
     });
+    expect(screen.getByText(/Текущее количество: 100/i)).toBeInTheDocument();
 
-    const apartmentCountInput = screen.getByLabelText(/Новое количество апартаментов/i);
+    const apartmentCountInput = screen.getByLabelText(/Добавить апартаментов/i);
     await user.clear(apartmentCountInput);
-    await user.type(apartmentCountInput, '120');
+    await user.type(apartmentCountInput, '20');
 
     await user.click(screen.getByRole('button', { name: /Увеличить количество апартаментов/i }));
 

@@ -115,7 +115,8 @@ func (r *ScanEventRepo) List(ctx context.Context, filters domain.ScanEventFilter
 }
 
 func (r *ScanEventRepo) CountValidScansToday(ctx context.Context) (int, error) {
-	today := time.Now().Truncate(24 * time.Hour)
+	nowUTC := time.Now().UTC()
+	today := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
 	query := `
 		SELECT COUNT(*)
 		FROM scan_events

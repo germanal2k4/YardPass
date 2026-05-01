@@ -6,6 +6,7 @@ export const APP_ROUTES = {
   ADMIN: '/admin',
   ADMIN_RULES: '/admin/rules',
   ADMIN_REPORTS: '/admin/reports',
+  ADMIN_GUARDS: '/admin/guards',
   FORBIDDEN: '/forbidden',
 } as const;
 
@@ -24,6 +25,7 @@ export const API_ENDPOINTS = {
   
   // Rules
   RULES: '/api/v1/rules',
+  USERS: '/api/v1/users',
   
   // Health
   HEALTH: '/health',

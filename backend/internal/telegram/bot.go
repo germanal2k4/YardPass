@@ -236,7 +236,7 @@ func (b *Bot) handleDuration(ctx context.Context, msg Message, state *UserState)
 
 func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserState) {
 	timeStr := msg.Text
-	now := time.Now()
+	now := time.Now().UTC()
 
 	parsedTime, err := time.Parse("15:04", timeStr)
 	if err != nil {
@@ -277,7 +277,7 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	var validTo time.Time
 
 	if duration, ok := state.Data["duration"].(time.Duration); ok {
@@ -298,8 +298,8 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		ApartmentID: resident.ApartmentID,
 		CarPlate:    carPlate,
 		GuestName:   guestName,
-		ValidFrom:   now,
-		ValidTo:     validTo,
+		ValidFrom:   now.UTC(),
+		ValidTo:     validTo.UTC(),
 	}
 
 	pass, err := b.passService.CreatePass(ctx, req)
@@ -322,7 +322,7 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 			"Действует до: %s\n"+
 			"ID пропуска: %s",
 		pass.CarPlate,
-		pass.ValidTo.Format("15:04 02.01.2006"),
+		pass.ValidTo.UTC().Format("15:04 02.01.2006"),
 		pass.ID.String(),
 	))
 	if err != nil {
@@ -359,7 +359,7 @@ func (b *Bot) listActivePasses(ctx context.Context, chatID int64, userID int64) 
 			i+1,
 			pass.CarPlate,
 			guestName,
-			pass.ValidTo.Format("15:04 02.01.2006"),
+			pass.ValidTo.UTC().Format("15:04 02.01.2006"),
 			pass.ID.String()[:8],
 		)
 	}

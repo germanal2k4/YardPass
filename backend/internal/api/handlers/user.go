@@ -27,7 +27,11 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, exists := c.Get("user_id")
+	if !exists {
+		errors.Unauthorized(c, "MISSING_USER_ID", "User ID not found in token")
+		return
+	}
 	createdBy := userID.(int64)
 
 	user, err := h.userService.RegisterUser(c.Request.Context(), req, createdBy)
@@ -42,12 +46,24 @@ func (h *UserHandler) RegisterUser(c *gin.Context) {
 
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	var filters domain.UserFilters
+	roleValue, _ := c.Get("role")
+	role, _ := roleValue.(string)
 
 	if role := c.Query("role"); role != "" {
 		filters.Role = &role
 	}
 
-	if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
+	if role == "admin" {
+		if buildingIDValue, exists := c.Get("building_id"); exists {
+			if buildingID, ok := buildingIDValue.(int64); ok {
+				filters.BuildingID = &buildingID
+			}
+		}
+		if filters.BuildingID == nil {
+			errors.Forbidden(c, "MISSING_BUILDING_SCOPE", "Admin is not scoped to a building")
+			return
+		}
+	} else if buildingIDStr := c.Query("building_id"); buildingIDStr != "" {
 		var buildingID int64
 		if _, err := fmt.Sscanf(buildingIDStr, "%d", &buildingID); err == nil {
 			filters.BuildingID = &buildingID

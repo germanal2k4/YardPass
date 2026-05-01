@@ -42,7 +42,7 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		req.ValidFrom = time.Now()
+		req.ValidFrom = time.Now().In(req.ValidTo.Location())
 	}
 
 	createReq := domain.CreatePassRequest{

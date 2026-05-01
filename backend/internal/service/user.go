@@ -41,12 +41,24 @@ func (s *UserService) RegisterUser(ctx context.Context, req RegisterUserRequest,
 		return nil, errors.New("creator not found")
 	}
 
-	if creator.Role != "superuser" {
-		return nil, errors.New("only superuser can register users")
-	}
-
 	if req.Role == "superuser" {
 		return nil, errors.New("cannot create superuser")
+	}
+
+	switch creator.Role {
+	case "superuser":
+		// superuser may create admin/guard for specific building
+	case "admin":
+		if req.Role != "guard" {
+			return nil, errors.New("admin can only create guard accounts")
+		}
+		if creator.BuildingID == nil {
+			return nil, errors.New("admin is not linked to a building")
+		}
+		// Admin always creates guards in own building.
+		req.BuildingID = creator.BuildingID
+	default:
+		return nil, errors.New("insufficient permissions to register users")
 	}
 
 	if req.Role == "guard" || req.Role == "admin" {

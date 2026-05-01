@@ -44,6 +44,7 @@ type PassRepository interface {
 	SearchByCarPlate(ctx context.Context, carPlate string, buildingID *int64, limit int) ([]*Pass, error)
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
 	Create(ctx context.Context, pass *Pass) error
+	CreateWithDailyLimit(ctx context.Context, pass *Pass, dayStartUTC, dayEndUTC time.Time, dailyLimit int) (bool, error)
 	Update(ctx context.Context, pass *Pass) error
 	Revoke(ctx context.Context, id uuid.UUID) error
 }

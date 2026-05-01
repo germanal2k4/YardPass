@@ -4,6 +4,7 @@ import { Layout } from '@/shared/ui/Layout';
 import { APP_ROUTES } from '@/shared/config/constants';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
 export function AdminPage() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ export function AdminPage() {
         </Typography>
 
         <Grid container spacing={3} sx={{ mt: 2 }}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Paper
               elevation={2}
               sx={{
@@ -45,7 +46,7 @@ export function AdminPage() {
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Paper
               elevation={2}
               sx={{
@@ -67,6 +68,35 @@ export function AdminPage() {
               </Typography>
               <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
                 Просмотр статистики, журнала событий и выгрузка отчетов в Excel
+              </Typography>
+              <Button variant="contained" sx={{ mt: 'auto' }}>
+                Открыть
+              </Button>
+            </Paper>
+          </Grid>
+
+          <Grid item xs={12} md={4}>
+            <Paper
+              elevation={2}
+              sx={{
+                p: 4,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'pointer',
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                },
+              }}
+              onClick={() => navigate(APP_ROUTES.ADMIN_GUARDS)}
+            >
+              <PersonAddIcon sx={{ fontSize: 80, color: 'primary.main', mb: 2 }} />
+              <Typography variant="h5" gutterBottom>
+                Охранники
+              </Typography>
+              <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
+                Добавление и просмотр аккаунтов охранников
               </Typography>
               <Button variant="contained" sx={{ mt: 'auto' }}>
                 Открыть

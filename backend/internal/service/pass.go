@@ -61,21 +61,19 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		}
 	}
 
+	validFromUTC := req.ValidFrom.UTC()
+	validToUTC := req.ValidTo.UTC()
+	localLocation := resolveLocationForPassTimes(req.ValidFrom, req.ValidTo)
+
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
-	if req.ValidTo.Sub(req.ValidFrom) > maxDuration {
+	if validToUTC.Sub(validFromUTC) > maxDuration {
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
 
-	count, err := s.passRepo.CountActiveTodayByApartmentID(ctx, req.ApartmentID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check daily limit: %w", err)
-	}
-	if count >= rule.DailyPassLimitPerApartment {
-		return nil, errors.New("daily pass limit exceeded")
-	}
-
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-		if err := s.validateQuietHours(req.ValidFrom, req.ValidTo, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+		validFromLocal := validFromUTC.In(localLocation)
+		validToLocal := validToUTC.In(localLocation)
+		if err := s.validateQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
 			return nil, err
 		}
 	}
@@ -85,13 +83,27 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		ApartmentID: req.ApartmentID,
 		CarPlate:    carPlate,
 		GuestName:   req.GuestName,
-		ValidFrom:   req.ValidFrom,
-		ValidTo:     req.ValidTo,
+		ValidFrom:   validFromUTC,
+		ValidTo:     validToUTC,
 		Status:      "active",
 	}
 
-	if err := s.passRepo.Create(ctx, pass); err != nil {
+	dayAnchorLocal := validFromUTC.In(localLocation)
+	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
+	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
+
+	created, err := s.passRepo.CreateWithDailyLimit(
+		ctx,
+		pass,
+		startOfDayLocal.UTC(),
+		endOfDayLocal.UTC(),
+		rule.DailyPassLimitPerApartment,
+	)
+	if err != nil {
 		return nil, fmt.Errorf("failed to create pass: %w", err)
+	}
+	if !created {
+		return nil, errors.New("daily pass limit exceeded")
 	}
 
 	s.logger.Info("pass created",
@@ -125,7 +137,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		return result, nil
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if now.Before(pass.ValidFrom) {
 		result.Reason = "PASS_NOT_YET_VALID"
 		s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
@@ -145,7 +157,8 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
+				localLocation := resolveLocationForPassTimes(pass.ValidFrom, pass.ValidTo)
+				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
 					s.logScanEvent(ctx, passID, guardUserID, "invalid", result.Reason)
 					return result, nil
@@ -208,7 +221,7 @@ func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardU
 	event := &domain.ScanEvent{
 		PassID:      passID,
 		GuardUserID: guardUserID,
-		ScannedAt:   time.Now(),
+		ScannedAt:   time.Now().UTC(),
 		Result:      result,
 		Reason:      &reason,
 	}
@@ -283,5 +296,25 @@ func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) boo
 
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
+}
+
+func resolveLocationFromTimestamp(ts time.Time) *time.Location {
+	if ts.IsZero() {
+		return nil
+	}
+	if loc := ts.Location(); loc != nil {
+		return loc
+	}
+	return nil
+}
+
+func resolveLocationForPassTimes(validFrom, validTo time.Time) *time.Location {
+	if loc := resolveLocationFromTimestamp(validFrom); loc != nil {
+		return loc
+	}
+	if loc := resolveLocationFromTimestamp(validTo); loc != nil {
+		return loc
+	}
+	return time.UTC
 }
 

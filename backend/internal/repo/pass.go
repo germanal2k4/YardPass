@@ -85,7 +85,7 @@ func (r *PassRepo) GetByApartmentID(ctx context.Context, apartmentID int64, stat
 }
 
 func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64) ([]*domain.Pass, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `
 		SELECT id, apartment_id, car_plate, guest_name, valid_from, valid_to, status, created_at, updated_at
 		FROM passes
@@ -125,7 +125,8 @@ func (r *PassRepo) GetActiveByApartmentID(ctx context.Context, apartmentID int64
 }
 
 func (r *PassRepo) CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error) {
-	today := time.Now().Truncate(24 * time.Hour)
+	nowUTC := time.Now().UTC()
+	today := time.Date(nowUTC.Year(), nowUTC.Month(), nowUTC.Day(), 0, 0, 0, 0, time.UTC)
 	query := `
 		SELECT COUNT(*)
 		FROM passes
@@ -157,6 +158,63 @@ func (r *PassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	).Scan(&pass.CreatedAt, &pass.UpdatedAt)
 
 	return err
+}
+
+func (r *PassRepo) CreateWithDailyLimit(
+	ctx context.Context,
+	pass *domain.Pass,
+	dayStartUTC, dayEndUTC time.Time,
+	dailyLimit int,
+) (bool, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
+	// Serialize pass creation per apartment to avoid limit races.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, pass.ApartmentID); err != nil {
+		return false, err
+	}
+
+	var count int
+	countQuery := `
+		SELECT COUNT(*)
+		FROM passes
+		WHERE apartment_id = $1
+			AND status = 'active'
+			AND created_at >= $2
+			AND created_at < $3
+	`
+	if err := tx.QueryRow(ctx, countQuery, pass.ApartmentID, dayStartUTC, dayEndUTC).Scan(&count); err != nil {
+		return false, err
+	}
+	if count >= dailyLimit {
+		return false, nil
+	}
+
+	insertQuery := `
+		INSERT INTO passes (id, apartment_id, car_plate, guest_name, valid_from, valid_to, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING created_at, updated_at
+	`
+	if err := tx.QueryRow(ctx, insertQuery,
+		pass.ID,
+		pass.ApartmentID,
+		pass.CarPlate,
+		pass.GuestName,
+		pass.ValidFrom,
+		pass.ValidTo,
+		pass.Status,
+	).Scan(&pass.CreatedAt, &pass.UpdatedAt); err != nil {
+		return false, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (r *PassRepo) Update(ctx context.Context, pass *domain.Pass) error {
@@ -237,7 +295,7 @@ func (r *PassRepo) SearchByCarPlate(ctx context.Context, carPlate string, buildi
 }
 
 func (r *PassRepo) GetActiveByBuildingID(ctx context.Context, buildingID int64) ([]*domain.Pass, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `
 		SELECT p.id, p.apartment_id, p.car_plate, p.guest_name, p.valid_from, p.valid_to, p.status, p.created_at, p.updated_at
 		FROM passes p

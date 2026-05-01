@@ -44,6 +44,11 @@ func (m *MockPassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	return args.Error(0)
 }
 
+func (m *MockPassRepo) CreateWithDailyLimit(ctx context.Context, pass *domain.Pass, dayStartUTC, dayEndUTC time.Time, dailyLimit int) (bool, error) {
+	args := m.Called(ctx, pass, dayStartUTC, dayEndUTC, dailyLimit)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockPassRepo) Update(ctx context.Context, pass *domain.Pass) error {
 	args := m.Called(ctx, pass)
 	return args.Error(0)
@@ -151,15 +156,14 @@ func TestPassService_CreatePass(t *testing.T) {
 			ID:         apartmentID,
 			BuildingID: buildingID,
 			Number:     "101",
-		}, nil)
+		}, nil).Once()
 
 		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
 			DailyPassLimitPerApartment: 5,
 			MaxPassDurationHours:       24,
-		}, nil)
+		}, nil).Once()
 
-		passRepo.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(2, nil)
-		passRepo.On("Create", ctx, mock.AnythingOfType("*domain.Pass")).Return(nil)
+		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 5).Return(true, nil).Once()
 
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,
@@ -189,14 +193,14 @@ func TestPassService_CreatePass(t *testing.T) {
 		apartmentRepo.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
 			ID:         apartmentID,
 			BuildingID: buildingID,
-		}, nil)
+		}, nil).Once()
 
 		ruleRepo.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
 			DailyPassLimitPerApartment: 5,
 			MaxPassDurationHours:       24,
-		}, nil)
+		}, nil).Once()
 
-		passRepo.On("CountActiveTodayByApartmentID", ctx, apartmentID).Return(5, nil)
+		passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.AnythingOfType("time.Time"), mock.AnythingOfType("time.Time"), 5).Return(false, nil).Once()
 
 		req := domain.CreatePassRequest{
 			ApartmentID: apartmentID,

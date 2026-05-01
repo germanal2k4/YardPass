@@ -83,6 +83,18 @@ export interface MeResponse {
   role: 'guard' | 'admin';
 }
 
+export interface RegisterUserRequest {
+  username: string;
+  email?: string;
+  password: string;
+  role: 'guard' | 'admin';
+  building_id?: number;
+}
+
+export interface ListUsersResponse {
+  users: User[];
+}
+
 export interface CreatePassRequest {
   apartment_id: number;
   car_plate: string;

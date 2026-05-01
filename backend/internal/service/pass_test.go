@@ -64,6 +64,11 @@ func (m *MockPassRepo) Create(ctx context.Context, pass *domain.Pass) error {
 	return args.Error(0)
 }
 
+func (m *MockPassRepo) CreateWithDailyLimit(ctx context.Context, pass *domain.Pass, dayStartUTC, dayEndUTC time.Time, dailyLimit int) (bool, error) {
+	args := m.Called(ctx, pass, dayStartUTC, dayEndUTC, dailyLimit)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockPassRepo) Update(ctx context.Context, pass *domain.Pass) error {
 	args := m.Called(ctx, pass)
 	return args.Error(0)

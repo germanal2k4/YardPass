@@ -53,6 +53,8 @@ type Resident struct {
 	Status      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	CarPlate    *string
+	Timezone    *string
 }
 
 type Rule struct {

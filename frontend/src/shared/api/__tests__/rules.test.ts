@@ -30,11 +30,11 @@ describe('rulesApi', () => {
 
   it('update sends PUT with building_id and data', async () => {
     let capturedUrl = '';
-    let capturedBody: any = null;
+    let capturedBody: Record<string, unknown> | null = null;
     server.use(
       http.put(`${API_BASE}/api/v1/rules`, async ({ request }) => {
         capturedUrl = request.url;
-        capturedBody = await request.json();
+        capturedBody = (await request.json()) as Record<string, unknown>;
         return HttpResponse.json({
           id: 1,
           building_id: 3,

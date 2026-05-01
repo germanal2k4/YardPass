@@ -11,8 +11,8 @@ import (
 )
 
 const createResident = `-- name: CreateResident :one
-INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING id, created_at, updated_at
 `
 
@@ -22,6 +22,8 @@ type CreateResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
+	Timezone    *string
 	Status      string
 }
 
@@ -38,6 +40,8 @@ func (q *Queries) CreateResident(ctx context.Context, arg CreateResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
+		arg.Timezone,
 		arg.Status,
 	)
 	var i CreateResidentRow
@@ -55,14 +59,28 @@ func (q *Queries) DeleteResident(ctx context.Context, id int64) error {
 }
 
 const getResidentByID = `-- name: GetResidentByID :one
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status, created_at, updated_at
 FROM residents
 WHERE id = $1
 `
 
-func (q *Queries) GetResidentByID(ctx context.Context, id int64) (Resident, error) {
+type GetResidentByIDRow struct {
+	ID          int64
+	ApartmentID int64
+	TelegramID  int64
+	ChatID      int64
+	Name        *string
+	Phone       *string
+	CarPlate    *string
+	Timezone    *string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) GetResidentByID(ctx context.Context, id int64) (GetResidentByIDRow, error) {
 	row := q.db.QueryRow(ctx, getResidentByID, id)
-	var i Resident
+	var i GetResidentByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.ApartmentID,
@@ -70,6 +88,8 @@ func (q *Queries) GetResidentByID(ctx context.Context, id int64) (Resident, erro
 		&i.ChatID,
 		&i.Name,
 		&i.Phone,
+		&i.CarPlate,
+		&i.Timezone,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -78,14 +98,28 @@ func (q *Queries) GetResidentByID(ctx context.Context, id int64) (Resident, erro
 }
 
 const getResidentByTelegramID = `-- name: GetResidentByTelegramID :one
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status, created_at, updated_at
 FROM residents
 WHERE telegram_id = $1
 `
 
-func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64) (Resident, error) {
+type GetResidentByTelegramIDRow struct {
+	ID          int64
+	ApartmentID int64
+	TelegramID  int64
+	ChatID      int64
+	Name        *string
+	Phone       *string
+	CarPlate    *string
+	Timezone    *string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64) (GetResidentByTelegramIDRow, error) {
 	row := q.db.QueryRow(ctx, getResidentByTelegramID, telegramID)
-	var i Resident
+	var i GetResidentByTelegramIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.ApartmentID,
@@ -93,6 +127,8 @@ func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64)
 		&i.ChatID,
 		&i.Name,
 		&i.Phone,
+		&i.CarPlate,
+		&i.Timezone,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -100,8 +136,65 @@ func (q *Queries) GetResidentByTelegramID(ctx context.Context, telegramID int64)
 	return i, err
 }
 
+const listActiveResidentsWithCarPlate = `-- name: ListActiveResidentsWithCarPlate :many
+SELECT r.id, r.apartment_id, r.telegram_id, r.chat_id, r.name, r.phone, r.car_plate, r.timezone, r.status, r.created_at, r.updated_at
+FROM residents r
+INNER JOIN apartments a ON r.apartment_id = a.id
+WHERE r.status = 'active'
+  AND r.car_plate IS NOT NULL
+  AND BTRIM(r.car_plate::text) <> ''
+  AND ($1::bigint IS NULL OR a.building_id = $1)
+ORDER BY r.id
+`
+
+type ListActiveResidentsWithCarPlateRow struct {
+	ID          int64
+	ApartmentID int64
+	TelegramID  int64
+	ChatID      int64
+	Name        *string
+	Phone       *string
+	CarPlate    *string
+	Timezone    *string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) ListActiveResidentsWithCarPlate(ctx context.Context, filterBuildingID *int64) ([]ListActiveResidentsWithCarPlateRow, error) {
+	rows, err := q.db.Query(ctx, listActiveResidentsWithCarPlate, filterBuildingID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveResidentsWithCarPlateRow
+	for rows.Next() {
+		var i ListActiveResidentsWithCarPlateRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ApartmentID,
+			&i.TelegramID,
+			&i.ChatID,
+			&i.Name,
+			&i.Phone,
+			&i.CarPlate,
+			&i.Timezone,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listResidents = `-- name: ListResidents :many
-SELECT id, apartment_id, telegram_id, chat_id, name, phone, status, created_at, updated_at
+SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status, created_at, updated_at
 FROM residents
 WHERE ($1::bigint IS NULL OR apartment_id = $1)
   AND ($2::bigint IS NULL OR apartment_id IN (SELECT id FROM apartments WHERE building_id = $2))
@@ -119,7 +212,21 @@ type ListResidentsParams struct {
 	MaxResults        *int32
 }
 
-func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([]Resident, error) {
+type ListResidentsRow struct {
+	ID          int64
+	ApartmentID int64
+	TelegramID  int64
+	ChatID      int64
+	Name        *string
+	Phone       *string
+	CarPlate    *string
+	Timezone    *string
+	Status      string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([]ListResidentsRow, error) {
 	rows, err := q.db.Query(ctx, listResidents,
 		arg.FilterApartmentID,
 		arg.FilterBuildingID,
@@ -131,9 +238,9 @@ func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Resident
+	var items []ListResidentsRow
 	for rows.Next() {
-		var i Resident
+		var i ListResidentsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ApartmentID,
@@ -141,6 +248,8 @@ func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([
 			&i.ChatID,
 			&i.Name,
 			&i.Phone,
+			&i.CarPlate,
+			&i.Timezone,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -155,9 +264,41 @@ func (q *Queries) ListResidents(ctx context.Context, arg ListResidentsParams) ([
 	return items, nil
 }
 
+const setResidentCarPlate = `-- name: SetResidentCarPlate :exec
+UPDATE residents
+SET car_plate = $2
+WHERE id = $1
+`
+
+type SetResidentCarPlateParams struct {
+	ID       int64
+	CarPlate *string
+}
+
+func (q *Queries) SetResidentCarPlate(ctx context.Context, arg SetResidentCarPlateParams) error {
+	_, err := q.db.Exec(ctx, setResidentCarPlate, arg.ID, arg.CarPlate)
+	return err
+}
+
+const setResidentTimezone = `-- name: SetResidentTimezone :exec
+UPDATE residents
+SET timezone = $2
+WHERE id = $1
+`
+
+type SetResidentTimezoneParams struct {
+	ID       int64
+	Timezone *string
+}
+
+func (q *Queries) SetResidentTimezone(ctx context.Context, arg SetResidentTimezoneParams) error {
+	_, err := q.db.Exec(ctx, setResidentTimezone, arg.ID, arg.Timezone)
+	return err
+}
+
 const updateResident = `-- name: UpdateResident :one
 UPDATE residents
-SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, status = $7
+SET apartment_id = $2, telegram_id = $3, chat_id = $4, name = $5, phone = $6, car_plate = $7, timezone = $8, status = $9
 WHERE id = $1
 RETURNING updated_at
 `
@@ -169,6 +310,8 @@ type UpdateResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
+	Timezone    *string
 	Status      string
 }
 
@@ -180,6 +323,8 @@ func (q *Queries) UpdateResident(ctx context.Context, arg UpdateResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
+		arg.Timezone,
 		arg.Status,
 	)
 	var updated_at time.Time
@@ -188,13 +333,14 @@ func (q *Queries) UpdateResident(ctx context.Context, arg UpdateResidentParams) 
 }
 
 const upsertResident = `-- name: UpsertResident :one
-INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, status)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, car_plate, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (telegram_id) DO UPDATE SET
     apartment_id = EXCLUDED.apartment_id,
     chat_id = EXCLUDED.chat_id,
     name = EXCLUDED.name,
     phone = EXCLUDED.phone,
+    car_plate = EXCLUDED.car_plate,
     status = EXCLUDED.status
 RETURNING id, created_at, updated_at
 `
@@ -205,6 +351,7 @@ type UpsertResidentParams struct {
 	ChatID      int64
 	Name        *string
 	Phone       *string
+	CarPlate    *string
 	Status      string
 }
 
@@ -221,6 +368,7 @@ func (q *Queries) UpsertResident(ctx context.Context, arg UpsertResidentParams) 
 		arg.ChatID,
 		arg.Name,
 		arg.Phone,
+		arg.CarPlate,
 		arg.Status,
 	)
 	var i UpsertResidentRow

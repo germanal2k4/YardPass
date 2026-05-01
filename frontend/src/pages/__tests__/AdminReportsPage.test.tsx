@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/helpers';
@@ -12,10 +12,13 @@ describe('AdminReportsPage', () => {
   let revokeObjectURLSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    createObjectURLSpy = vi.fn(() => 'blob:http://localhost/fake-url') as any;
-    revokeObjectURLSpy = vi.fn() as any;
-    URL.createObjectURL = createObjectURLSpy as any;
-    URL.revokeObjectURL = revokeObjectURLSpy as any;
+    createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:http://localhost/fake-url');
+    revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    createObjectURLSpy.mockRestore();
+    revokeObjectURLSpy.mockRestore();
   });
 
   it('renders statistics cards', async () => {

@@ -72,6 +72,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-me}
       - SERVICE_TOKEN=${SERVICE_TOKEN:-your-service-token}
       - API_BASE_URL=http://backend:8080
       - LOG_LEVEL=${LOG_LEVEL:-info}

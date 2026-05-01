@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	_ "time/tzdata"
 	"yardpass/internal/setup"
 
 	"github.com/spf13/cobra"

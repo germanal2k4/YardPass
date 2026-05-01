@@ -6,7 +6,13 @@ image:
   tag: "latest"
   pullPolicy: IfNotPresent
 
+# Optional: init migrate job uses this image when set; defaults to image above (api image includes ./migrate).
+migrateImage: {}
+
 imagePullSecrets: []
+
+# Istio: init migrate runs before sidecar; exclude host Postgres/Redis from redirect (local + external DB).
+podAnnotations: {}
 
 appLabel: yardpass-backend
 
@@ -20,7 +26,7 @@ secrets:
   smtpFrom: ""
 
 env:
-  JWT_SECRET: your-secret-key-change-me
+  JWT_SECRET: ""
   JWT_ACCESS_TTL: 15m
   JWT_REFRESH_TTL: 168h
   SERVICE_TOKEN: your-service-token

@@ -155,6 +155,10 @@ releases:
 {{ if hasKey .Values "backend" }}
       - {{ .Values.backend | toYaml | nindent 8 }}
 {{ end }}
+    set:
+      # Prefer non-empty JWT from env-specific values; otherwise shell (e.g. .env sourced by k8s-podman-deploy.sh).
+      - name: env.JWT_SECRET
+        value: {{ $jwt := dig "backend" "env" "JWT_SECRET" "" .Values }}{{ if ne $jwt "" }}{{ $jwt | quote }}{{ else }}{{ env "JWT_SECRET" | default "" | quote }}{{ end }}
   - name: yardpass-frontend
     namespace: yardpass
     createNamespace: true
@@ -182,4 +186,6 @@ releases:
     set:
       - name: secrets.telegramToken
         value: {{ env "TELEGRAM_BOT_TOKEN" | default "" | quote }}
+      - name: env.JWT_SECRET
+        value: {{ $jwt := dig "bot" "env" "JWT_SECRET" "" .Values }}{{ if ne $jwt "" }}{{ $jwt | quote }}{{ else }}{{ env "JWT_SECRET" | default "" | quote }}{{ end }}
     installed: true

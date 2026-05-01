@@ -6,6 +6,7 @@ export const APP_ROUTES = {
   ADMIN: '/admin',
   ADMIN_RULES: '/admin/rules',
   ADMIN_REPORTS: '/admin/reports',
+  ADMIN_GUARDS: '/admin/guards',
   ADMIN_RESIDENTS: '/admin/residents',
   FORBIDDEN: '/forbidden',
 } as const;
@@ -27,6 +28,7 @@ export const API_ENDPOINTS = {
   
   // Rules
   RULES: '/api/v1/rules',
+  USERS: '/api/v1/users',
   BUILDING_APARTMENT_COUNT: (id: number) => `/api/v1/buildings/${id}/apartment-count`,
   
   // Residents
@@ -48,6 +50,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
   PASS_EXPIRED: 'Срок действия пропуска истек',
   PASS_REVOKED: 'Пропуск отозван',
   PASS_NOT_YET_VALID: 'Пропуск еще не действителен',
+  PASS_ALREADY_USED: 'Пропуск уже был использован',
   QUIET_HOURS: 'Действие запрещено в тихие часы',
   RATE_LIMIT_EXCEEDED: 'Превышен лимит запросов',
   INVALID_CREDENTIALS: 'Неверные учетные данные',
@@ -55,6 +58,11 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INSUFFICIENT_PERMISSIONS: 'Недостаточно прав',
   NETWORK_ERROR: 'Ошибка сети. Проверьте подключение',
   UNKNOWN_ERROR: 'Произошла неизвестная ошибка',
+  // Passes
+  INVALID_PERSONAL_PASS: 'Недействительный личный пропуск',
+  BUILDING_MISMATCH: 'Пропуск от другого жилого комплекса',
+  APARTMENT_NOT_FOUND: 'Квартира не найдена',
+  INVALID_CAR_PLATE: 'Некорректный номер автомобиля',
   // Residents
   RESIDENT_EXISTS: 'Житель с таким Telegram ID уже существует',
   RESIDENT_NOT_FOUND: 'Житель не найден',

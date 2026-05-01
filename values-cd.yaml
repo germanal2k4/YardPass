@@ -31,3 +31,7 @@ frontend:
     pullPolicy: Always
   imagePullSecrets:
     - name: ghcr-pull-secret
+
+bot:
+  imagePullSecrets:
+    - name: ghcr-pull-secret

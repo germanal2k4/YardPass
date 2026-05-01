@@ -117,6 +117,18 @@ export interface PurchaseSubscriptionResponse {
   message: string;
 }
 
+export interface RegisterUserRequest {
+  username: string;
+  email?: string;
+  password: string;
+  role: 'guard' | 'admin';
+  building_id?: number;
+}
+
+export interface ListUsersResponse {
+  users: User[];
+}
+
 export interface CreatePassRequest {
   apartment_id: number;
   car_plate: string;
@@ -226,7 +238,7 @@ export interface ScanEventWithDetails {
   ApartmentNumber?: string;
   BuildingID?: number;
   BuildingName?: string;
-  Meta?: any;
+  Meta?: Record<string, unknown>;
 }
 
 export interface GetScanEventsRequest {

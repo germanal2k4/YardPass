@@ -34,8 +34,8 @@ func (m *mockPassService) GenerateResidentPersonalPassToken(residentTelegramID i
 	return args.String(0)
 }
 
-func (m *mockPassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
-	args := m.Called(ctx, passID, guardUserID)
+func (m *mockPassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	args := m.Called(ctx, passID, guardUserID, buildingID)
 	return args.Get(0).(*domain.PassValidationResult), args.Error(1)
 }
 
@@ -91,7 +91,8 @@ func TestPassHandler_Validate(t *testing.T) {
 
 		passID := uuid.New()
 		validTo := time.Now().Add(time.Hour)
-		svc.On("ValidatePass", mock.Anything, passID, int64(1)).Return(&domain.PassValidationResult{
+		bID := int64(1)
+		svc.On("ValidatePass", mock.Anything, passID, int64(1), &bID).Return(&domain.PassValidationResult{
 			Valid:     true,
 			CarPlate:  "A123BC",
 			Apartment: "101",
@@ -119,11 +120,14 @@ func TestPassHandler_Validate(t *testing.T) {
 		r := gin.New()
 		r.POST("/validate", func(c *gin.Context) {
 			c.Set("user_id", int64(1))
+			c.Set("role", "guard")
+			c.Set("building_id", int64(1))
 			h.Validate(c)
 		})
 
 		passID := uuid.New()
-		svc.On("ValidatePass", mock.Anything, passID, int64(1)).Return(&domain.PassValidationResult{
+		bID := int64(1)
+		svc.On("ValidatePass", mock.Anything, passID, int64(1), &bID).Return(&domain.PassValidationResult{
 			Valid:  false,
 			Reason: "PASS_EXPIRED",
 		}, nil)
@@ -140,6 +144,49 @@ func TestPassHandler_Validate(t *testing.T) {
 		assert.False(t, resp["valid"].(bool))
 		assert.Equal(t, "PASS_EXPIRED", resp["reason"])
 		svc.AssertExpectations(t)
+	})
+
+	t.Run("guard without building_id returns 401", func(t *testing.T) {
+		svc := new(mockPassService)
+		h := NewPassHandler(svc)
+
+		r := gin.New()
+		r.POST("/validate", func(c *gin.Context) {
+			c.Set("user_id", int64(1))
+			c.Set("role", "guard")
+			h.Validate(c)
+		})
+
+		passID := uuid.New()
+		body, _ := json.Marshal(ValidatePassRequest{QRUUID: passID.String()})
+		req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		svc.AssertNotCalled(t, "ValidatePass")
+	})
+
+	t.Run("admin without building_id returns 401", func(t *testing.T) {
+		svc := new(mockPassService)
+		h := NewPassHandler(svc)
+
+		r := gin.New()
+		r.POST("/validate", func(c *gin.Context) {
+			c.Set("user_id", int64(1))
+			c.Set("role", "admin")
+			h.Validate(c)
+		})
+
+		body, _ := json.Marshal(ValidatePassRequest{CarPlate: "A123BC"})
+		req := httptest.NewRequest(http.MethodPost, "/validate", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		svc.AssertNotCalled(t, "ValidatePassByCarPlate")
 	})
 
 	t.Run("missing qr_uuid and car_plate returns 400", func(t *testing.T) {
@@ -166,6 +213,7 @@ func TestPassHandler_Validate(t *testing.T) {
 		r := gin.New()
 		r.POST("/validate", func(c *gin.Context) {
 			c.Set("user_id", int64(1))
+			c.Set("role", "guard")
 			c.Set("building_id", int64(1))
 			h.Validate(c)
 		})
@@ -217,7 +265,8 @@ func TestPassHandler_Create(t *testing.T) {
 			Status:      "active",
 		}
 		svc.On("CreatePass", mock.Anything, mock.MatchedBy(func(r domain.CreatePassRequest) bool {
-			return r.ApartmentID == 1 && r.CarPlate != nil && *r.CarPlate == carPlate
+			return r.ApartmentID == 1 && r.CarPlate != nil && *r.CarPlate == carPlate &&
+				r.ResidentID != nil && *r.ResidentID == 1
 		})).Return(pass, nil)
 
 		body, _ := json.Marshal(CreatePassRequest{

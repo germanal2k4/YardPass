@@ -2,6 +2,8 @@ package repo
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
@@ -28,19 +30,19 @@ func (r *ResidentRepo) GetByID(ctx context.Context, id int64) (*domain.Resident,
 	if err != nil {
 		return nil, err
 	}
-	return residentFromDB(row), nil
+	return newDomainResidentFromRow(row.ID, row.ApartmentID, row.TelegramID, row.ChatID, row.Name, row.Phone, row.CarPlate, row.Timezone, row.Status, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (r *ResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*domain.Resident, error) {
 	ctx = queryNameToContext(ctx, "ResidentRepo.GetByTelegramID")
 	row, err := r.queries.GetResidentByTelegramID(ctx, telegramID)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return residentFromDB(row), nil
+	return newDomainResidentFromRow(row.ID, row.ApartmentID, row.TelegramID, row.ChatID, row.Name, row.Phone, row.CarPlate, row.Timezone, row.Status, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
@@ -51,6 +53,8 @@ func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) er
 		ChatID:      resident.ChatID,
 		Name:        resident.Name,
 		Phone:       resident.Phone,
+		CarPlate:    resident.CarPlate,
+		Timezone:    resident.Timezone,
 		Status:      resident.Status,
 	})
 	if err != nil {
@@ -71,6 +75,8 @@ func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) er
 		ChatID:      resident.ChatID,
 		Name:        resident.Name,
 		Phone:       resident.Phone,
+		CarPlate:    resident.CarPlate,
+		Timezone:    resident.Timezone,
 		Status:      resident.Status,
 	})
 	if err != nil {
@@ -78,6 +84,16 @@ func (r *ResidentRepo) Update(ctx context.Context, resident *domain.Resident) er
 	}
 	resident.UpdatedAt = updatedAt
 	return nil
+}
+
+func (r *ResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.SetCarPlate")
+	return r.queries.SetResidentCarPlate(ctx, db.SetResidentCarPlateParams{ID: id, CarPlate: carPlate})
+}
+
+func (r *ResidentRepo) SetTimezone(ctx context.Context, id int64, timezone *string) error {
+	ctx = queryNameToContext(ctx, "ResidentRepo.SetTimezone")
+	return r.queries.SetResidentTimezone(ctx, db.SetResidentTimezoneParams{ID: id, Timezone: timezone})
 }
 
 func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Resident) error {
@@ -104,6 +120,7 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Reside
 			ChatID:      resident.ChatID,
 			Name:        resident.Name,
 			Phone:       resident.Phone,
+			CarPlate:    resident.CarPlate,
 			Status:      resident.Status,
 		})
 		if err != nil {
@@ -117,10 +134,23 @@ func (r *ResidentRepo) BulkCreate(ctx context.Context, residents []domain.Reside
 	return tx.Commit(ctx)
 }
 
+func (r *ResidentRepo) ListActiveWithCarPlate(ctx context.Context, buildingID *int64) ([]domain.Resident, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.ListActiveWithCarPlate")
+	rows, err := r.queries.ListActiveResidentsWithCarPlate(ctx, buildingID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.Resident, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, *newDomainResidentFromRow(row.ID, row.ApartmentID, row.TelegramID, row.ChatID, row.Name, row.Phone, row.CarPlate, row.Timezone, row.Status, row.CreatedAt, row.UpdatedAt))
+	}
+	return out, nil
+}
+
 func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
 	ctx = queryNameToContext(ctx, "ResidentRepo.List")
 	const listResidentsWithApartmentNumberQuery = `
-		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.status, r.created_at, r.updated_at
+		SELECT r.id, r.apartment_id, a.number, r.telegram_id, r.chat_id, r.name, r.phone, r.car_plate, r.timezone, r.status, r.created_at, r.updated_at
 		FROM residents r
 		INNER JOIN apartments a ON a.id = r.apartment_id
 		WHERE ($1::bigint IS NULL OR r.apartment_id = $1)
@@ -156,6 +186,8 @@ func (r *ResidentRepo) List(ctx context.Context, filters domain.ResidentFilters)
 			&resident.ChatID,
 			&resident.Name,
 			&resident.Phone,
+			&resident.CarPlate,
+			&resident.Timezone,
 			&resident.Status,
 			&resident.CreatedAt,
 			&resident.UpdatedAt,
@@ -175,17 +207,23 @@ func (r *ResidentRepo) Delete(ctx context.Context, id int64) error {
 	return r.queries.DeleteResident(ctx, id)
 }
 
-func residentFromDB(row db.Resident) *domain.Resident {
+func newDomainResidentFromRow(
+	id, apartmentID, telegramID, chatID int64,
+	name, phone, carPlate, timezone *string,
+	status string,
+	createdAt, updatedAt time.Time,
+) *domain.Resident {
 	return &domain.Resident{
-		ID:          row.ID,
-		ApartmentID: row.ApartmentID,
-		TelegramID:  row.TelegramID,
-		ChatID:      row.ChatID,
-		Name:        row.Name,
-		Phone:       row.Phone,
-		Status:      row.Status,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
+		ID:          id,
+		ApartmentID: apartmentID,
+		TelegramID:  telegramID,
+		ChatID:      chatID,
+		Name:        name,
+		Phone:       phone,
+		CarPlate:    carPlate,
+		Timezone:    timezone,
+		Status:      status,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
 	}
 }
-

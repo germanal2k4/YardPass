@@ -49,7 +49,7 @@ import { ru } from 'date-fns/locale';
 
 // Regex для валидации телефонных номеров (российский формат)
 // Поддерживает форматы: +7XXXXXXXXXX, 8XXXXXXXXXX, +7 (XXX) XXX-XX-XX и т.д.
-const PHONE_REGEX = /^(\+7|7|8)?[\s\-]?\(?[489][0-9]{2}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$/;
+const PHONE_REGEX = /^(\+7|7|8)?[\s-]?\(?[489][0-9]{2}\)?[\s-]?[0-9]{3}[\s-]?[0-9]{2}[\s-]?[0-9]{2}$/;
 
 const residentSchema = z.object({
   apartment_number: z.string().min(1, 'Номер апартамента обязателен'),
@@ -68,6 +68,7 @@ const residentSchema = z.object({
     ),
 });
 
+type ResidentFormValues = z.input<typeof residentSchema>;
 type ResidentFormData = z.infer<typeof residentSchema>;
 
 export function AdminResidentsPage() {
@@ -80,12 +81,18 @@ export function AdminResidentsPage() {
   // Bulk import state
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkJson, setBulkJson] = useState('');
-  const [bulkResult, setBulkResult] = useState<{ created: number; errors: any[] } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{
+    created: number;
+    errors: Array<{ row?: number; error: string } | string>;
+  } | null>(null);
   
   // CSV import state
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [csvResult, setCsvResult] = useState<{ created: number; errors: any[] } | null>(null);
+  const [csvResult, setCsvResult] = useState<{
+    created: number;
+    errors: Array<{ row?: number; error: string } | string>;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete state
@@ -110,11 +117,11 @@ export function AdminResidentsPage() {
     handleSubmit,
     reset,
     formState: { errors, isDirty },
-  } = useForm<ResidentFormData>({
+  } = useForm<ResidentFormValues>({
     resolver: zodResolver(residentSchema),
     defaultValues: {
       apartment_number: '',
-      telegram_id: '' as any,
+      telegram_id: '',
       name: '',
       phone: '',
     },
@@ -192,13 +199,14 @@ export function AdminResidentsPage() {
     },
   });
 
-  const onSubmit = (data: ResidentFormData) => {
+  const onSubmit = (data: ResidentFormValues) => {
+    const parsed: ResidentFormData = residentSchema.parse(data);
     const createData: CreateResidentRequest = {
-      apartment_number: data.apartment_number.trim(),
-      telegram_id: data.telegram_id as number,
-      chat_id: data.telegram_id as number, // Chat ID равен Telegram ID
-      name: data.name?.trim() || undefined,
-      phone: data.phone?.trim() || undefined,
+      apartment_number: parsed.apartment_number.trim(),
+      telegram_id: parsed.telegram_id,
+      chat_id: parsed.telegram_id, // Chat ID равен Telegram ID
+      name: parsed.name?.trim() || undefined,
+      phone: parsed.phone?.trim() || undefined,
     };
     createMutation.mutate(createData);
   };

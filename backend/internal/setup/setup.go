@@ -3,6 +3,7 @@ package setup
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -128,6 +129,9 @@ func SetupBot(configPath string) (*fx.App, error) {
 
 	if cfg.Telegram.BotToken == "" {
 		return nil, errors.New("TELEGRAM_BOT_TOKEN is required for Telegram bot")
+	}
+	if strings.TrimSpace(cfg.JWT.Secret) == "" {
+		return nil, errors.New("JWT_SECRET is required for Telegram bot (must match API JWT_SECRET for resident personal QR)")
 	}
 
 	return fx.New(

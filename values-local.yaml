@@ -6,6 +6,8 @@ backend:
     repository: localhost/yardpass/backend
     tag: latest
     pullPolicy: Never
+  podAnnotations:
+    traffic.sidecar.istio.io/excludeOutboundPorts: "5432,6379"
   secrets:
     databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
     redisUrl: "redis://host.minikube.internal:6379/0"
@@ -31,11 +33,14 @@ bot:
     repository: localhost/yardpass/bot
     tag: latest
     pullPolicy: Never
+  podAnnotations:
+    traffic.sidecar.istio.io/excludeOutboundPorts: "5432,6379"
   secrets:
     databaseUrl: "postgres://yardpass:password@host.minikube.internal:5432/yardpass?sslmode=disable"
     redisUrl: "redis://host.minikube.internal:6379/0"
     telegramToken: ""
   env:
+    JWT_SECRET: ""
     LOG_TRANSPORT: stdout
     TRACER_ENABLED: "true"
     TRACER_URL: "jaeger-collector.istio-system:4317"

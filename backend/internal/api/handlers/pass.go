@@ -24,6 +24,7 @@ func NewPassHandler(passService domain.PassService) *PassHandler {
 
 type CreatePassRequest struct {
 	ApartmentID int64     `json:"apartment_id" binding:"required"`
+	ResidentID  *int64    `json:"resident_id,omitempty"`
 	CarPlate    *string   `json:"car_plate,omitempty"`
 	GuestName   *string   `json:"guest_name,omitempty"`
 	ValidFrom   time.Time `json:"valid_from"`
@@ -43,15 +44,21 @@ func (h *PassHandler) Create(c *gin.Context) {
 	}
 
 	if req.ValidFrom.IsZero() {
-		req.ValidFrom = time.Now().UTC()
-	} else {
-		req.ValidFrom = req.ValidFrom.UTC()
+		req.ValidFrom = time.Now().In(req.ValidTo.Location())
 	}
 
-	req.ValidTo = req.ValidTo.UTC()
+	residentID := req.ResidentID
+	if residentID == nil {
+		if rid, ok := c.Get("resident_id"); ok {
+			if id, ok := rid.(int64); ok {
+				residentID = &id
+			}
+		}
+	}
 
 	createReq := domain.CreatePassRequest{
 		ApartmentID: req.ApartmentID,
+		ResidentID:  residentID,
 		CarPlate:    req.CarPlate,
 		GuestName:   req.GuestName,
 		ValidFrom:   req.ValidFrom,
@@ -118,6 +125,14 @@ func (h *PassHandler) Validate(c *gin.Context) {
 		}
 	}
 
+	role, _ := c.Get("role")
+	if rs, ok := role.(string); ok && (rs == "guard" || rs == "admin") {
+		if bID == nil {
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for guard and admin")
+			return
+		}
+	}
+
 	var result *domain.PassValidationResult
 	var err error
 
@@ -126,7 +141,7 @@ func (h *PassHandler) Validate(c *gin.Context) {
 	} else if req.QRUUID != "" {
 		passID, parseErr := uuid.Parse(req.QRUUID)
 		if parseErr == nil {
-			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID)
+			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID, bID)
 		} else {
 			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), req.QRUUID, guardUserID, bID)
 		}

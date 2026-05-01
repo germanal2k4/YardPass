@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/observability/logger"
@@ -93,7 +94,7 @@ func NewPassService(
 func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
 	var carPlate *string
 	if req.CarPlate != nil && *req.CarPlate != "" {
-		normalized := normalizeCarPlate(*req.CarPlate)
+		normalized := NormalizeCarPlate(*req.CarPlate)
 		if normalized == "" {
 			s.rejectionsTotal.WithLabelValues("invalid_car_plate").Inc()
 			return nil, errors.New("invalid car plate number")
@@ -120,8 +121,11 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		}
 	}
 
+	validFromUTC := req.ValidFrom.UTC()
+	validToUTC := req.ValidTo.UTC()
+
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
-	if req.ValidTo.Sub(req.ValidFrom) > maxDuration {
+	if validToUTC.Sub(validFromUTC) > maxDuration {
 		s.rejectionsTotal.WithLabelValues("max_duration_exceeded").Inc()
 		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
 	}
@@ -130,17 +134,23 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		return nil, errors.New("resident_id is required")
 	}
 
-	count, err := s.passRepo.CountActiveTodayByResidentID(ctx, *req.ResidentID)
+	resident, err := s.residentRepo.GetByID(ctx, *req.ResidentID)
 	if err != nil {
-		return nil, fmt.Errorf("check daily limit: %w", err)
+		return nil, fmt.Errorf("get resident: %w", err)
 	}
-	if count >= int(rule.DailyPassLimitPerApartment) {
-		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
-		return nil, fmt.Errorf("daily pass limit exceeded: you have created %d passes today (limit: %d)", count, rule.DailyPassLimitPerApartment)
+	if resident == nil {
+		return nil, errors.New("resident not found")
+	}
+	if resident.ApartmentID != req.ApartmentID {
+		return nil, errors.New("resident does not belong to the specified apartment")
 	}
 
+	localLocation := locationForResidentRules(resident)
+
 	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-		if err := s.validateQuietHours(req.ValidFrom, req.ValidTo, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+		validFromLocal := validFromUTC.In(localLocation)
+		validToLocal := validToUTC.In(localLocation)
+		if err := s.validateQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
 			s.rejectionsTotal.WithLabelValues("quiet_hours").Inc()
 			return nil, err
 		}
@@ -152,14 +162,29 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		ResidentID:  req.ResidentID,
 		CarPlate:    carPlate,
 		GuestName:   req.GuestName,
-		ValidFrom:   req.ValidFrom,
-		ValidTo:     req.ValidTo,
+		ValidFrom:   validFromUTC,
+		ValidTo:     validToUTC,
 		Status:      "active",
 	}
 
-	if err := s.passRepo.Create(ctx, pass); err != nil {
+	dayAnchorLocal := validFromUTC.In(localLocation)
+	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
+	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
+
+	created, err := s.passRepo.CreateWithDailyLimit(
+		ctx,
+		pass,
+		startOfDayLocal.UTC(),
+		endOfDayLocal.UTC(),
+		int(rule.DailyPassLimitPerApartment),
+	)
+	if err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
 		return nil, fmt.Errorf("create pass: %w", err)
+	}
+	if !created {
+		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
+		return nil, fmt.Errorf("daily pass limit exceeded (limit: %d per day)", rule.DailyPassLimitPerApartment)
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
@@ -192,7 +217,7 @@ func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64
 	return fmt.Sprintf("resident:%d:%s", residentTelegramID, s.signResidentToken(residentTelegramID))
 }
 
-func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
+func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
 		return nil, fmt.Errorf("get pass: %w", err)
@@ -206,11 +231,27 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 		return result, nil
 	}
 
+	if buildingID != nil {
+		apartment, err := s.apartmentRepo.GetByID(ctx, pass.ApartmentID)
+		if err != nil {
+			return nil, fmt.Errorf("get apartment: %w", err)
+		}
+		if apartment == nil {
+			return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+		}
+		if apartment.BuildingID != *buildingID {
+			result := &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}
+			s.opsTotal.WithLabelValues("validate", "invalid").Inc()
+			s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
+			return result, nil
+		}
+	}
+
 	return s.validatePassInternal(ctx, pass, guardUserID)
 }
 
 func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
-	normalizedCarPlate := normalizeCarPlate(carPlate)
+	normalizedCarPlate := NormalizeCarPlate(carPlate)
 	if normalizedCarPlate == "" {
 		result := &domain.PassValidationResult{
 			Valid:  false,
@@ -224,25 +265,63 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 		return nil, fmt.Errorf("get pass by car plate: %w", err)
 	}
 
-	result := &domain.PassValidationResult{
-		Valid: false,
-	}
-
 	if pass == nil {
-		result.Reason = "PASS_NOT_FOUND"
-		return result, nil
+		return s.validateResidentCarPlate(ctx, normalizedCarPlate, buildingID)
 	}
 
 	return s.validatePassInternal(ctx, pass, guardUserID)
 }
 
+// validateResidentCarPlate checks permanent resident vehicle registration when no guest pass matches.
+func (s *PassService) validateResidentCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.PassValidationResult, error) {
+	residents, err := s.residentRepo.ListActiveWithCarPlate(ctx, buildingID)
+	if err != nil {
+		return nil, fmt.Errorf("list residents by car plate: %w", err)
+	}
+
+	result := &domain.PassValidationResult{Valid: false}
+
+	for i := range residents {
+		res := &residents[i]
+		if res.CarPlate == nil {
+			continue
+		}
+		if NormalizeCarPlate(*res.CarPlate) != normalizedCarPlate {
+			continue
+		}
+
+		apartment, err := s.apartmentRepo.GetByID(ctx, res.ApartmentID)
+		if err != nil || apartment == nil {
+			return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
+		}
+		if buildingID != nil && apartment.BuildingID != *buildingID {
+			result.Reason = "BUILDING_MISMATCH"
+			return result, nil
+		}
+
+		return &domain.PassValidationResult{
+			Valid:     true,
+			CarPlate:  normalizedCarPlate,
+			Apartment: apartment.Number,
+		}, nil
+	}
+
+	result.Reason = "PASS_NOT_FOUND"
+	return result, nil
+}
+
 func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	// Trim whitespace that QR scanners sometimes append
+	token = strings.TrimSpace(token)
+
 	const prefix = "resident:"
 	if !strings.HasPrefix(token, prefix) {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
 
-	parts := strings.Split(token, ":")
+	// Format: resident:<telegram_id>:<hmac>
+	// Use SplitN to limit to 3 parts so any unexpected colons don't break parsing
+	parts := strings.SplitN(token, ":", 3)
 	if len(parts) != 3 {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
@@ -251,7 +330,9 @@ func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token st
 	if err != nil {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
-	if !hmac.Equal([]byte(parts[2]), []byte(s.signResidentToken(telegramID))) {
+
+	expectedHMAC := s.signResidentToken(telegramID)
+	if !hmac.Equal([]byte(strings.TrimSpace(parts[2])), []byte(expectedHMAC)) {
 		return &domain.PassValidationResult{Valid: false, Reason: "INVALID_PERSONAL_PASS"}, nil
 	}
 
@@ -269,9 +350,14 @@ func (s *PassService) ValidateResidentPersonalPass(ctx context.Context, token st
 		return &domain.PassValidationResult{Valid: false, Reason: "BUILDING_MISMATCH"}, nil
 	}
 
+	carPlate := ""
+	if resident.CarPlate != nil && *resident.CarPlate != "" {
+		carPlate = NormalizeCarPlate(*resident.CarPlate)
+	}
+
 	return &domain.PassValidationResult{
 		Valid:     true,
-		CarPlate:  "",
+		CarPlate:  carPlate,
 		Apartment: apartment.Number,
 	}, nil
 }
@@ -320,7 +406,8 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
 			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
-				if s.isQuietHours(now, *rule.QuietHoursStart, *rule.QuietHoursEnd) {
+				localLocation := s.quietHoursLocation(ctx, pass)
+				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
 					s.opsTotal.WithLabelValues("validate", "invalid").Inc()
 					s.logScanEvent(ctx, pass.ID, guardUserID, "invalid", result.Reason)
@@ -439,7 +526,8 @@ var russianToEnglish = map[rune]rune{
 	'у': 'Y', 'х': 'X',
 }
 
-func normalizeCarPlate(plate string) string {
+// NormalizeCarPlate uppercases, strips spaces, maps Russian plate look-alike letters to Latin, and keeps only A–Z and 0–9.
+func NormalizeCarPlate(plate string) string {
 	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
 
 	var result strings.Builder
@@ -454,72 +542,115 @@ func normalizeCarPlate(plate string) string {
 	return result.String()
 }
 
-func (s *PassService) validateQuietHours(validFrom, validTo time.Time, startTime, endTime string) error {
-	// Interpret quiet hours in local building timezone (Europe/Moscow)
-	location, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		location = time.UTC
+// quietHoursWindowOnDay returns [q0, q1) for the quiet-hours rule on local calendar day d (end may be next calendar day).
+func quietHoursWindowOnDay(d time.Time, startClock, endClock time.Time) (q0, q1 time.Time) {
+	loc := d.Location()
+	startMin := startClock.Hour()*60 + startClock.Minute()
+	endMin := endClock.Hour()*60 + endClock.Minute()
+	q0 = time.Date(d.Year(), d.Month(), d.Day(), startClock.Hour(), startClock.Minute(), 0, 0, loc)
+	if endMin <= startMin {
+		q1 = time.Date(d.Year(), d.Month(), d.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc).Add(24 * time.Hour)
+	} else {
+		q1 = time.Date(d.Year(), d.Month(), d.Day(), endClock.Hour(), endClock.Minute(), 0, 0, loc)
+		if !q1.After(q0) {
+			q1 = q1.Add(24 * time.Hour)
+		}
 	}
+	return q0, q1
+}
 
-	validFromLocal := validFrom.In(location)
-	validToLocal := validTo.In(location)
+// intervalsOverlapHalfOpen reports whether [a0, a1) and [b0, b1) overlap.
+func intervalsOverlapHalfOpen(a0, a1, b0, b1 time.Time) bool {
+	return a0.Before(b1) && b0.Before(a1)
+}
 
-	start, err := parseTime(startTime)
+func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time, startTime, endTime string) error {
+	startClock, err := parseTime(startTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours start: %w", err)
 	}
-	end, err := parseTime(endTime)
+	endClock, err := parseTime(endTime)
 	if err != nil {
 		return fmt.Errorf("invalid quiet hours end: %w", err)
 	}
 
-	fromHour := validFromLocal.Hour()*60 + validFromLocal.Minute()
-	toHour := validToLocal.Hour()*60 + validToLocal.Minute()
-	startMin := start.Hour()*60 + start.Minute()
-	endMin := end.Hour()*60 + end.Minute()
-
-	if endMin < startMin {
-		endMin += 24 * 60
-		if toHour < startMin {
-			toHour += 24 * 60
-		}
+	loc := validFromLocal.Location()
+	passA := validFromLocal
+	passB := validToLocal
+	if !passB.After(passA) {
+		return errors.New("pass valid_to must be after valid_from")
 	}
 
-	if (fromHour < endMin && toHour > startMin) || (fromHour+24*60 < endMin && toHour+24*60 > startMin) {
-		return errors.New("pass cannot overlap with quiet hours")
+	fromDay := time.Date(passA.Year(), passA.Month(), passA.Day(), 0, 0, 0, 0, loc)
+	toDay := time.Date(passB.Year(), passB.Month(), passB.Day(), 0, 0, 0, 0, loc)
+
+	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
+		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
+		if intervalsOverlapHalfOpen(passA, passB, q0, q1) {
+			return errors.New("pass cannot overlap with quiet hours")
+		}
 	}
 
 	return nil
 }
 
-func (s *PassService) isQuietHours(now time.Time, startTime, endTime string) bool {
-	// Interpret quiet hours in local building timezone (Europe/Moscow)
-	location, err := time.LoadLocation("Europe/Moscow")
-	if err != nil {
-		location = time.UTC
-	}
-	nowLocal := now.In(location)
-
-	start, err := parseTime(startTime)
+func (s *PassService) isQuietHours(nowLocal time.Time, startTime, endTime string) bool {
+	startClock, err := parseTime(startTime)
 	if err != nil {
 		return false
 	}
-	end, err := parseTime(endTime)
+	endClock, err := parseTime(endTime)
 	if err != nil {
 		return false
 	}
-
-	nowMin := nowLocal.Hour()*60 + nowLocal.Minute()
-	startMin := start.Hour()*60 + start.Minute()
-	endMin := end.Hour()*60 + end.Minute()
-
-	if endMin < startMin {
-		return nowMin >= startMin || nowMin < endMin
-	}
-
-	return nowMin >= startMin && nowMin < endMin
+	d := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, nowLocal.Location())
+	q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
+	return !nowLocal.Before(q0) && nowLocal.Before(q1)
 }
 
 func parseTime(timeStr string) (time.Time, error) {
 	return time.Parse("15:04", timeStr)
+}
+
+// locationForResidentRules returns the wall-clock zone for interpreting rule quiet hours
+// and calendar-day limits. Pass validity is always stored in UTC; rules are edited in
+// the resident's local time (IANA name on resident, default Europe/Moscow).
+func locationForResidentRules(resident *domain.Resident) *time.Location {
+	if resident != nil && resident.Timezone != nil {
+		name := strings.TrimSpace(*resident.Timezone)
+		if name != "" {
+			if loc, err := time.LoadLocation(name); err == nil {
+				return loc
+			}
+		}
+	}
+	return europeMoscowOrMSK()
+}
+
+func europeMoscowOrMSK() *time.Location {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	if err != nil {
+		return time.FixedZone("MSK", 3*3600)
+	}
+	return loc
+}
+
+func (s *PassService) quietHoursLocation(ctx context.Context, pass *domain.Pass) *time.Location {
+	if pass.ResidentID != nil {
+		resident, err := s.residentRepo.GetByID(ctx, *pass.ResidentID)
+		if err == nil && resident != nil {
+			return locationForResidentRules(resident)
+		}
+		if err != nil {
+			lgr := logger.FromContext(ctx)
+			if lgr == nil {
+				lgr = s.fallbackLogger
+			}
+			lgr.Warn("failed to load resident for quiet-hours zone; using default",
+				zap.Error(err),
+				zap.String("pass_id", pass.ID.String()),
+			)
+		}
+	}
+	return locationForResidentRules(nil)
 }

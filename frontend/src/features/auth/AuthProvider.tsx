@@ -11,6 +11,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
+// Fast refresh: context is intentionally co-located with the provider for this feature module.
+// eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {

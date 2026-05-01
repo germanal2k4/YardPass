@@ -25,9 +25,13 @@ type ResidentRepository interface {
 	GetByTelegramID(ctx context.Context, telegramID int64) (*Resident, error)
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
+	SetCarPlate(ctx context.Context, id int64, carPlate *string) error
+	SetTimezone(ctx context.Context, id int64, timezone *string) error
 	Delete(ctx context.Context, id int64) error
 	BulkCreate(ctx context.Context, residents []Resident) error
 	List(ctx context.Context, filters ResidentFilters) ([]Resident, error)
+	// ListActiveWithCarPlate returns active residents that have a non-empty car_plate, optionally scoped to a building.
+	ListActiveWithCarPlate(ctx context.Context, buildingID *int64) ([]Resident, error)
 }
 
 type ResidentFilters struct {
@@ -49,6 +53,7 @@ type PassRepository interface {
 	CountActiveTodayByApartmentID(ctx context.Context, apartmentID int64) (int, error)
 	CountActiveTodayByResidentID(ctx context.Context, residentID int64) (int, error)
 	Create(ctx context.Context, pass *Pass) error
+	CreateWithDailyLimit(ctx context.Context, pass *Pass, dayStartUTC, dayEndUTC time.Time, dailyLimit int) (bool, error)
 	Update(ctx context.Context, pass *Pass) error
 	Revoke(ctx context.Context, id uuid.UUID) error
 }
@@ -128,7 +133,7 @@ type CreatePassRequest struct {
 type PassService interface {
 	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
 	GenerateResidentPersonalPassToken(residentTelegramID int64) string
-	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
+	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error

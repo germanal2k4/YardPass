@@ -129,7 +129,7 @@ type CreatePassRequest struct {
 type PassService interface {
 	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
 	GenerateResidentPersonalPassToken(residentTelegramID int64) string
-	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*PassValidationResult, error)
+	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error

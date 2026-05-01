@@ -17,7 +17,7 @@ describe('apiClient interceptors', () => {
   beforeEach(async () => {
     Object.defineProperty(window, 'location', {
       writable: true,
-      value: { ...window.location, href: originalLocation },
+      value: { ...window.location, href: originalLocation, pathname: '/' },
     });
     await loadClient();
   });
@@ -63,6 +63,26 @@ describe('apiClient interceptors', () => {
     await expect(apiClient.get('/api/v1/data')).rejects.toThrow();
 
     expect(window.location.href).toBe('/login');
+  });
+
+  it('does not redirect when refresh fails on login page (avoids reload loop)', async () => {
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: { ...window.location, href: 'http://localhost/login', pathname: '/login' },
+    });
+    await loadClient();
+
+    mock.onGet('/api/v1/data').reply(401, {
+      error: { code: 'UNAUTHORIZED', message: 'Token expired' },
+    });
+
+    mock.onPost('/auth/refresh').reply(401, {
+      error: { code: 'INVALID_REFRESH_TOKEN', message: 'Invalid refresh token' },
+    });
+
+    await expect(apiClient.get('/api/v1/data')).rejects.toThrow();
+
+    expect(window.location.href).toBe('http://localhost/login');
   });
 
   it('passes non-401 errors through without refresh attempt', async () => {

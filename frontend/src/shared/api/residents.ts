@@ -32,7 +32,7 @@ export const residentsApi = {
   async createBulk(data: CreateResidentRequest[]): Promise<{
     created: number;
     residents: Resident[];
-    errors: any[];
+    errors: Array<{ row?: number; error: string } | string>;
   }> {
     const response = await apiClient.post(API_ENDPOINTS.RESIDENTS_BULK, data);
     return response.data;
@@ -43,7 +43,7 @@ export const residentsApi = {
    */
   async importFromCSV(file: File, buildingId: number): Promise<{
     created: number;
-    errors: any[];
+    errors: Array<{ row?: number; error: string } | string>;
   }> {
     const formData = new FormData();
     formData.append('file', file);

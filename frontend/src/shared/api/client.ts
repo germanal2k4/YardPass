@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { config } from '@/shared/config/env';
-import { API_ENDPOINTS } from '@/shared/config/constants';
+import { API_ENDPOINTS, APP_ROUTES } from '@/shared/config/constants';
 import type { ErrorResponse } from '@/shared/types/api';
 
 const apiClient = axios.create({
@@ -58,7 +58,12 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError as Error);
-        window.location.href = '/login';
+        // Avoid full reload when already on auth pages: getMe() returns 401 for guests,
+        // refresh fails without cookies, and assigning href here caused an infinite reload loop.
+        const path = window.location.pathname;
+        if (path !== APP_ROUTES.LOGIN && path !== APP_ROUTES.REGISTER) {
+          window.location.href = APP_ROUTES.LOGIN;
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

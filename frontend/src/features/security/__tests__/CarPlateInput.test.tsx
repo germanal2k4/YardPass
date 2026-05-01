@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { theme } from '@/shared/ui/theme';
 import { CarPlateInput } from '../CarPlateInput';
@@ -119,7 +118,7 @@ describe('CarPlateInput', () => {
 
   describe('auto-focus transitions', () => {
     it('focuses digits after entering 1 letter', () => {
-      const { letter1, digits, props } = renderPlate();
+      const { letter1, props } = renderPlate();
       letter1.focus();
       fireEvent.change(letter1, { target: { value: 'А' } });
       expect(props.onChange).toHaveBeenCalledWith('А');

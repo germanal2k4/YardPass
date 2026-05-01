@@ -42,7 +42,7 @@ describe('PassDetailsCard', () => {
   it('renders invalid pass with translated reason', () => {
     renderCard({
       valid: false,
-      reason: 'PASS_REVOKED' as any,
+      reason: 'PASS_REVOKED',
     });
 
     expect(screen.getByText('Пропуск недействителен')).toBeInTheDocument();

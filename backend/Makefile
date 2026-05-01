@@ -25,7 +25,7 @@ test:
 	@go test -v -race -coverprofile=coverage.out ./...
 
 lint:
-	@golangci-lint run
+	@PATH="$(shell go env GOPATH)/bin:$$PATH" golangci-lint run
 
 migrate-up:
 	@go run ./cmd/migrate up

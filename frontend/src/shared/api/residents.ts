@@ -42,7 +42,7 @@ export const residentsApi = {
    * Импорт резидентов из CSV файла
    */
   async importFromCSV(file: File, buildingId: number): Promise<{
-    imported: number;
+    created: number;
     errors: any[];
   }> {
     const formData = new FormData();

@@ -29,6 +29,11 @@ func (m *mockPassService) CreatePass(ctx context.Context, req domain.CreatePassR
 	return args.Get(0).(*domain.Pass), args.Error(1)
 }
 
+func (m *mockPassService) GenerateResidentPersonalPassToken(residentTelegramID int64) string {
+	args := m.Called(residentTelegramID)
+	return args.String(0)
+}
+
 func (m *mockPassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64) (*domain.PassValidationResult, error) {
 	args := m.Called(ctx, passID, guardUserID)
 	return args.Get(0).(*domain.PassValidationResult), args.Error(1)
@@ -36,6 +41,11 @@ func (m *mockPassService) ValidatePass(ctx context.Context, passID uuid.UUID, gu
 
 func (m *mockPassService) ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
 	args := m.Called(ctx, carPlate, guardUserID, buildingID)
+	return args.Get(0).(*domain.PassValidationResult), args.Error(1)
+}
+
+func (m *mockPassService) ValidateResidentPersonalPass(ctx context.Context, token string, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
+	args := m.Called(ctx, token, guardUserID, buildingID)
 	return args.Get(0).(*domain.PassValidationResult), args.Error(1)
 }
 

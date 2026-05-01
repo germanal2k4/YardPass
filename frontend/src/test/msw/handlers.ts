@@ -141,11 +141,12 @@ export const handlers = [
   }),
 
   http.post(`${API_BASE}/auth/purchase-subscription`, async ({ request }) => {
-    const body = (await request.json()) as { email: string; building_name: string };
+    const body = (await request.json()) as { email: string; building_name: string; apartment_count: number };
     return HttpResponse.json(
       {
         building_id: 1,
         building_name: body.building_name,
+        apartment_count: body.apartment_count,
         subscription_fee: 200000,
         period: '1 year',
         email: body.email,
@@ -172,7 +173,7 @@ export const handlers = [
   // Passes
   http.post(`${API_BASE}/api/v1/passes/validate`, async ({ request }) => {
     const body = (await request.json()) as { qr_uuid?: string; car_plate?: string };
-    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777') {
+    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777' || body.qr_uuid === 'resident:123:token') {
       return HttpResponse.json({
         valid: true,
         car_plate: 'А123ВС777',
@@ -218,7 +219,7 @@ export const handlers = [
   }),
 
   http.post(`${API_BASE}/api/v1/residents/import`, () => {
-    return HttpResponse.json({ imported: 2, errors: [] });
+    return HttpResponse.json({ created: 2, errors: [] });
   }),
 
   http.delete(`${API_BASE}/api/v1/residents/:id`, () => {
@@ -232,6 +233,18 @@ export const handlers = [
 
   http.put(`${API_BASE}/api/v1/rules`, () => {
     return HttpResponse.json(mockRule);
+  }),
+
+  http.put(`${API_BASE}/api/v1/buildings/:id/apartment-count`, async ({ request, params }) => {
+    const body = (await request.json()) as { apartment_count: number };
+    return HttpResponse.json({
+      id: Number(params.id),
+      name: 'Дом 1',
+      address: 'Тестовый адрес',
+      apartment_count: body.apartment_count,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: new Date().toISOString(),
+    });
   }),
 
   // Reports

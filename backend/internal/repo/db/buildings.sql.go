@@ -7,26 +7,38 @@ package db
 
 import (
 	"context"
+	"time"
 )
 
 const createBuilding = `-- name: CreateBuilding :one
-INSERT INTO buildings (name, address)
-VALUES ($1, $2)
-RETURNING id, name, address, created_at, updated_at
+INSERT INTO buildings (name, address, apartment_count)
+VALUES ($1, $2, $3)
+RETURNING id, name, address, apartment_count, created_at, updated_at
 `
 
 type CreateBuildingParams struct {
-	Name    string
-	Address *string
+	Name           string
+	Address        *string
+	ApartmentCount int32
 }
 
-func (q *Queries) CreateBuilding(ctx context.Context, arg CreateBuildingParams) (Building, error) {
-	row := q.db.QueryRow(ctx, createBuilding, arg.Name, arg.Address)
-	var i Building
+type CreateBuildingRow struct {
+	ID             int64
+	Name           string
+	Address        *string
+	ApartmentCount int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) CreateBuilding(ctx context.Context, arg CreateBuildingParams) (CreateBuildingRow, error) {
+	row := q.db.QueryRow(ctx, createBuilding, arg.Name, arg.Address, arg.ApartmentCount)
+	var i CreateBuildingRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Address,
+		&i.ApartmentCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -34,18 +46,28 @@ func (q *Queries) CreateBuilding(ctx context.Context, arg CreateBuildingParams) 
 }
 
 const getBuildingByID = `-- name: GetBuildingByID :one
-SELECT id, name, address, created_at, updated_at
+SELECT id, name, address, apartment_count, created_at, updated_at
 FROM buildings
 WHERE id = $1
 `
 
-func (q *Queries) GetBuildingByID(ctx context.Context, id int64) (Building, error) {
+type GetBuildingByIDRow struct {
+	ID             int64
+	Name           string
+	Address        *string
+	ApartmentCount int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) GetBuildingByID(ctx context.Context, id int64) (GetBuildingByIDRow, error) {
 	row := q.db.QueryRow(ctx, getBuildingByID, id)
-	var i Building
+	var i GetBuildingByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Address,
+		&i.ApartmentCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -53,24 +75,34 @@ func (q *Queries) GetBuildingByID(ctx context.Context, id int64) (Building, erro
 }
 
 const listBuildings = `-- name: ListBuildings :many
-SELECT id, name, address, created_at, updated_at
+SELECT id, name, address, apartment_count, created_at, updated_at
 FROM buildings
 ORDER BY name
 `
 
-func (q *Queries) ListBuildings(ctx context.Context) ([]Building, error) {
+type ListBuildingsRow struct {
+	ID             int64
+	Name           string
+	Address        *string
+	ApartmentCount int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) ListBuildings(ctx context.Context) ([]ListBuildingsRow, error) {
 	rows, err := q.db.Query(ctx, listBuildings)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Building
+	var items []ListBuildingsRow
 	for rows.Next() {
-		var i Building
+		var i ListBuildingsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Address,
+			&i.ApartmentCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -82,4 +114,39 @@ func (q *Queries) ListBuildings(ctx context.Context) ([]Building, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateBuildingApartmentCount = `-- name: UpdateBuildingApartmentCount :one
+UPDATE buildings
+SET apartment_count = $2
+WHERE id = $1
+RETURNING id, name, address, apartment_count, created_at, updated_at
+`
+
+type UpdateBuildingApartmentCountParams struct {
+	ID             int64
+	ApartmentCount int32
+}
+
+type UpdateBuildingApartmentCountRow struct {
+	ID             int64
+	Name           string
+	Address        *string
+	ApartmentCount int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) UpdateBuildingApartmentCount(ctx context.Context, arg UpdateBuildingApartmentCountParams) (UpdateBuildingApartmentCountRow, error) {
+	row := q.db.QueryRow(ctx, updateBuildingApartmentCount, arg.ID, arg.ApartmentCount)
+	var i UpdateBuildingApartmentCountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Address,
+		&i.ApartmentCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

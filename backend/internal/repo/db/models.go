@@ -20,11 +20,12 @@ type Apartment struct {
 }
 
 type Building struct {
-	ID        int64
-	Name      string
-	Address   *string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID             int64
+	Name           string
+	Address        *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	ApartmentCount int32
 }
 
 type Pass struct {
@@ -86,5 +87,6 @@ type User struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	// Building ID for guards/admins. NULL for superuser, required for guard/admin
-	BuildingID *int64
+	BuildingID      *int64
+	ApartmentNumber *int32
 }

@@ -47,7 +47,7 @@ describe('AdminResidentsPage', () => {
     });
 
     expect(screen.getByText('ID')).toBeInTheDocument();
-    expect(screen.getByText('Квартира ID')).toBeInTheDocument();
+    expect(screen.getAllByText(/Апартамент/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Telegram ID')).toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe('AdminResidentsPage', () => {
         expect(screen.getByText('Иван Петров')).toBeInTheDocument();
       });
 
-      await user.type(screen.getByLabelText(/ID квартиры/i), '201');
+      await user.type(screen.getByLabelText(/Номер апартамента/i), '201');
       await user.type(screen.getByLabelText(/Telegram ID/i), '999888777');
       await user.type(screen.getByLabelText(/Имя \(опционально\)/i), 'Тестовый Житель');
 
@@ -83,7 +83,7 @@ describe('AdminResidentsPage', () => {
         expect(screen.getByText('Иван Петров')).toBeInTheDocument();
       });
 
-      await user.type(screen.getByLabelText(/ID квартиры/i), '201');
+      await user.type(screen.getByLabelText(/Номер апартамента/i), '201');
       await user.type(screen.getByLabelText(/Telegram ID/i), '999888777');
       await user.type(screen.getByLabelText(/Телефон/i), 'invalid-phone');
 

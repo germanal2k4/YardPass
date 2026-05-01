@@ -33,6 +33,7 @@ func NewRouter(
 	passHandler *handlers.PassHandler,
 	ruleHandler *handlers.RuleHandler,
 	userHandler *handlers.UserHandler,
+	buildingHandler *handlers.BuildingHandler,
 	residentHandler *handlers.ResidentHandler,
 	scanEventHandler *handlers.ScanEventHandler,
 	reportHandler *handlers.ReportHandler,
@@ -98,6 +99,12 @@ func NewRouter(
 		{
 			users.POST("", userHandler.RegisterUser)
 			users.GET("", userHandler.ListUsers)
+		}
+
+		buildings := api.Group("/buildings")
+		buildings.Use(middleware.RequireRole("admin", "superuser"))
+		{
+			buildings.PUT("/:id/apartment-count", buildingHandler.UpdateApartmentCount)
 		}
 
 		residents := api.Group("/residents")

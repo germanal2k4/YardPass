@@ -25,6 +25,7 @@ describe('RegistrationPage', () => {
     const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
 
     await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
+    await user.type(screen.getByLabelText(/Количество апартаментов/i), '120');
     fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
@@ -37,6 +38,7 @@ describe('RegistrationPage', () => {
     const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
 
     await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
+    await user.type(screen.getByLabelText(/Количество апартаментов/i), '120');
     fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
@@ -50,6 +52,7 @@ describe('RegistrationPage', () => {
 
     await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
     await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
+    await user.type(screen.getByLabelText(/Количество апартаментов/i), '120');
     fireEvent.submit(container.querySelector('form')!);
 
     await waitFor(() => {
@@ -66,6 +69,7 @@ describe('RegistrationPage', () => {
 
     await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
     await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
+    await user.type(screen.getByLabelText(/Количество апартаментов/i), '120');
     await user.type(screen.getByTestId('card-number-input'), '4111111111111111');
     await user.type(screen.getByLabelText(/Владелец карты/i), 'IVAN PETROV');
     await user.type(screen.getByLabelText(/Срок/i), '12/30');
@@ -77,5 +81,19 @@ describe('RegistrationPage', () => {
     });
 
     await vi.advanceTimersByTimeAsync(2300);
+  });
+
+  it('shows error when apartment count is invalid', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { container } = renderWithProviders(<RegistrationPage />, { auth: { user: null } });
+
+    await user.type(screen.getByLabelText(/Здание/i), 'ЖК Лесной');
+    await user.type(screen.getByLabelText(/Email/i), 'owner@example.com');
+    await user.type(screen.getByLabelText(/Количество апартаментов/i), '0');
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Укажите корректное количество апартаментов/i)).toBeInTheDocument();
+    });
   });
 });

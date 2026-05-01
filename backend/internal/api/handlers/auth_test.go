@@ -178,17 +178,19 @@ func TestAuthHandler_PurchaseSubscription(t *testing.T) {
 		r.POST("/purchase-subscription", h.PurchaseSubscription)
 
 		reqBody := domain.PurchaseSubscriptionRequest{
-			Email:        "client@example.com",
-			BuildingName: "ЖК Тестовый",
-			CardNumber:   "4111111111111111",
-			CardHolder:   "IVAN PETROV",
-			Expiry:       "12/30",
-			CVV:          "123",
+			Email:          "client@example.com",
+			BuildingName:   "ЖК Тестовый",
+			ApartmentCount: 120,
+			CardNumber:     "4111111111111111",
+			CardHolder:     "IVAN PETROV",
+			Expiry:         "12/30",
+			CVV:            "123",
 		}
 
 		subSvc.On("Purchase", mock.Anything, reqBody).Return(&domain.PurchaseSubscriptionResponse{
 			BuildingID:      10,
 			BuildingName:    "ЖК Тестовый",
+			ApartmentCount:  120,
 			SubscriptionFee: 200000,
 			Period:          "1 year",
 			Email:           "client@example.com",

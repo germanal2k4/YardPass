@@ -58,13 +58,13 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 
 	role, exists := c.Get("role")
 	if !exists {
-		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		errors.Unauthorized(c, "MISSING_ROLE", "Роль пользователя не найдена. Обратитесь к администратору.")
 		return
 	}
 
 	roleStr, ok := role.(string)
 	if !ok {
-		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		errors.InternalServerError(c, "INVALID_ROLE", "Некорректный тип роли в сессии.")
 		return
 	}
 
@@ -81,12 +81,12 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		}
 	case "admin", "guard":
 		if buildingID == nil {
-			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "Для вашей роли требуется привязка к зданию (building_id).")
 			return
 		}
 		id, ok := buildingID.(int64)
 		if !ok {
-			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "Некорректный building_id в сессии. Войдите снова.")
 			return
 		}
 		bID = &id
@@ -94,7 +94,7 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 
 	events, err := h.scanEventRepo.GetEventsWithDetails(c.Request.Context(), filters, bID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 

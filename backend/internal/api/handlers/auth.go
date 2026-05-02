@@ -45,13 +45,13 @@ type RefreshRequest struct {
 
 func (h *AuthHandler) PurchaseSubscription(c *gin.Context) {
 	if h.subscriptionService == nil {
-		errors.InternalServerError(c, "SERVICE_UNAVAILABLE", "subscription service is not configured")
+		errors.InternalServerError(c, "SERVICE_UNAVAILABLE", "Сервис подписок не настроен. Обратитесь к администратору.")
 		return
 	}
 
 	var req domain.PurchaseSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *AuthHandler) PurchaseSubscription(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	refreshToken, err := c.Cookie(cookieRefreshToken)
 	if err != nil || refreshToken == "" {
-		errors.BadRequest(c, "INVALID_REQUEST", "refresh_token is required")
+		errors.BadRequest(c, "INVALID_REQUEST", "Требуется refresh_token (cookie). Войдите снова.")
 		return
 	}
 

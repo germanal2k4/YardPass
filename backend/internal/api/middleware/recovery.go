@@ -36,7 +36,7 @@ func RecoveryMiddleware(lgr *zap.Logger) gin.HandlerFunc {
 
 				c.Abort()
 
-				errors.InternalServerError(c, "INTERNAL_ERROR", "Internal server error")
+				errors.InternalServerError(c, "INTERNAL_ERROR", errors.UserMsgInternalError)
 			}
 		}()
 

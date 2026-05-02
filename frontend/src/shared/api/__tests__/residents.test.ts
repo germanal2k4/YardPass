@@ -71,6 +71,29 @@ describe('residentsApi', () => {
     postSpy.mockRestore();
   });
 
+  it('importFromCSV omits building_id param when not provided (admin flow)', async () => {
+    const { apiClient } = await import('../client');
+    const postSpy = vi.spyOn(apiClient, 'post').mockResolvedValue({
+      data: { created: 1, errors: [] },
+    });
+
+    const file = new File(['a,b\n1,2'], 't.csv', { type: 'text/csv' });
+    await residentsApi.importFromCSV(file);
+
+    expect(postSpy).toHaveBeenCalledWith(
+      '/api/v1/residents/import',
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    );
+    const call = postSpy.mock.calls[0];
+    const config = call[2] as Record<string, unknown>;
+    expect(config.params).toBeUndefined();
+
+    postSpy.mockRestore();
+  });
+
   it('delete sends DELETE to /residents/:id', async () => {
     const result = await residentsApi.delete(1);
     expect(result).toHaveProperty('message');

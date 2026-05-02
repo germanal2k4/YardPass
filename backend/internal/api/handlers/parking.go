@@ -40,13 +40,13 @@ func (h *ParkingHandler) GetOccupancy(c *gin.Context) {
 	}
 
 	if bID == nil {
-		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id is required")
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "Укажите здание (building_id) или войдите с ролью, у которой оно задано.")
 		return
 	}
 
 	activePasses, err := h.passService.GetActivePassesByBuilding(c.Request.Context(), *bID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (h *ParkingHandler) GetVehicles(c *gin.Context) {
 	}
 
 	if bID == nil {
-		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id is required")
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "Укажите здание (building_id) или войдите с ролью, у которой оно задано.")
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *ParkingHandler) GetVehicles(c *gin.Context) {
 
 	activePasses, err := h.passService.GetActivePassesByBuilding(c.Request.Context(), *bID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 

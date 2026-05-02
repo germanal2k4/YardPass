@@ -21,7 +21,7 @@ import { z } from 'zod';
 import type { UpdateApartmentCountRequest, UpdateRuleRequest } from '@/shared/types/api';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
-import { formatErrorMessage } from '@/shared/utils/errors';
+import { formatErrorMessage, getErrorMessage } from '@/shared/utils/errors';
 
 const ruleSchema = z.object({
   quiet_hours_start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Формат: HH:mm').optional().or(z.literal('')),
@@ -174,7 +174,7 @@ export function AdminRulesPage() {
       <Layout title="Правила и настройки">
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Alert severity="error">
-            Ошибка загрузки правил: {(error as Error).message}
+            Ошибка загрузки правил: {getErrorMessage(error)}
           </Alert>
         </Container>
       </Layout>

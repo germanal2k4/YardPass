@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -111,7 +112,7 @@ func TestAuthHandler_Login(t *testing.T) {
 		r := gin.New()
 		r.POST("/login", h.Login)
 
-		svc.On("Login", mock.Anything, "baduser", "wrong").Return((*domain.AuthTokens)(nil), context.DeadlineExceeded)
+		svc.On("Login", mock.Anything, "baduser", "wrong").Return((*domain.AuthTokens)(nil), errors.New("Неверный логин или пароль."))
 
 		body, _ := json.Marshal(LoginRequest{Username: "baduser", Password: "wrong"})
 		req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))

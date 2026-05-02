@@ -163,7 +163,7 @@ export const handlers = [
           { username: 'admin_building_1234', password: 'secretAdmin' },
           { username: 'guard_building_5678', password: 'secretGuard' },
         ],
-        message: 'Subscription is paid. Credentials were sent to email.',
+        message: 'Подписка оплачена. Данные для входа отправлены на указанный email.',
       },
       { status: 201 }
     );

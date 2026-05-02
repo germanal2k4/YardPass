@@ -1,0 +1,8 @@
+# golangci-lint v2. ST1005 conflicts with intentional Russian user-facing messages.
+version: "2"
+linters:
+  exclusions:
+    rules:
+      - linters:
+          - staticcheck
+        text: "ST1005:"

@@ -63,19 +63,19 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, apartmentID)
 	if err != nil {
-		return nil, fmt.Errorf("get apartment: %w", err)
+		return nil, errors.New("Не удалось проверить квартиру. Попробуйте позже.")
 	}
 	if apartment == nil {
-		return nil, errors.New("apartment not found")
+		return nil, errors.New("Квартира не найдена.")
 	}
 
 	existing, err := s.residentRepo.GetByTelegramID(ctx, req.TelegramID)
 	if err != nil {
-		return nil, fmt.Errorf("check telegram_id: %w", err)
+		return nil, errors.New("Не удалось проверить Telegram. Попробуйте позже.")
 	}
 	if existing != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
-		return nil, errors.New("resident with this telegram_id already exists")
+		return nil, errors.New("Житель с таким Telegram ID уже существует.")
 	}
 
 	chatID := req.TelegramID
@@ -94,7 +94,7 @@ func (s *ResidentService) CreateResident(ctx context.Context, req domain.CreateR
 
 	if err := s.residentRepo.Create(ctx, resident); err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
-		return nil, fmt.Errorf("create resident: %w", err)
+		return nil, errors.New("Не удалось сохранить жителя. Попробуйте позже.")
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
@@ -126,11 +126,11 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	records, err := csvReader.ReadAll()
 	if err != nil {
-		return 0, []error{fmt.Errorf("read CSV: %w", err)}
+		return 0, []error{errors.New("Не удалось прочитать CSV. Проверьте кодировку и разделитель полей.")}
 	}
 
 	if len(records) < 2 {
-		return 0, []error{errors.New("CSV must have header row and at least one data row")}
+		return 0, []error{errors.New("В файле должны быть строка заголовков и хотя бы одна строка с данными.")}
 	}
 
 	header := records[0]
@@ -142,7 +142,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	requiredFields := []string{"apartment", "telegram_id"}
 	for _, field := range requiredFields {
 		if _, ok := headerMap[field]; !ok {
-			return 0, []error{fmt.Errorf("missing required column: %s", field)}
+			return 0, []error{fmt.Errorf("В заголовке CSV отсутствует обязательная колонка: %s", field)}
 		}
 	}
 
@@ -151,19 +151,19 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	for i, record := range records[1:] {
 		if len(record) < len(header) {
-			parseErrors = append(parseErrors, fmt.Errorf("row %d: insufficient columns", i+2))
+			parseErrors = append(parseErrors, fmt.Errorf("Строка %d: недостаточно столбцов.", i+2))
 			continue
 		}
 
 		apartmentNumber := strings.TrimSpace(record[headerMap["apartment"]])
 		if apartmentNumber == "" {
-			parseErrors = append(parseErrors, fmt.Errorf("row %d: apartment is required", i+2))
+			parseErrors = append(parseErrors, fmt.Errorf("Строка %d: укажите номер квартиры (apartment).", i+2))
 			continue
 		}
 
 		apartments, err := s.apartmentRepo.GetByBuildingID(ctx, buildingID)
 		if err != nil {
-			parseErrors = append(parseErrors, fmt.Errorf("row %d: failed to get apartments: %w", i+2, err))
+			parseErrors = append(parseErrors, fmt.Errorf("Строка %d: не удалось загрузить квартиры здания.", i+2))
 			continue
 		}
 
@@ -178,14 +178,14 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 		}
 
 		if !found {
-			parseErrors = append(parseErrors, fmt.Errorf("row %d: apartment %s not found", i+2, apartmentNumber))
+			parseErrors = append(parseErrors, fmt.Errorf("Строка %d: квартира «%s» не найдена в этом здании.", i+2, apartmentNumber))
 			continue
 		}
 
 		telegramIDStr := strings.TrimSpace(record[headerMap["telegram_id"]])
 		telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
 		if err != nil {
-			parseErrors = append(parseErrors, fmt.Errorf("row %d: invalid telegram_id: %s", i+2, telegramIDStr))
+			parseErrors = append(parseErrors, fmt.Errorf("Строка %d: некорректный telegram_id «%s» (нужно целое число).", i+2, telegramIDStr))
 			continue
 		}
 
@@ -243,7 +243,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	var errorList []error
 	for _, err := range createErrors {
-		errorList = append(errorList, fmt.Errorf("row %d: %s", err.Row, err.Error))
+		errorList = append(errorList, fmt.Errorf("Строка %d: %s", err.Row, err.Error))
 	}
 
 	return len(residents), errorList
@@ -254,15 +254,15 @@ func (s *ResidentService) resolveApartmentID(ctx context.Context, req domain.Cre
 		return *req.ApartmentID, nil
 	}
 	if req.BuildingID == nil {
-		return 0, errors.New("building_id is required when apartment_id is not provided")
+		return 0, errors.New("Укажите building_id, если не передан apartment_id.")
 	}
 	if req.ApartmentNumber == nil || strings.TrimSpace(*req.ApartmentNumber) == "" {
-		return 0, errors.New("apartment_number is required when apartment_id is not provided")
+		return 0, errors.New("Укажите apartment_number, если не передан apartment_id.")
 	}
 
 	apartments, err := s.apartmentRepo.GetByBuildingID(ctx, *req.BuildingID)
 	if err != nil {
-		return 0, fmt.Errorf("get apartments by building: %w", err)
+		return 0, errors.New("Не удалось загрузить квартиры здания. Попробуйте позже.")
 	}
 	targetNumber := strings.TrimSpace(*req.ApartmentNumber)
 	for _, apt := range apartments {
@@ -271,7 +271,7 @@ func (s *ResidentService) resolveApartmentID(ctx context.Context, req domain.Cre
 		}
 	}
 
-	return 0, fmt.Errorf("apartment %s not found in building", targetNumber)
+	return 0, fmt.Errorf("Квартира «%s» не найдена в указанном здании.", targetNumber)
 }
 
 func (s *ResidentService) ListResidents(ctx context.Context, filters domain.ResidentFilters) ([]domain.Resident, error) {
@@ -281,15 +281,15 @@ func (s *ResidentService) ListResidents(ctx context.Context, filters domain.Resi
 func (s *ResidentService) DeleteResident(ctx context.Context, id int64) error {
 	resident, err := s.residentRepo.GetByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("get resident: %w", err)
+		return errors.New("Не удалось найти жителя. Попробуйте позже.")
 	}
 	if resident == nil {
-		return errors.New("resident not found")
+		return errors.New("Житель не найден.")
 	}
 
 	if err := s.residentRepo.Delete(ctx, id); err != nil {
 		s.opsTotal.WithLabelValues("delete", "error").Inc()
-		return fmt.Errorf("delete resident: %w", err)
+		return errors.New("Не удалось удалить жителя. Попробуйте позже.")
 	}
 
 	s.opsTotal.WithLabelValues("delete", "success").Inc()

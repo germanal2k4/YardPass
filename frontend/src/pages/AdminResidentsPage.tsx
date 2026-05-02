@@ -162,7 +162,7 @@ export function AdminResidentsPage() {
 
   // CSV import mutation
   const csvImportMutation = useMutation({
-    mutationFn: (params: { file: File; buildingId: number }) => 
+    mutationFn: (params: { file: File; buildingId?: number }) =>
       residentsApi.importFromCSV(params.file, params.buildingId),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['residents'] });
@@ -264,11 +264,16 @@ export function AdminResidentsPage() {
       setErrorMsg('Пожалуйста, выберите файл');
       return;
     }
-    if (!buildingId) {
+    // Админ: building_id на сервере из JWT; суперпользователь — передаём в query.
+    if (user?.role !== 'admin' && buildingId == null) {
       setErrorMsg('Не удалось определить ID здания. Обратитесь к администратору.');
       return;
     }
-    csvImportMutation.mutate({ file: selectedFile, buildingId });
+    csvImportMutation.mutate(
+      user?.role === 'admin'
+        ? { file: selectedFile }
+        : { file: selectedFile, buildingId: buildingId! },
+    );
   };
 
   const handleCloseCsvDialog = () => {
@@ -667,17 +672,17 @@ export function AdminResidentsPage() {
             />
 
             {bulkResult && (
-              <Alert severity={bulkResult.errors.length > 0 ? 'warning' : 'success'} sx={{ mt: 2 }}>
+              <Alert severity={(bulkResult.errors ?? []).length > 0 ? 'warning' : 'success'} sx={{ mt: 2 }}>
                 <Typography variant="body2">
                   Создано: {bulkResult.created}
                 </Typography>
-                {bulkResult.errors.length > 0 && (
+                {(bulkResult.errors ?? []).length > 0 && (
                   <>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      Ошибки: {bulkResult.errors.length}
+                      Ошибки: {(bulkResult.errors ?? []).length}
                     </Typography>
                     <Box sx={{ mt: 1, maxHeight: 200, overflow: 'auto' }}>
-                      {bulkResult.errors.map((err, idx) => (
+                      {(bulkResult.errors ?? []).map((err, idx) => (
                         <Typography key={idx} variant="caption" display="block">
                           • {formatBulkError(err)}
                         </Typography>
@@ -749,17 +754,17 @@ export function AdminResidentsPage() {
               )}
 
               {csvResult && (
-                <Alert severity={csvResult.errors.length > 0 ? 'warning' : 'success'}>
+                <Alert severity={(csvResult.errors ?? []).length > 0 ? 'warning' : 'success'}>
                   <Typography variant="body2">
                     Создано: {csvResult.created}
                   </Typography>
-                  {csvResult.errors.length > 0 && (
+                  {(csvResult.errors ?? []).length > 0 && (
                     <>
                       <Typography variant="body2" sx={{ mt: 1 }}>
-                        Ошибки: {csvResult.errors.length}
+                        Ошибки: {(csvResult.errors ?? []).length}
                       </Typography>
                       <Box sx={{ mt: 1, maxHeight: 150, overflow: 'auto' }}>
-                        {csvResult.errors.map((err, idx) => (
+                        {(csvResult.errors ?? []).map((err, idx) => (
                           <Typography key={idx} variant="caption" display="block">
                             • {formatBulkError(err)}
                           </Typography>

@@ -42,13 +42,13 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 
 	role, exists := c.Get("role")
 	if !exists {
-		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		errors.Unauthorized(c, "MISSING_ROLE", "Роль пользователя не найдена. Обратитесь к администратору.")
 		return
 	}
 
 	roleStr, ok := role.(string)
 	if !ok {
-		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		errors.InternalServerError(c, "INVALID_ROLE", "Некорректный тип роли в сессии.")
 		return
 	}
 
@@ -65,12 +65,12 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 		}
 	case "admin", "guard":
 		if buildingID == nil {
-			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "Для вашей роли требуется привязка к зданию (building_id).")
 			return
 		}
 		id, ok := buildingID.(int64)
 		if !ok {
-			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "Некорректный building_id в сессии. Войдите снова.")
 			return
 		}
 		bID = &id
@@ -78,7 +78,7 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 
 	stats, err := h.scanEventRepo.GetStatistics(c.Request.Context(), from, to, bID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *ReportHandler) GetStatistics(c *gin.Context) {
 func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	format := c.Query("format")
 	if format != "xlsx" {
-		errors.BadRequest(c, "INVALID_FORMAT", "format must be xlsx")
+		errors.BadRequest(c, "INVALID_FORMAT", "Допустим только формат экспорта format=xlsx.")
 		return
 	}
 
@@ -117,13 +117,13 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 
 	role, exists := c.Get("role")
 	if !exists {
-		errors.Unauthorized(c, "MISSING_ROLE", "User role not found")
+		errors.Unauthorized(c, "MISSING_ROLE", "Роль пользователя не найдена. Обратитесь к администратору.")
 		return
 	}
 
 	roleStr, ok := role.(string)
 	if !ok {
-		errors.InternalServerError(c, "INVALID_ROLE", "Invalid role type")
+		errors.InternalServerError(c, "INVALID_ROLE", "Некорректный тип роли в сессии.")
 		return
 	}
 
@@ -140,12 +140,12 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 		}
 	case "admin", "guard":
 		if buildingID == nil {
-			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for this role")
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "Для вашей роли требуется привязка к зданию (building_id).")
 			return
 		}
 		id, ok := buildingID.(int64)
 		if !ok {
-			errors.InternalServerError(c, "INVALID_BUILDING_ID", "invalid building_id in auth context")
+			errors.InternalServerError(c, "INVALID_BUILDING_ID", "Некорректный building_id в сессии. Войдите снова.")
 			return
 		}
 		bID = &id
@@ -158,7 +158,7 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 
 	events, err := h.scanEventRepo.GetEventsWithDetails(c.Request.Context(), filters, bID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	sheetName := "События"
 	index, err := file.NewSheet(sheetName)
 	if err != nil {
-		errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+		errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 		return
 	}
 
@@ -182,7 +182,7 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	for i, header := range headers {
 		cell := fmt.Sprintf("%c1", 'A'+i)
 		if err := file.SetCellValue(sheetName, cell, header); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
 	}
@@ -190,43 +190,43 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	for i, event := range events {
 		row := i + 2
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("A%d", row), event.ID); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("B%d", row), event.ScannedAt.Format("2006-01-02 15:04:05")); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("C%d", row), event.Result); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
 		if event.CarPlate != nil {
 			if err := file.SetCellValue(sheetName, fmt.Sprintf("D%d", row), *event.CarPlate); err != nil {
-				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 				return
 			}
 		}
 		if err := file.SetCellValue(sheetName, fmt.Sprintf("E%d", row), event.ApartmentNumber); err != nil {
-			errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
 		if event.GuardUsername != nil {
 			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuardUsername); err != nil {
-				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 				return
 			}
 		}
 		if event.Reason != nil {
 			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {
-				errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 				return
 			}
 		}
 	}
 
 	if err := file.DeleteSheet("Sheet1"); err != nil {
-		errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+		errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 		return
 	}
 
@@ -234,7 +234,7 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=report_%s.xlsx", time.Now().Format("20060102_150405")))
 
 	if err := file.Write(c.Writer); err != nil {
-		errors.InternalServerError(c, "EXCEL_ERROR", err.Error())
+		errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 		return
 	}
 }

@@ -65,13 +65,19 @@ func (h *PassHandler) Create(c *gin.Context) {
 		ValidTo:     req.ValidTo,
 	}
 
-	pass, err := h.passService.CreatePass(c.Request.Context(), createReq)
+	result, err := h.passService.CreatePass(c.Request.Context(), createReq)
 	if err != nil {
 		errors.BadRequest(c, "CREATE_PASS_FAILED", err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, pass)
+	c.JSON(http.StatusCreated, struct {
+		domain.Pass
+		QuietHoursNotice *string `json:"quiet_hours_notice,omitempty"`
+	}{
+		Pass:             *result.Pass,
+		QuietHoursNotice: result.QuietHoursNotice,
+	})
 }
 
 func (h *PassHandler) GetByID(c *gin.Context) {

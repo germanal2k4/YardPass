@@ -52,6 +52,12 @@ type Pass struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// CreatePassResult is returned when a pass is created; QuietHoursNotice is set if valid_to was shortened before quiet hours.
+type CreatePassResult struct {
+	Pass               *Pass   `json:"pass"`
+	QuietHoursNotice   *string `json:"quiet_hours_notice,omitempty"`
+}
+
 type ScanEvent struct {
 	ID          int64     `json:"id"`
 	PassID      uuid.UUID `json:"pass_id"`

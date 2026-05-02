@@ -77,12 +77,13 @@ func TestIntegration_PassFlow(t *testing.T) {
 		ValidTo:     validTo,
 	}
 
-	pass, err := passService.CreatePass(ctx, req)
+	createRes, err := passService.CreatePass(ctx, req)
 	require.NoError(t, err)
-	assert.NotNil(t, pass)
-	assert.NotEmpty(t, pass.ID)
-	assert.Equal(t, "A123BC", *pass.CarPlate)
-	assert.Equal(t, "active", pass.Status)
+	assert.NotNil(t, createRes)
+	assert.NotEmpty(t, createRes.Pass.ID)
+	assert.Equal(t, "A123BC", *createRes.Pass.CarPlate)
+	assert.Equal(t, "active", createRes.Pass.Status)
+	pass := createRes.Pass
 
 	// Validate pass (guard scoped to pass building)
 	result, err := passService.ValidatePass(ctx, pass.ID, 1, &buildingID)

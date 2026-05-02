@@ -349,8 +349,7 @@ func (b *Bot) handleCustomTime(ctx context.Context, msg Message, state *UserStat
 		targetTime = targetTime.Add(24 * time.Hour)
 	}
 
-	state.Data["valid_to"] = targetTime.UTC()
-
+	// Wall clock in bot location (Europe/Moscow); createPassFromState converts to UTC for storage.
 	state.Data["valid_to"] = targetTime
 	state.Step = StateWaitingGuestName
 	b.setState(msg.From.ID, state)
@@ -436,12 +435,13 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 		ValidTo:     validToUTC,
 	}
 
-	pass, err := b.passService.CreatePass(ctx, req)
+	result, err := b.passService.CreatePass(ctx, req)
 	if err != nil {
 		_ = b.sendMessage(ctx, chatID, fmt.Sprintf("Ошибка при создании пропуска: %s", err.Error()))
 		b.logger.Error("failed to create pass", zap.Error(err), zap.Int64("user_id", userID))
 		return
 	}
+	pass := result.Pass
 
 	qrPNG, err := b.qrGen.GenerateQR(ctx, pass.ID)
 	if err != nil {
@@ -474,6 +474,9 @@ func (b *Bot) createPassFromState(ctx context.Context, chatID int64, userID int6
 	}
 	if pass.GuestName != nil && *pass.GuestName != "" {
 		caption = fmt.Sprintf("%s\nГость: %s", caption, *pass.GuestName)
+	}
+	if result.QuietHoursNotice != nil && *result.QuietHoursNotice != "" {
+		caption = fmt.Sprintf("%s\n\n⚠️ %s", caption, *result.QuietHoursNotice)
 	}
 
 	err = b.sendPhoto(ctx, chatID, qrPNG, caption)

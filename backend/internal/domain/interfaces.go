@@ -131,7 +131,7 @@ type CreatePassRequest struct {
 
 // PassService is the interface for pass-related operations (used by handlers for testability).
 type PassService interface {
-	CreatePass(ctx context.Context, req CreatePassRequest) (*Pass, error)
+	CreatePass(ctx context.Context, req CreatePassRequest) (*CreatePassResult, error)
 	GenerateResidentPersonalPassToken(residentTelegramID int64) string
 	ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*PassValidationResult, error)
 	ValidatePassByCarPlate(ctx context.Context, carPlate string, guardUserID int64, buildingID *int64) (*PassValidationResult, error)

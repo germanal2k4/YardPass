@@ -133,6 +133,30 @@ async function setupApiMocks(page: Page) {
     await route.fulfill({ status: 204, body: '' });
   });
 
+  await page.route('**/auth/purchase-subscription', async (route) => {
+    const body = route.request().postDataJSON() as {
+      email?: string;
+      building_name?: string;
+      apartment_count?: number;
+    };
+    await route.fulfill({
+      status: 200,
+      json: {
+        building_id: 1,
+        building_name: body.building_name ?? 'Test',
+        apartment_count: body.apartment_count ?? 10,
+        subscription_fee: 200_000,
+        period: 'year',
+        email: body.email ?? 'owner@example.com',
+        accounts: [
+          { username: 'admin_test', password: 'Pass123!' },
+          { username: 'guard_test', password: 'Pass123!' },
+        ],
+        message: 'OK',
+      },
+    });
+  });
+
   await page.route('**/api/v1/me', async (route) => {
     if (!loggedInRole) {
       await route.fulfill({

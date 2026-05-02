@@ -21,9 +21,9 @@ test.describe('Welcome Page – Role Selection', () => {
     await expect(page).toHaveURL(/\/login\?role=admin/);
   });
 
-  test('registration button navigates to /register', async ({ page }) => {
+  test('subscription button navigates to /register', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: /Зарегистрироваться/i }).click();
+    await page.getByRole('button', { name: /Оплатить подписку/i }).click();
     await expect(page).toHaveURL(/\/register/);
   });
 });

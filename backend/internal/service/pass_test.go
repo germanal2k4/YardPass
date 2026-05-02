@@ -275,13 +275,14 @@ func TestPassService_CreatePass(t *testing.T) {
 			ValidTo:     validTo,
 		}
 
-		pass, err := service.CreatePass(ctx, req)
+		createRes, err := service.CreatePass(ctx, req)
 
 		assert.NoError(t, err)
-		assert.NotNil(t, pass)
-		assert.NotNil(t, pass.CarPlate)
-		assert.Equal(t, "A123BC", *pass.CarPlate)
-		assert.Equal(t, "active", pass.Status)
+		assert.NotNil(t, createRes)
+		assert.NotNil(t, createRes.Pass)
+		assert.NotNil(t, createRes.Pass.CarPlate)
+		assert.Equal(t, "A123BC", *createRes.Pass.CarPlate)
+		assert.Equal(t, "active", createRes.Pass.Status)
 
 		passRepo.AssertExpectations(t)
 		apartmentRepo.AssertExpectations(t)
@@ -330,10 +331,10 @@ func TestPassService_CreatePass(t *testing.T) {
 			ValidTo:     validTo,
 		}
 
-		pass, err := service2.CreatePass(ctx, req)
+		createRes, err := service2.CreatePass(ctx, req)
 
 		assert.Error(t, err)
-		assert.Nil(t, pass)
+		assert.Nil(t, createRes)
 		if err != nil {
 			assert.Contains(t, err.Error(), "лимит")
 		}
@@ -391,7 +392,7 @@ func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
 
 	passRepo.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 10).Return(true, nil)
 	carPlate := "A123BC"
-	_, err = svc.CreatePass(ctx, domain.CreatePassRequest{
+	res, err := svc.CreatePass(ctx, domain.CreatePassRequest{
 		ApartmentID: apartmentID,
 		ResidentID:  &residentID,
 		CarPlate:    &carPlate,
@@ -399,8 +400,10 @@ func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
 		ValidTo:     validTo,
 	})
 	assert.NoError(t, err)
+	assert.NotNil(t, res.Pass)
+	assert.Nil(t, res.QuietHoursNotice)
 
-	// 20:00–22:00 UTC = 23:00–01:00 MSK — overlaps quiet hours starting at 23:00
+	// 20:00 UTC = 23:00 MSK — creation moment inside quiet hours (23:00–07:00)
 	passRepo2 := new(MockPassRepo)
 	apartmentRepo2 := new(MockApartmentRepo)
 	ruleRepo2 := new(MockRuleRepo)
@@ -434,7 +437,84 @@ func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
 		ValidTo:     time.Date(2026, 1, 15, 22, 0, 0, 0, time.UTC),
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "тихими")
+	assert.Contains(t, err.Error(), "тих")
+
+	// 15:00–20:30 UTC = 18:00–23:30 MSK — creation outside quiet hours; validity extends into 23:00+ window (allowed)
+	passRepo3 := new(MockPassRepo)
+	apartmentRepo3 := new(MockApartmentRepo)
+	ruleRepo3 := new(MockRuleRepo)
+	residentRepo3 := new(MockResidentRepo)
+	scanEventRepo3 := new(MockScanEventRepo)
+	svc3 := NewPassService(passRepo3, apartmentRepo3, residentRepo3, ruleRepo3, scanEventRepo3, "test-secret", logger, noopMetrics)
+
+	apartmentRepo3.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		ID: apartmentID, BuildingID: buildingID, Number: "101",
+	}, nil)
+	ruleRepo3.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		DailyPassLimitPerApartment: 10,
+		MaxPassDurationHours:       24,
+		QuietHoursStart:            &start,
+		QuietHoursEnd:              &end,
+	}, nil)
+	residentRepo3.On("GetByID", ctx, residentID).Return(&domain.Resident{
+		ID:          residentID,
+		ApartmentID: apartmentID,
+		TelegramID:  1,
+		ChatID:      1,
+		Status:      "active",
+		Timezone:    &tz,
+	}, nil)
+	passRepo3.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 10).Return(true, nil)
+
+	res3, err := svc3.CreatePass(ctx, domain.CreatePassRequest{
+		ApartmentID: apartmentID,
+		ResidentID:  &residentID,
+		CarPlate:    &carPlate,
+		ValidFrom:   time.Date(2026, 1, 15, 15, 0, 0, 0, time.UTC),
+		ValidTo:     time.Date(2026, 1, 15, 20, 30, 0, 0, time.UTC),
+	})
+	assert.NoError(t, err)
+	require.Equal(t, 18, time.Date(2026, 1, 15, 15, 0, 0, 0, time.UTC).In(msk).Hour())
+	// Capped at 23:00 MSK (= 20:00 UTC) before overnight quiet
+	assert.True(t, res3.Pass.ValidTo.Equal(time.Date(2026, 1, 15, 20, 0, 0, 0, time.UTC)))
+	require.NotNil(t, res3.QuietHoursNotice)
+	assert.Contains(t, *res3.QuietHoursNotice, "23:00")
+
+	// 06:00–08:00 UTC = 09:00–11:00 MSK; quiet 10:00–12:00 → valid_to capped at 10:00 MSK (07:00 UTC)
+	qStart, qEnd := "10:00", "12:00"
+	passRepo4 := new(MockPassRepo)
+	apartmentRepo4 := new(MockApartmentRepo)
+	ruleRepo4 := new(MockRuleRepo)
+	residentRepo4 := new(MockResidentRepo)
+	scanEventRepo4 := new(MockScanEventRepo)
+	svc4 := NewPassService(passRepo4, apartmentRepo4, residentRepo4, ruleRepo4, scanEventRepo4, "test-secret", logger, noopMetrics)
+
+	apartmentRepo4.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		ID: apartmentID, BuildingID: buildingID, Number: "101",
+	}, nil)
+	ruleRepo4.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		DailyPassLimitPerApartment: 10,
+		MaxPassDurationHours:       24,
+		QuietHoursStart:            &qStart,
+		QuietHoursEnd:              &qEnd,
+	}, nil)
+	residentRepo4.On("GetByID", ctx, residentID).Return(&domain.Resident{
+		ID: residentID, ApartmentID: apartmentID, TelegramID: 1, ChatID: 1,
+		Status: "active", Timezone: &tz,
+	}, nil)
+	passRepo4.On("CreateWithDailyLimit", ctx, mock.AnythingOfType("*domain.Pass"), mock.Anything, mock.Anything, 10).Return(true, nil)
+
+	res4, err := svc4.CreatePass(ctx, domain.CreatePassRequest{
+		ApartmentID: apartmentID,
+		ResidentID:  &residentID,
+		CarPlate:    &carPlate,
+		ValidFrom:   time.Date(2026, 1, 15, 6, 0, 0, 0, time.UTC),
+		ValidTo:     time.Date(2026, 1, 15, 8, 0, 0, 0, time.UTC),
+	})
+	assert.NoError(t, err)
+	assert.True(t, res4.Pass.ValidTo.Equal(time.Date(2026, 1, 15, 7, 0, 0, 0, time.UTC)))
+	require.NotNil(t, res4.QuietHoursNotice)
+	assert.Contains(t, *res4.QuietHoursNotice, "10:00")
 }
 
 func TestPassService_ValidatePass(t *testing.T) {

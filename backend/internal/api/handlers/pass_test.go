@@ -21,12 +21,12 @@ type mockPassService struct {
 	mock.Mock
 }
 
-func (m *mockPassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
+func (m *mockPassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.CreatePassResult, error) {
 	args := m.Called(ctx, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Pass), args.Error(1)
+	return args.Get(0).(*domain.CreatePassResult), args.Error(1)
 }
 
 func (m *mockPassService) GenerateResidentPersonalPassToken(residentTelegramID int64) string {
@@ -267,7 +267,7 @@ func TestPassHandler_Create(t *testing.T) {
 		svc.On("CreatePass", mock.Anything, mock.MatchedBy(func(r domain.CreatePassRequest) bool {
 			return r.ApartmentID == 1 && r.CarPlate != nil && *r.CarPlate == carPlate &&
 				r.ResidentID != nil && *r.ResidentID == 1
-		})).Return(pass, nil)
+		})).Return(&domain.CreatePassResult{Pass: pass}, nil)
 
 		body, _ := json.Marshal(CreatePassRequest{
 			ApartmentID: 1,

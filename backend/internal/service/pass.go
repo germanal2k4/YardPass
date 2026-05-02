@@ -91,7 +91,7 @@ func NewPassService(
 	}
 }
 
-func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.Pass, error) {
+func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassRequest) (*domain.CreatePassResult, error) {
 	var carPlate *string
 	if req.CarPlate != nil && *req.CarPlate != "" {
 		normalized := NormalizeCarPlate(*req.CarPlate)
@@ -147,12 +147,19 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 
 	localLocation := locationForResidentRules(resident)
 
-	if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
+	var quietNotice *string
+	if ruleQuietHoursConfigured(rule) {
 		validFromLocal := validFromUTC.In(localLocation)
 		validToLocal := validToUTC.In(localLocation)
-		if err := s.validateQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd); err != nil {
+		newToLocal, truncated, truncErr := truncateValidToForQuietHours(validFromLocal, validToLocal, *rule.QuietHoursStart, *rule.QuietHoursEnd)
+		if truncErr != nil {
 			s.rejectionsTotal.WithLabelValues("quiet_hours").Inc()
-			return nil, err
+			return nil, truncErr
+		}
+		validToUTC = newToLocal.UTC()
+		if truncated {
+			msg := quietHoursShortenedNotice(newToLocal)
+			quietNotice = &msg
 		}
 	}
 
@@ -210,7 +217,7 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	}
 	lgr.Info("Pass created", logFields...)
 
-	return pass, nil
+	return &domain.CreatePassResult{Pass: pass, QuietHoursNotice: quietNotice}, nil
 }
 
 func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64) string {
@@ -405,7 +412,7 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 	if err == nil && apartment != nil {
 		rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 		if err == nil && rule != nil {
-			if rule.QuietHoursStart != nil && rule.QuietHoursEnd != nil {
+			if ruleQuietHoursConfigured(rule) {
 				localLocation := s.quietHoursLocation(ctx, pass)
 				if s.isQuietHours(now.In(localLocation), *rule.QuietHoursStart, *rule.QuietHoursEnd) {
 					result.Reason = "QUIET_HOURS"
@@ -542,6 +549,71 @@ func NormalizeCarPlate(plate string) string {
 	return result.String()
 }
 
+// ruleQuietHoursConfigured is true when both fields are set and non-empty (after trim).
+// If only one side is set in the DB, quiet-hours logic is skipped entirely — avoid relying on that in production.
+func ruleQuietHoursConfigured(rule *domain.Rule) bool {
+	if rule == nil {
+		return false
+	}
+	if rule.QuietHoursStart == nil || rule.QuietHoursEnd == nil {
+		return false
+	}
+	if strings.TrimSpace(*rule.QuietHoursStart) == "" || strings.TrimSpace(*rule.QuietHoursEnd) == "" {
+		return false
+	}
+	return true
+}
+
+// intervalsOverlapHalfOpen reports whether [a0, a1) and [b0, b1) overlap.
+func intervalsOverlapHalfOpen(a0, a1, b0, b1 time.Time) bool {
+	return a0.Before(b1) && b0.Before(a1)
+}
+
+// truncateValidToForQuietHours shortens validTo to the start of the first quiet-hours window that intersects the pass interval.
+// If the interval begins inside quiet hours, creation is rejected.
+func truncateValidToForQuietHours(validFrom, validTo time.Time, startStr, endStr string) (newTo time.Time, truncated bool, err error) {
+	startClock, err := parseTime(startStr)
+	if err != nil {
+		return time.Time{}, false, errors.New("Некорректное время начала тихих часов в правилах здания.")
+	}
+	endClock, err := parseTime(endStr)
+	if err != nil {
+		return time.Time{}, false, errors.New("Некорректное время окончания тихих часов в правилах здания.")
+	}
+	if !validTo.After(validFrom) {
+		return time.Time{}, false, errors.New("Время окончания пропуска должно быть позже времени начала.")
+	}
+	loc := validFrom.Location()
+	fromDay := time.Date(validFrom.Year(), validFrom.Month(), validFrom.Day(), 0, 0, 0, 0, loc)
+	toDay := time.Date(validTo.Year(), validTo.Month(), validTo.Day(), 0, 0, 0, 0, loc)
+
+	newTo = validTo
+	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
+		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
+		if !intervalsOverlapHalfOpen(validFrom, newTo, q0, q1) {
+			continue
+		}
+		if !validFrom.Before(q0) && validFrom.Before(q1) {
+			return time.Time{}, false, errors.New("Сейчас действуют тихие часы. Оформите пропуск после их окончания.")
+		}
+		if validFrom.Before(q0) && q0.Before(validTo) && q0.Before(newTo) {
+			newTo = q0
+		}
+	}
+	if !newTo.After(validFrom) {
+		return time.Time{}, false, errors.New("Срок действия пропуска слишком короткий относительно тихих часов. Выберите другое время.")
+	}
+	return newTo, newTo.Before(validTo), nil
+}
+
+func quietHoursShortenedNotice(validToLocal time.Time) string {
+	return fmt.Sprintf(
+		"С %s действуют тихие часы (вход по пропуску в это время недоступен). Пропуск действителен до %s.",
+		validToLocal.Format("15:04"),
+		validToLocal.Format("15:04 02.01.2006"),
+	)
+}
+
 // quietHoursWindowOnDay returns [q0, q1) for the quiet-hours rule on local calendar day d (end may be next calendar day).
 func quietHoursWindowOnDay(d time.Time, startClock, endClock time.Time) (q0, q1 time.Time) {
 	loc := d.Location()
@@ -557,41 +629,6 @@ func quietHoursWindowOnDay(d time.Time, startClock, endClock time.Time) (q0, q1 
 		}
 	}
 	return q0, q1
-}
-
-// intervalsOverlapHalfOpen reports whether [a0, a1) and [b0, b1) overlap.
-func intervalsOverlapHalfOpen(a0, a1, b0, b1 time.Time) bool {
-	return a0.Before(b1) && b0.Before(a1)
-}
-
-func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time, startTime, endTime string) error {
-	startClock, err := parseTime(startTime)
-	if err != nil {
-		return errors.New("Некорректное время начала тихих часов в правилах здания.")
-	}
-	endClock, err := parseTime(endTime)
-	if err != nil {
-		return errors.New("Некорректное время окончания тихих часов в правилах здания.")
-	}
-
-	loc := validFromLocal.Location()
-	passA := validFromLocal
-	passB := validToLocal
-	if !passB.After(passA) {
-		return errors.New("Время окончания пропуска должно быть позже времени начала.")
-	}
-
-	fromDay := time.Date(passA.Year(), passA.Month(), passA.Day(), 0, 0, 0, 0, loc)
-	toDay := time.Date(passB.Year(), passB.Month(), passB.Day(), 0, 0, 0, 0, loc)
-
-	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
-		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
-		if intervalsOverlapHalfOpen(passA, passB, q0, q1) {
-			return errors.New("Пропуск пересекается с тихими часами. Выберите другое время.")
-		}
-	}
-
-	return nil
 }
 
 func (s *PassService) isQuietHours(nowLocal time.Time, startTime, endTime string) bool {

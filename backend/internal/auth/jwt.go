@@ -56,34 +56,34 @@ func (s *JWTService) Login(ctx context.Context, username, password string) (*dom
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, fmt.Errorf("user not found: %w", err)
+		return nil, errors.New("Не удалось выполнить вход. Попробуйте позже.")
 	}
 
 	if user == nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("Неверный логин или пароль.")
 	}
 
 	if user.Status != "active" {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, errors.New("user account is inactive")
+		return nil, errors.New("Учётная запись отключена. Обратитесь к администратору.")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, errors.New("invalid credentials")
+		return nil, errors.New("Неверный логин или пароль.")
 	}
 
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, fmt.Errorf("generate access token: %w", err)
+		return nil, errors.New("Не удалось выдать токен доступа. Попробуйте позже.")
 	}
 
 	refreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("login", "failure").Inc()
-		return nil, fmt.Errorf("generate refresh token: %w", err)
+		return nil, errors.New("Не удалось выдать токен обновления. Попробуйте позже.")
 	}
 
 	s.authOps.WithLabelValues("login", "success").Inc()
@@ -99,35 +99,39 @@ func (s *JWTService) RefreshToken(ctx context.Context, refreshToken string) (*do
 	claims, err := s.validateToken(refreshToken)
 	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, fmt.Errorf("invalid refresh token: %w", err)
+		return nil, errors.New("Неверный или устаревший refresh token. Войдите снова.")
 	}
 
 	if claims.Type != "refresh" {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, errors.New("token is not a refresh token")
+		return nil, errors.New("Передан не refresh-токен. Войдите снова.")
 	}
 
 	user, err := s.userRepo.GetByID(ctx, claims.UserID)
-	if err != nil || user == nil {
+	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, errors.New("user not found")
+		return nil, errors.New("Не удалось обновить сессию. Попробуйте позже.")
+	}
+	if user == nil {
+		s.authOps.WithLabelValues("refresh", "failure").Inc()
+		return nil, errors.New("Пользователь не найден. Войдите снова.")
 	}
 
 	if user.Status != "active" {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, errors.New("user account is inactive")
+		return nil, errors.New("Учётная запись отключена. Обратитесь к администратору.")
 	}
 
 	accessToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "access", s.accessTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, fmt.Errorf("generate access token: %w", err)
+		return nil, errors.New("Не удалось выдать токен доступа. Попробуйте позже.")
 	}
 
 	newRefreshToken, err := s.generateToken(user.ID, user.Role, user.BuildingID, "refresh", s.refreshTTL)
 	if err != nil {
 		s.authOps.WithLabelValues("refresh", "failure").Inc()
-		return nil, fmt.Errorf("generate refresh token: %w", err)
+		return nil, errors.New("Не удалось выдать токен обновления. Попробуйте позже.")
 	}
 
 	s.authOps.WithLabelValues("refresh", "success").Inc()
@@ -146,7 +150,7 @@ func (s *JWTService) ValidateToken(ctx context.Context, token string) (*domain.T
 	}
 
 	if claims.Type != "access" {
-		return nil, errors.New("token is not an access token")
+		return nil, errors.New("Передан не access-токен.")
 	}
 
 	return &domain.TokenClaims{
@@ -191,7 +195,7 @@ func (s *JWTService) validateToken(tokenString string) (*Claims, error) {
 		return claims, nil
 	}
 
-	return nil, errors.New("invalid token")
+	return nil, errors.New("Недействительный токен.")
 }
 
 func HashPassword(password string) (string, error) {

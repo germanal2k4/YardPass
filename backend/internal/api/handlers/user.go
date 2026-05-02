@@ -24,7 +24,7 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 func (h *UserHandler) RegisterUser(c *gin.Context) {
 	var req domain.RegisterUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 
 	users, err := h.userService.ListUsers(c.Request.Context(), filters)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 

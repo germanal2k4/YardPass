@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -47,10 +48,10 @@ func NewSubscriptionService(
 
 func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseSubscriptionRequest) (*domain.PurchaseSubscriptionResponse, error) {
 	if strings.TrimSpace(req.BuildingName) == "" {
-		return nil, fmt.Errorf("building_name is required")
+		return nil, errors.New("Укажите название здания (building_name).")
 	}
 	if req.ApartmentCount <= 0 {
-		return nil, fmt.Errorf("apartment_count must be greater than zero")
+		return nil, errors.New("Количество квартир (apartment_count) должно быть больше нуля.")
 	}
 
 	if err := validatePaymentFields(req); err != nil {
@@ -59,7 +60,7 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 
 	normalizedBuildingName := normalizeBuildingName(req.BuildingName)
 	if normalizedBuildingName == "" {
-		return nil, fmt.Errorf("building_name is required")
+		return nil, errors.New("Укажите корректное название здания.")
 	}
 
 	building, err := s.findOrCreateBuilding(ctx, normalizedBuildingName, req.ApartmentCount)
@@ -88,7 +89,7 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 	)
 
 	if err := s.emailSender.Send(req.Email, "YardPass: доступы к системе", message); err != nil {
-		return nil, fmt.Errorf("send credentials email: %w", err)
+		return nil, errors.New("Не удалось отправить письмо с доступами. Проверьте email и попробуйте позже.")
 	}
 
 	return &domain.PurchaseSubscriptionResponse{
@@ -102,7 +103,7 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 			adminCreds,
 			guardCreds,
 		},
-		Message: "Subscription is paid. Credentials were sent to email.",
+		Message: "Подписка оплачена. Данные для входа отправлены на указанный email.",
 	}, nil
 }
 
@@ -120,12 +121,12 @@ func (s *SubscriptionService) createUserForRole(
 
 	password, err := generatePassword(12)
 	if err != nil {
-		return domain.AccountCredentials{}, fmt.Errorf("generate password: %w", err)
+		return domain.AccountCredentials{}, errors.New("Не удалось сформировать пароль. Попробуйте позже.")
 	}
 
 	passwordHash, err := auth.HashPassword(password)
 	if err != nil {
-		return domain.AccountCredentials{}, fmt.Errorf("hash password: %w", err)
+		return domain.AccountCredentials{}, errors.New("Не удалось сохранить пароль. Попробуйте позже.")
 	}
 
 	user := &domain.User{
@@ -137,7 +138,7 @@ func (s *SubscriptionService) createUserForRole(
 		Status:       "active",
 	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
-		return domain.AccountCredentials{}, fmt.Errorf("create %s user: %w", role, err)
+		return domain.AccountCredentials{}, fmt.Errorf("Не удалось создать учётную запись (%s). Попробуйте позже.", role)
 	}
 
 	return domain.AccountCredentials{Username: username, Password: password}, nil
@@ -152,36 +153,36 @@ func (s *SubscriptionService) generateUniqueUsername(ctx context.Context, buildi
 	for range 10 {
 		suffix, err := randomDigits(4)
 		if err != nil {
-			return "", fmt.Errorf("generate username suffix: %w", err)
+			return "", errors.New("Не удалось сформировать логин. Попробуйте позже.")
 		}
 
 		username := fmt.Sprintf("%s_%s_%s", role, base, suffix)
 		existing, err := s.userRepo.GetByUsername(ctx, username)
 		if err != nil {
-			return "", fmt.Errorf("check username uniqueness: %w", err)
+			return "", errors.New("Не удалось проверить уникальность логина. Попробуйте позже.")
 		}
 		if existing == nil {
 			return username, nil
 		}
 	}
 
-	return "", fmt.Errorf("failed to generate unique username")
+	return "", errors.New("Не удалось подобрать уникальный логин. Попробуйте другое название здания.")
 }
 
 func validatePaymentFields(req domain.PurchaseSubscriptionRequest) error {
 	cardDigits := onlyDigits(req.CardNumber)
 	if len(cardDigits) < 12 || len(cardDigits) > 19 {
-		return fmt.Errorf("invalid card number")
+		return errors.New("Некорректный номер карты.")
 	}
 	if len(strings.TrimSpace(req.CardHolder)) < 3 {
-		return fmt.Errorf("invalid card holder")
+		return errors.New("Укажите имя держателя карты (не менее 3 символов).")
 	}
 	if matched := regexp.MustCompile(`^(0[1-9]|1[0-2])\/\d{2}$`).MatchString(strings.TrimSpace(req.Expiry)); !matched {
-		return fmt.Errorf("invalid expiry")
+		return errors.New("Некорректный срок действия карты (формат ММ/ГГ).")
 	}
 	cvvDigits := onlyDigits(req.CVV)
 	if len(cvvDigits) < 3 || len(cvvDigits) > 4 {
-		return fmt.Errorf("invalid cvv")
+		return errors.New("Некорректный CVV-код.")
 	}
 
 	return nil
@@ -190,7 +191,7 @@ func validatePaymentFields(req domain.PurchaseSubscriptionRequest) error {
 func generatePassword(length int) (string, error) {
 	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	if length <= 0 {
-		return "", fmt.Errorf("invalid password length")
+		return "", errors.New("внутренняя ошибка: некорректная длина пароля")
 	}
 	var out strings.Builder
 	out.Grow(length)
@@ -207,7 +208,7 @@ func generatePassword(length int) (string, error) {
 
 func randomDigits(length int) (string, error) {
 	if length <= 0 {
-		return "", fmt.Errorf("invalid random digits length")
+		return "", errors.New("внутренняя ошибка: некорректная длина суффикса")
 	}
 	var out strings.Builder
 	out.Grow(length)
@@ -248,7 +249,7 @@ func transliterateCyrillic(value string) string {
 func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normalizedName string, apartmentCount int32) (*domain.Building, error) {
 	buildings, err := s.buildingRepo.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list buildings: %w", err)
+		return nil, errors.New("Не удалось загрузить список зданий. Попробуйте позже.")
 	}
 
 	for _, existing := range buildings {
@@ -256,7 +257,7 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 			if apartmentCount > existing.ApartmentCount {
 				updated, err := s.buildingRepo.UpdateApartmentCount(ctx, existing.ID, apartmentCount)
 				if err != nil {
-					return nil, fmt.Errorf("update building apartment_count: %w", err)
+					return nil, errors.New("Не удалось обновить количество квартир. Попробуйте позже.")
 				}
 				if updated != nil {
 					return updated, nil
@@ -272,7 +273,7 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 		ApartmentCount: apartmentCount,
 	}
 	if err := s.buildingRepo.Create(ctx, building); err != nil {
-		return nil, fmt.Errorf("create building: %w", err)
+		return nil, errors.New("Не удалось создать здание. Попробуйте позже.")
 	}
 	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {
 		return nil, err
@@ -283,7 +284,7 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 func (s *SubscriptionService) ensureDefaultRule(ctx context.Context, buildingID int64) error {
 	existingRule, err := s.ruleRepo.GetByBuildingID(ctx, buildingID)
 	if err != nil {
-		return fmt.Errorf("get building rule: %w", err)
+		return errors.New("Не удалось загрузить правила здания. Попробуйте позже.")
 	}
 	if existingRule != nil {
 		return nil
@@ -295,7 +296,7 @@ func (s *SubscriptionService) ensureDefaultRule(ctx context.Context, buildingID 
 		MaxPassDurationHours:       24,
 	}
 	if err := s.ruleRepo.Create(ctx, rule); err != nil {
-		return fmt.Errorf("create default rule: %w", err)
+		return errors.New("Не удалось создать правила по умолчанию. Попробуйте позже.")
 	}
 	return nil
 }

@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { reportsApi } from '@/shared/api/reports';
 import type { ScanEventWithDetails } from '@/shared/types/api';
+import { getErrorMessage } from '@/shared/utils/errors';
 
 export function EventsLog() {
   const [page, setPage] = useState(0);
@@ -81,7 +82,7 @@ export function EventsLog() {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Ошибка при загрузке данных: {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+          Ошибка при загрузке данных: {getErrorMessage(error)}
         </Alert>
       )}
 

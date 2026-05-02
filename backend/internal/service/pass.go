@@ -97,22 +97,22 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		normalized := NormalizeCarPlate(*req.CarPlate)
 		if normalized == "" {
 			s.rejectionsTotal.WithLabelValues("invalid_car_plate").Inc()
-			return nil, errors.New("invalid car plate number")
+			return nil, errors.New("Некорректный номер автомобиля.")
 		}
 		carPlate = &normalized
 	}
 
 	apartment, err := s.apartmentRepo.GetByID(ctx, req.ApartmentID)
 	if err != nil {
-		return nil, fmt.Errorf("get apartment: %w", err)
+		return nil, errors.New("Не удалось проверить квартиру. Попробуйте позже.")
 	}
 	if apartment == nil {
-		return nil, errors.New("apartment not found")
+		return nil, errors.New("Квартира не найдена.")
 	}
 
 	rule, err := s.ruleRepo.GetByBuildingID(ctx, apartment.BuildingID)
 	if err != nil {
-		return nil, fmt.Errorf("get rules: %w", err)
+		return nil, errors.New("Не удалось загрузить правила здания. Попробуйте позже.")
 	}
 	if rule == nil {
 		rule = &domain.Rule{
@@ -127,22 +127,22 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	maxDuration := time.Duration(rule.MaxPassDurationHours) * time.Hour
 	if validToUTC.Sub(validFromUTC) > maxDuration {
 		s.rejectionsTotal.WithLabelValues("max_duration_exceeded").Inc()
-		return nil, fmt.Errorf("pass duration exceeds maximum of %d hours", rule.MaxPassDurationHours)
+		return nil, fmt.Errorf("Срок действия пропуска не может превышать %d ч.", rule.MaxPassDurationHours)
 	}
 
 	if req.ResidentID == nil {
-		return nil, errors.New("resident_id is required")
+		return nil, errors.New("Не указан житель (resident_id).")
 	}
 
 	resident, err := s.residentRepo.GetByID(ctx, *req.ResidentID)
 	if err != nil {
-		return nil, fmt.Errorf("get resident: %w", err)
+		return nil, errors.New("Не удалось проверить жителя. Попробуйте позже.")
 	}
 	if resident == nil {
-		return nil, errors.New("resident not found")
+		return nil, errors.New("Житель не найден.")
 	}
 	if resident.ApartmentID != req.ApartmentID {
-		return nil, errors.New("resident does not belong to the specified apartment")
+		return nil, errors.New("Житель не относится к указанной квартире.")
 	}
 
 	localLocation := locationForResidentRules(resident)
@@ -180,11 +180,11 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 	)
 	if err != nil {
 		s.opsTotal.WithLabelValues("create", "error").Inc()
-		return nil, fmt.Errorf("create pass: %w", err)
+		return nil, errors.New("Не удалось создать пропуск. Попробуйте позже.")
 	}
 	if !created {
 		s.rejectionsTotal.WithLabelValues("daily_limit_exceeded").Inc()
-		return nil, fmt.Errorf("daily pass limit exceeded (limit: %d per day)", rule.DailyPassLimitPerApartment)
+		return nil, fmt.Errorf("Превышен дневной лимит пропусков для квартиры (не более %d в сутки).", rule.DailyPassLimitPerApartment)
 	}
 
 	s.opsTotal.WithLabelValues("create", "success").Inc()
@@ -220,7 +220,7 @@ func (s *PassService) GenerateResidentPersonalPassToken(residentTelegramID int64
 func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardUserID int64, buildingID *int64) (*domain.PassValidationResult, error) {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return nil, fmt.Errorf("get pass: %w", err)
+		return nil, errors.New("Не удалось проверить пропуск. Попробуйте позже.")
 	}
 
 	if pass == nil {
@@ -234,7 +234,7 @@ func (s *PassService) ValidatePass(ctx context.Context, passID uuid.UUID, guardU
 	if buildingID != nil {
 		apartment, err := s.apartmentRepo.GetByID(ctx, pass.ApartmentID)
 		if err != nil {
-			return nil, fmt.Errorf("get apartment: %w", err)
+			return nil, errors.New("Не удалось проверить квартиру. Попробуйте позже.")
 		}
 		if apartment == nil {
 			return &domain.PassValidationResult{Valid: false, Reason: "APARTMENT_NOT_FOUND"}, nil
@@ -262,7 +262,7 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 
 	pass, err := s.passRepo.GetActiveByCarPlate(ctx, normalizedCarPlate, buildingID)
 	if err != nil {
-		return nil, fmt.Errorf("get pass by car plate: %w", err)
+		return nil, errors.New("Не удалось проверить пропуск по номеру. Попробуйте позже.")
 	}
 
 	if pass == nil {
@@ -276,7 +276,7 @@ func (s *PassService) ValidatePassByCarPlate(ctx context.Context, carPlate strin
 func (s *PassService) validateResidentCarPlate(ctx context.Context, normalizedCarPlate string, buildingID *int64) (*domain.PassValidationResult, error) {
 	residents, err := s.residentRepo.ListActiveWithCarPlate(ctx, buildingID)
 	if err != nil {
-		return nil, fmt.Errorf("list residents by car plate: %w", err)
+		return nil, errors.New("Не удалось проверить данные жителей. Попробуйте позже.")
 	}
 
 	result := &domain.PassValidationResult{Valid: false}
@@ -440,19 +440,19 @@ func (s *PassService) validatePassInternal(ctx context.Context, pass *domain.Pas
 func (s *PassService) RevokePass(ctx context.Context, passID uuid.UUID, revokedBy int64) error {
 	pass, err := s.passRepo.GetByID(ctx, passID)
 	if err != nil {
-		return fmt.Errorf("get pass: %w", err)
+		return errors.New("Не удалось найти пропуск. Попробуйте позже.")
 	}
 	if pass == nil {
-		return errors.New("pass not found")
+		return errors.New("Пропуск не найден.")
 	}
 
 	if pass.Status == "revoked" {
-		return errors.New("pass already revoked")
+		return errors.New("Пропуск уже отозван.")
 	}
 
 	if err := s.passRepo.Revoke(ctx, passID); err != nil {
 		s.opsTotal.WithLabelValues("revoke", "error").Inc()
-		return fmt.Errorf("revoke pass: %w", err)
+		return errors.New("Не удалось отозвать пропуск. Попробуйте позже.")
 	}
 
 	s.opsTotal.WithLabelValues("revoke", "success").Inc()
@@ -567,18 +567,18 @@ func intervalsOverlapHalfOpen(a0, a1, b0, b1 time.Time) bool {
 func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time, startTime, endTime string) error {
 	startClock, err := parseTime(startTime)
 	if err != nil {
-		return fmt.Errorf("invalid quiet hours start: %w", err)
+		return errors.New("Некорректное время начала тихих часов в правилах здания.")
 	}
 	endClock, err := parseTime(endTime)
 	if err != nil {
-		return fmt.Errorf("invalid quiet hours end: %w", err)
+		return errors.New("Некорректное время окончания тихих часов в правилах здания.")
 	}
 
 	loc := validFromLocal.Location()
 	passA := validFromLocal
 	passB := validToLocal
 	if !passB.After(passA) {
-		return errors.New("pass valid_to must be after valid_from")
+		return errors.New("Время окончания пропуска должно быть позже времени начала.")
 	}
 
 	fromDay := time.Date(passA.Year(), passA.Month(), passA.Day(), 0, 0, 0, 0, loc)
@@ -587,7 +587,7 @@ func (s *PassService) validateQuietHours(validFromLocal, validToLocal time.Time,
 	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
 		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
 		if intervalsOverlapHalfOpen(passA, passB, q0, q1) {
-			return errors.New("pass cannot overlap with quiet hours")
+			return errors.New("Пропуск пересекается с тихими часами. Выберите другое время.")
 		}
 	}
 

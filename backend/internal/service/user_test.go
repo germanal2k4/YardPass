@@ -151,7 +151,7 @@ func TestUserService_RegisterUser(t *testing.T) {
 		user, err := svc.RegisterUser(ctx, req, 1)
 		assert.Error(t, err)
 		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "admin can only create")
+		assert.Contains(t, err.Error(), "только для своего здания")
 		userRepo.AssertNotCalled(t, "Create")
 	})
 
@@ -173,7 +173,7 @@ func TestUserService_RegisterUser(t *testing.T) {
 		user, err := svc.RegisterUser(ctx, req, 1)
 		assert.Error(t, err)
 		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "cannot create superuser")
+		assert.Contains(t, err.Error(), "суперпользователя")
 		userRepo.AssertNotCalled(t, "Create")
 	})
 

@@ -116,6 +116,12 @@ deploy_app_only() {
     helmfile -f helmfile.yaml.gotmpl -e local -l name=yardpass-backend -l name=yardpass-frontend sync
 }
 
+cleanup_namespace_on_deploy_error() {
+    local ns="${1:-yardpass}"
+    warn "Deploy failed. Removing namespace '$ns'..."
+    kubectl delete namespace "$ns" --ignore-not-found --timeout=60s 2>/dev/null || true
+}
+
 wait_for_pods() {
     local ns="$1"
     local timeout="${2:-120}"
@@ -191,7 +197,10 @@ cmd_up() {
     ensure_minikube
     build_images
     load_images
-    helmfile_sync
+    helmfile_sync || {
+        cleanup_namespace_on_deploy_error "yardpass"
+        return 1
+    }
     wait_for_pods "istio-system" 180
     wait_for_pods "yardpass" 180
     show_status
@@ -215,9 +224,14 @@ cmd_down() {
 
 cmd_rebuild() {
     check_deps
+    start_data_services
+    ensure_minikube
     build_images
     load_images
-    deploy_app_only
+    deploy_app_only || {
+        cleanup_namespace_on_deploy_error "yardpass"
+        return 1
+    }
 
     log "Restarting deployments..."
     kubectl rollout restart deployment -n yardpass 2>/dev/null || true

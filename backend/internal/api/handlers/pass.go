@@ -39,7 +39,7 @@ type ValidatePassRequest struct {
 func (h *PassHandler) Create(c *gin.Context) {
 	var req CreatePassRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
@@ -76,14 +76,14 @@ func (h *PassHandler) Create(c *gin.Context) {
 
 func (h *PassHandler) GetByID(c *gin.Context) {
 	_ = c.Param("id")
-	errors.ErrorResponseJSON(c, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Get pass by ID not yet implemented")
+	errors.ErrorResponseJSON(c, http.StatusNotImplemented, "NOT_IMPLEMENTED", "Получение пропуска по ID пока не реализовано.")
 }
 
 func (h *PassHandler) Revoke(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		errors.BadRequest(c, "INVALID_UUID", "Invalid pass ID format")
+		errors.BadRequest(c, "INVALID_UUID", "Некорректный формат идентификатора пропуска.")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *PassHandler) Revoke(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Pass revoked successfully",
+		"message": "Пропуск успешно отозван.",
 		"pass_id": id.String(),
 	})
 }
@@ -107,7 +107,7 @@ func (h *PassHandler) Revoke(c *gin.Context) {
 func (h *PassHandler) Validate(c *gin.Context) {
 	var req ValidatePassRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *PassHandler) Validate(c *gin.Context) {
 	role, _ := c.Get("role")
 	if rs, ok := role.(string); ok && (rs == "guard" || rs == "admin") {
 		if bID == nil {
-			errors.Unauthorized(c, "MISSING_BUILDING_ID", "building_id is required for guard and admin")
+			errors.Unauthorized(c, "MISSING_BUILDING_ID", "Для охранника и администратора требуется привязка к зданию (building_id).")
 			return
 		}
 	}
@@ -146,12 +146,12 @@ func (h *PassHandler) Validate(c *gin.Context) {
 			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), req.QRUUID, guardUserID, bID)
 		}
 	} else {
-		errors.BadRequest(c, "MISSING_PARAMETER", "Either qr_uuid or car_plate must be provided")
+		errors.BadRequest(c, "MISSING_PARAMETER", "Укажите qr_uuid или car_plate.")
 		return
 	}
 
 	if err != nil {
-		errors.InternalServerError(c, "VALIDATION_ERROR", err.Error())
+		errors.InternalServerError(c, "VALIDATION_ERROR", errors.UserMsgValidatePassFailed)
 		return
 	}
 
@@ -182,19 +182,19 @@ func (h *PassHandler) GetActive(c *gin.Context) {
 	} else if apartmentIDStr := c.Query("apartment_id"); apartmentIDStr != "" {
 		apartmentID, parseErr := strconv.ParseInt(apartmentIDStr, 10, 64)
 		if parseErr != nil {
-			errors.BadRequest(c, "INVALID_APARTMENT_ID", "Invalid apartment ID format")
+			errors.BadRequest(c, "INVALID_APARTMENT_ID", "Некорректный формат номера квартиры (apartment_id).")
 			return
 		}
 		passes, err = h.passService.GetActivePasses(c.Request.Context(), apartmentID)
 	} else if role == "admin" && buildingID != nil {
 		passes, err = h.passService.GetActivePassesByBuilding(c.Request.Context(), buildingID.(int64))
 	} else {
-		errors.BadRequest(c, "MISSING_PARAMETER", "apartment_id or building_id required")
+		errors.BadRequest(c, "MISSING_PARAMETER", "Укажите apartment_id или войдите с ролью, у которой есть building_id.")
 		return
 	}
 
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (h *PassHandler) GetActive(c *gin.Context) {
 func (h *PassHandler) Search(c *gin.Context) {
 	carPlate := c.Query("car_plate")
 	if carPlate == "" {
-		errors.BadRequest(c, "MISSING_CAR_PLATE", "car_plate query parameter is required")
+		errors.BadRequest(c, "MISSING_CAR_PLATE", "Укажите параметр запроса car_plate (номер автомобиля).")
 		return
 	}
 
@@ -227,7 +227,7 @@ func (h *PassHandler) Search(c *gin.Context) {
 
 	passes, err := h.passService.SearchPassesByCarPlate(c.Request.Context(), carPlate, bID)
 	if err != nil {
-		errors.InternalServerError(c, "SEARCH_FAILED", err.Error())
+		errors.InternalServerError(c, "SEARCH_FAILED", errors.UserMsgSearchFailed)
 		return
 	}
 

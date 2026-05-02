@@ -30,25 +30,25 @@ type UpdateRuleRequest struct {
 func (h *RuleHandler) Get(c *gin.Context) {
 	buildingIDStr := c.Query("building_id")
 	if buildingIDStr == "" {
-		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id query parameter is required")
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "Укажите параметр запроса building_id.")
 		return
 	}
 
 	var buildingID int64
 	_, err := fmt.Sscanf(buildingIDStr, "%d", &buildingID)
 	if err != nil {
-		errors.BadRequest(c, "INVALID_BUILDING_ID", "Invalid building ID format")
+		errors.BadRequest(c, "INVALID_BUILDING_ID", "Некорректный формат building_id.")
 		return
 	}
 
 	rule, err := h.ruleRepo.GetByBuildingID(c.Request.Context(), buildingID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
 	if rule == nil {
-		errors.NotFound(c, "RULE_NOT_FOUND", "Rules not found for this building")
+		errors.NotFound(c, "RULE_NOT_FOUND", "Правила для этого здания не найдены.")
 		return
 	}
 
@@ -58,26 +58,26 @@ func (h *RuleHandler) Get(c *gin.Context) {
 func (h *RuleHandler) Update(c *gin.Context) {
 	buildingIDStr := c.Query("building_id")
 	if buildingIDStr == "" {
-		errors.BadRequest(c, "MISSING_BUILDING_ID", "building_id query parameter is required")
+		errors.BadRequest(c, "MISSING_BUILDING_ID", "Укажите параметр запроса building_id.")
 		return
 	}
 
 	var buildingID int64
 	_, err := fmt.Sscanf(buildingIDStr, "%d", &buildingID)
 	if err != nil {
-		errors.BadRequest(c, "INVALID_BUILDING_ID", "Invalid building ID format")
+		errors.BadRequest(c, "INVALID_BUILDING_ID", "Некорректный формат building_id.")
 		return
 	}
 
 	var req UpdateRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		errors.BadRequest(c, "INVALID_REQUEST", err.Error())
+		errors.BadRequestInvalidJSON(c)
 		return
 	}
 
 	rule, err := h.ruleRepo.GetByBuildingID(c.Request.Context(), buildingID)
 	if err != nil {
-		errors.InternalServerError(c, "FETCH_FAILED", err.Error())
+		errors.InternalServerError(c, "FETCH_FAILED", errors.UserMsgFetchFailed)
 		return
 	}
 
@@ -109,7 +109,7 @@ func (h *RuleHandler) Update(c *gin.Context) {
 	}
 
 	if err != nil {
-		errors.InternalServerError(c, "UPDATE_FAILED", err.Error())
+		errors.InternalServerError(c, "UPDATE_FAILED", errors.UserMsgUpdateFailed)
 		return
 	}
 

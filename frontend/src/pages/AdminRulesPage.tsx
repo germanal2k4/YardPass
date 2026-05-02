@@ -21,7 +21,7 @@ import { z } from 'zod';
 import type { UpdateApartmentCountRequest, UpdateRuleRequest } from '@/shared/types/api';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
-import { formatErrorMessage } from '@/shared/utils/errors';
+import { formatErrorMessage, getErrorMessage } from '@/shared/utils/errors';
 
 const ruleSchema = z.object({
   quiet_hours_start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Формат: HH:mm').optional().or(z.literal('')),
@@ -33,7 +33,7 @@ const ruleSchema = z.object({
 type RuleFormData = z.infer<typeof ruleSchema>;
 
 const apartmentCountSchema = z.object({
-  apartment_count: z.number().int().min(1).max(100000),
+  apartment_delta: z.number().int().min(1).max(100000),
 });
 
 type ApartmentCountFormData = z.infer<typeof apartmentCountSchema>;
@@ -74,8 +74,14 @@ export function AdminRulesPage() {
   } = useForm<ApartmentCountFormData>({
     resolver: zodResolver(apartmentCountSchema),
     defaultValues: {
-      apartment_count: 1,
+      apartment_delta: 1,
     },
+  });
+
+  const { data: building } = useQuery({
+    queryKey: ['building', buildingId],
+    queryFn: () => buildingsApi.getById(buildingId!),
+    enabled: !!buildingId,
   });
 
   useEffect(() => {
@@ -106,10 +112,11 @@ export function AdminRulesPage() {
   const updateApartmentCountMutation = useMutation({
     mutationFn: (data: UpdateApartmentCountRequest) => buildingsApi.updateApartmentCount(buildingId!, data),
     onSuccess: (building) => {
+      queryClient.invalidateQueries({ queryKey: ['building', buildingId] });
       queryClient.invalidateQueries({ queryKey: ['residents'] });
       setSuccessMsg(`Количество апартаментов обновлено: ${building.apartment_count}`);
       setErrorMsg('');
-      resetApartmentForm({ apartment_count: building.apartment_count });
+      resetApartmentForm({ apartment_delta: 1 });
       setTimeout(() => setSuccessMsg(''), 3000);
     },
     onError: (error: AxiosError<ErrorResponse>) => {
@@ -129,8 +136,14 @@ export function AdminRulesPage() {
   };
 
   const onApartmentCountSubmit = (data: ApartmentCountFormData) => {
+    if (!building) {
+      setErrorMsg('Не удалось загрузить текущее количество апартаментов');
+      setSuccessMsg('');
+      return;
+    }
+
     updateApartmentCountMutation.mutate({
-      apartment_count: data.apartment_count,
+      apartment_count: building.apartment_count + data.apartment_delta,
     });
   };
 
@@ -161,7 +174,7 @@ export function AdminRulesPage() {
       <Layout title="Правила и настройки">
         <Container maxWidth="md" sx={{ py: 4 }}>
           <Alert severity="error">
-            Ошибка загрузки правил: {(error as Error).message}
+            Ошибка загрузки правил: {getErrorMessage(error)}
           </Alert>
         </Container>
       </Layout>
@@ -304,23 +317,24 @@ export function AdminRulesPage() {
               Количество апартаментов
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Укажите новое общее количество апартаментов в здании. Доступно только увеличение текущего значения.
+              Текущее количество: {building?.apartment_count ?? '—'}.
+              {' '}Укажите положительную дельту, на сколько нужно увеличить.
             </Typography>
 
             <form onSubmit={handleApartmentSubmit(onApartmentCountSubmit)}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <Controller
-                    name="apartment_count"
+                    name="apartment_delta"
                     control={apartmentControl}
                     render={({ field }) => (
                       <TextField
                         {...field}
-                        label="Новое количество апартаментов"
+                        label="Добавить апартаментов"
                         type="number"
                         fullWidth
-                        error={!!apartmentErrors.apartment_count}
-                        helperText={apartmentErrors.apartment_count?.message}
+                        error={!!apartmentErrors.apartment_delta}
+                        helperText={apartmentErrors.apartment_delta?.message}
                         onChange={(e) => {
                           const value = e.target.value;
                           field.onChange(value === '' ? undefined : parseInt(value, 10));
@@ -334,7 +348,7 @@ export function AdminRulesPage() {
                     <Button
                       type="submit"
                       variant="contained"
-                      disabled={!isApartmentDirty || updateApartmentCountMutation.isPending}
+                      disabled={!isApartmentDirty || updateApartmentCountMutation.isPending || !building}
                     >
                       {updateApartmentCountMutation.isPending
                         ? 'Обновление...'

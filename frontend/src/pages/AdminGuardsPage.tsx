@@ -16,7 +16,7 @@ import { AxiosError } from 'axios';
 import { Layout } from '@/shared/ui/Layout';
 import { usersApi } from '@/shared/api/users';
 import type { ErrorResponse, RegisterUserRequest } from '@/shared/types/api';
-import { ERROR_MESSAGES } from '@/shared/config/constants';
+import { formatErrorMessage } from '@/shared/utils/errors';
 
 export function AdminGuardsPage() {
   const queryClient = useQueryClient();
@@ -43,8 +43,7 @@ export function AdminGuardsPage() {
       setTimeout(() => setSuccessMsg(''), 3000);
     },
     onError: (error: AxiosError<ErrorResponse>) => {
-      const errorCode = error.response?.data?.error?.code || 'UNKNOWN_ERROR';
-      setErrorMsg(ERROR_MESSAGES[errorCode] || error.response?.data?.error?.message || ERROR_MESSAGES.UNKNOWN_ERROR);
+      setErrorMsg(formatErrorMessage(error));
       setSuccessMsg('');
     },
   });

@@ -51,6 +51,26 @@ const MESSAGE_TRANSLATIONS: Record<string, string> = {
   'Forbidden': 'Доступ запрещен',
   'Not found': 'Не найдено',
   'Internal server error': 'Внутренняя ошибка сервера',
+  'Network Error': 'Ошибка сети. Проверьте подключение',
+  'Request failed with status code 401': 'Требуется авторизация',
+  'Request failed with status code 403': 'Доступ запрещён',
+  'Request failed with status code 404': 'Ресурс не найден',
+  'Request failed with status code 500': 'Ошибка на сервере. Попробуйте позже',
+};
+
+/** Сообщения по коду причины проверки пропуска (совпадают с backend). */
+export const PASS_REASON_MESSAGES: Record<string, string> = {
+  PASS_NOT_FOUND: 'Пропуск не найден',
+  PASS_EXPIRED: 'Срок действия пропуска истек',
+  PASS_REVOKED: 'Пропуск отозван',
+  PASS_NOT_YET_VALID: 'Пропуск ещё не действителен',
+  PASS_ALREADY_USED: 'Пропуск уже был использован',
+  QUIET_HOURS: 'Действие запрещено в тихие часы',
+  INVALID_CAR_PLATE: 'Некорректный номер автомобиля',
+  INVALID_PERSONAL_PASS: 'Недействительный личный пропуск',
+  BUILDING_MISMATCH: 'Пропуск относится к другому зданию',
+  APARTMENT_NOT_FOUND: 'Квартира не найдена',
+  RESIDENT_NOT_FOUND: 'Житель не найден',
 };
 
 /**
@@ -59,28 +79,44 @@ const MESSAGE_TRANSLATIONS: Record<string, string> = {
  * @param error - Ошибка от Axios
  * @returns Отформатированное сообщение на русском языке
  */
+function containsCyrillic(text: string): boolean {
+  return /[а-яёА-ЯЁ]/.test(text);
+}
+
 export function formatErrorMessage(error: AxiosError<ErrorResponse>): string {
   if (error.code === 'ERR_NETWORK' || !error.response) {
     return ERROR_MESSAGES.NETWORK_ERROR;
   }
 
   const errorCode = error.response.data?.error?.code || 'UNKNOWN_ERROR';
-  const serverMessage = error.response.data?.error?.message;
-  
+  const serverMessage = error.response.data?.error?.message?.trim();
+
+  // Сообщение с сервера уже на русском — показываем его целиком (без дублирования с заголовком по коду).
+  if (serverMessage && containsCyrillic(serverMessage)) {
+    let msg = serverMessage;
+    if (import.meta.env.DEV) {
+      msg += ` (HTTP ${error.response.status})`;
+    }
+    return msg;
+  }
+
   let errorMessage = ERROR_MESSAGES[errorCode] || ERROR_MESSAGES.UNKNOWN_ERROR;
-  
+
   if (serverMessage) {
     const translatedMessage = MESSAGE_TRANSLATIONS[serverMessage] || serverMessage;
-    
-    if (translatedMessage !== errorMessage) {
+    const appendDetail =
+      translatedMessage !== errorMessage &&
+      (MESSAGE_TRANSLATIONS[serverMessage] !== undefined || containsCyrillic(translatedMessage));
+
+    if (appendDetail) {
       errorMessage = `${errorMessage}: ${translatedMessage}`;
     }
   }
-  
+
   if (import.meta.env.DEV) {
     errorMessage += ` (HTTP ${error.response.status})`;
   }
-  
+
   return errorMessage;
 }
 
@@ -96,7 +132,7 @@ export function getErrorMessage(error: unknown): string {
   }
 
   if (error instanceof Error && error.message.trim()) {
-    return error.message;
+    return translateMessage(error.message.trim());
   }
 
   return ERROR_MESSAGES.UNKNOWN_ERROR;

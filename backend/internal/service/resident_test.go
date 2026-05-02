@@ -119,7 +119,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		resident, err := svc.CreateResident(ctx, req)
 		assert.Error(t, err)
 		assert.Nil(t, resident)
-		assert.Contains(t, err.Error(), "telegram_id already exists")
+		assert.Contains(t, err.Error(), "Telegram ID уже")
 		residentRepo.AssertNotCalled(t, "Update")
 		residentRepo.AssertNotCalled(t, "Create")
 		residentRepo.AssertExpectations(t)
@@ -140,7 +140,7 @@ func TestResidentService_CreateResident(t *testing.T) {
 		resident, err := svc.CreateResident(ctx, req)
 		assert.Error(t, err)
 		assert.Nil(t, resident)
-		assert.Contains(t, err.Error(), "apartment not found")
+		assert.Contains(t, err.Error(), "Квартира не найдена")
 		residentRepo.AssertNotCalled(t, "Create")
 	})
 }
@@ -188,7 +188,7 @@ func TestResidentService_ImportFromCSV(t *testing.T) {
 		count, errs := svc.ImportFromCSV(ctx, strings.NewReader(csv), 1)
 		assert.Equal(t, 0, count)
 		assert.Len(t, errs, 1)
-		assert.Contains(t, errs[0].Error(), "missing required column")
+		assert.Contains(t, errs[0].Error(), "обязательная колонка")
 	})
 
 	t.Run("valid csv import", func(t *testing.T) {

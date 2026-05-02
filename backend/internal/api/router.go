@@ -104,6 +104,7 @@ func NewRouter(
 		buildings := api.Group("/buildings")
 		buildings.Use(middleware.RequireRole("admin", "superuser"))
 		{
+			buildings.GET("/:id", buildingHandler.GetByID)
 			buildings.PUT("/:id/apartment-count", buildingHandler.UpdateApartmentCount)
 		}
 

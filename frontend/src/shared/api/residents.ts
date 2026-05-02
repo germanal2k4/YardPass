@@ -39,19 +39,22 @@ export const residentsApi = {
   },
 
   /**
-   * Импорт резидентов из CSV файла
+   * Импорт резидентов из CSV файла.
+   * Для администратора building_id не передаётся — сервер берёт из сессии.
+   * Для суперпользователя укажите buildingId в целевое здание.
    */
-  async importFromCSV(file: File, buildingId: number): Promise<{
+  async importFromCSV(
+    file: File,
+    buildingId?: number,
+  ): Promise<{
     created: number;
     errors: Array<{ row?: number; error: string } | string>;
   }> {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const response = await apiClient.post(API_ENDPOINTS.RESIDENTS_IMPORT, formData, {
-      params: {
-        building_id: buildingId,
-      },
+      ...(buildingId !== undefined ? { params: { building_id: buildingId } } : {}),
       headers: {
         'Content-Type': 'multipart/form-data',
       },

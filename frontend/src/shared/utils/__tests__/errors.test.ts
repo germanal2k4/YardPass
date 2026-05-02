@@ -179,13 +179,22 @@ describe('formatErrorMessage', () => {
     expect(formatErrorMessage(error)).toContain('Произошла неизвестная ошибка');
   });
 
-  it('appends untranslated server message as-is', () => {
+  it('does not append untranslated English-only server detail', () => {
     const error = makeAxiosError({
       status: 400,
       errorCode: 'INVALID_REQUEST',
       errorMessage: 'some exotic detail',
     });
-    expect(formatErrorMessage(error)).toBe('Некорректный запрос: some exotic detail');
+    expect(formatErrorMessage(error)).toBe('Некорректный запрос');
+  });
+
+  it('uses Russian server message verbatim when already localized', () => {
+    const error = makeAxiosError({
+      status: 401,
+      errorCode: 'INVALID_CREDENTIALS',
+      errorMessage: 'Неверный логин или пароль.',
+    });
+    expect(formatErrorMessage(error)).toBe('Неверный логин или пароль.');
   });
 });
 

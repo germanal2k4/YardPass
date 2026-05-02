@@ -335,7 +335,7 @@ func TestPassService_CreatePass(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, pass)
 		if err != nil {
-			assert.Contains(t, err.Error(), "daily pass limit")
+			assert.Contains(t, err.Error(), "лимит")
 		}
 
 		passRepo2.AssertExpectations(t)
@@ -434,7 +434,7 @@ func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
 		ValidTo:     time.Date(2026, 1, 15, 22, 0, 0, 0, time.UTC),
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "quiet hours")
+	assert.Contains(t, err.Error(), "тихими")
 }
 
 func TestPassService_ValidatePass(t *testing.T) {

@@ -80,14 +80,16 @@ func (r *ScanEventRepo) GetStatistics(ctx context.Context, from, to *time.Time, 
 func (r *ScanEventRepo) GetEventsWithDetails(ctx context.Context, filters domain.ScanEventFilters, buildingID *int64) ([]domain.ScanEventWithDetails, error) {
 	ctx = queryNameToContext(ctx, "ScanEventRepo.GetEventsWithDetails")
 	rows, err := r.queries.GetScanEventsWithDetails(ctx, db.GetScanEventsWithDetailsParams{
-		FilterBuildingID:  buildingID,
-		FilterPassID:      uuidToPgtype(filters.PassID),
-		FilterGuardUserID: filters.GuardUserID,
-		FilterResult:      filters.Result,
-		FilterFrom:        timeToPgtypeTimestamp(filters.From),
-		FilterTo:          timeToPgtypeTimestamp(filters.To),
-		MaxResults:        intToInt32Ptr(filters.Limit),
-		ResultsOffset:     intToInt32Ptr(filters.Offset),
+		FilterBuildingID:      buildingID,
+		FilterPassID:          uuidToPgtype(filters.PassID),
+		FilterGuardUserID:     filters.GuardUserID,
+		FilterResult:          filters.Result,
+		FilterApartmentNumber: filters.ApartmentNumber,
+		FilterCarPlate:        filters.CarPlate,
+		FilterFrom:            timeToPgtypeTimestamp(filters.From),
+		FilterTo:              timeToPgtypeTimestamp(filters.To),
+		MaxResults:            intToInt32Ptr(filters.Limit),
+		ResultsOffset:         intToInt32Ptr(filters.Offset),
 	})
 	if err != nil {
 		return nil, err

@@ -56,6 +56,14 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		filters.Result = &result
 	}
 
+	if apartmentNumber := c.Query("apartment_number"); apartmentNumber != "" {
+		filters.ApartmentNumber = &apartmentNumber
+	}
+
+	if carPlate := c.Query("car_plate"); carPlate != "" {
+		filters.CarPlate = &carPlate
+	}
+
 	role, exists := c.Get("role")
 	if !exists {
 		errors.Unauthorized(c, "MISSING_ROLE", "Роль пользователя не найдена. Обратитесь к администратору.")

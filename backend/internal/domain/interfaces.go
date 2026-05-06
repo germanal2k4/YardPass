@@ -89,13 +89,15 @@ type ScanEventWithDetails struct {
 }
 
 type ScanEventFilters struct {
-	PassID      *uuid.UUID
-	GuardUserID *int64
-	Result      *string
-	From        *time.Time
-	To          *time.Time
-	Limit       int
-	Offset      int
+	PassID          *uuid.UUID
+	GuardUserID     *int64
+	Result          *string
+	ApartmentNumber *string
+	CarPlate        *string
+	From            *time.Time
+	To              *time.Time
+	Limit           int
+	Offset          int
 }
 
 type RuleRepository interface {

@@ -39,6 +39,8 @@ export function AdminReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [resultFilter, setResultFilter] = useState<'valid' | 'invalid' | ''>('');
+  const [apartmentFilter, setApartmentFilter] = useState('');
+  const [carPlateFilter, setCarPlateFilter] = useState('');
   const [exportError, setExportError] = useState('');
   const [isExporting, setIsExporting] = useState(false);
 
@@ -59,7 +61,7 @@ export function AdminReportsPage() {
 
   // Fetch scan events
   const { data: eventsData, isLoading: eventsLoading, isError, refetch: refetchEvents } = useQuery({
-    queryKey: ['scanEvents', page, rowsPerPage, dateFrom, dateTo, resultFilter],
+    queryKey: ['scanEvents', page, rowsPerPage, dateFrom, dateTo, resultFilter, apartmentFilter, carPlateFilter],
     queryFn: () => {
       // Преобразуем datetime-local формат в RFC3339 (ISO 8601)
       const fromRFC3339 = dateFrom ? new Date(dateFrom).toISOString() : undefined;
@@ -71,6 +73,8 @@ export function AdminReportsPage() {
         from: fromRFC3339,
         to: toRFC3339,
         result: resultFilter || undefined,
+        apartment_number: apartmentFilter.trim() || undefined,
+        car_plate: carPlateFilter.trim() || undefined,
       });
     },
   });
@@ -138,6 +142,25 @@ export function AdminReportsPage() {
     setPage(0); // Сбрасываем на первую страницу при изменении фильтра
   };
 
+  const handleResetFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setResultFilter('');
+    setApartmentFilter('');
+    setCarPlateFilter('');
+    setPage(0);
+  };
+
+  const handleApartmentFilterChange = (value: string) => {
+    setApartmentFilter(value);
+    setPage(0);
+  };
+
+  const handleCarPlateFilterChange = (value: string) => {
+    setCarPlateFilter(value);
+    setPage(0);
+  };
+
   const events = eventsData?.events || [];
 
   // Если на текущей странице нет событий и это не первая страница,
@@ -178,6 +201,20 @@ export function AdminReportsPage() {
               InputLabelProps={{ shrink: true }}
               fullWidth
             />
+            <TextField
+              label="Номер квартиры"
+              value={apartmentFilter}
+              onChange={(e) => handleApartmentFilterChange(e.target.value)}
+              placeholder="Например: 101"
+              fullWidth
+            />
+            <TextField
+              label="Номер авто"
+              value={carPlateFilter}
+              onChange={(e) => handleCarPlateFilterChange(e.target.value)}
+              placeholder="Например: А123ВС777"
+              fullWidth
+            />
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Chip
                 label="Все"
@@ -199,6 +236,14 @@ export function AdminReportsPage() {
               />
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+              <Button
+                variant="text"
+                onClick={handleResetFilters}
+                disabled={statsLoading || eventsLoading}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Сбросить фильтры
+              </Button>
               <Button
                 variant="outlined"
                 startIcon={<RefreshIcon />}

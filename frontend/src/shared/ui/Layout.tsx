@@ -14,6 +14,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PeopleIcon from '@mui/icons-material/People';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useNavigate } from 'react-router-dom';
@@ -145,6 +146,22 @@ export function Layout({ children, title }: LayoutProps) {
                     >
                       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                         Отчеты
+                      </Box>
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Аккаунты охранников">
+                    <Button
+                      color="inherit"
+                      onClick={() => navigate(APP_ROUTES.ADMIN_GUARDS)}
+                      startIcon={<PersonAddIcon />}
+                      data-testid="nav-guards"
+                      sx={{
+                        fontWeight: 700,
+                        '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                        Охранники
                       </Box>
                     </Button>
                   </Tooltip>

@@ -143,6 +143,8 @@ describe('AdminReportsPage', () => {
 
     expect(screen.getByLabelText('Дата от')).toBeInTheDocument();
     expect(screen.getByLabelText('Дата до')).toBeInTheDocument();
+    expect(screen.getByLabelText('Номер квартиры')).toBeInTheDocument();
+    expect(screen.getByLabelText('Номер авто')).toBeInTheDocument();
   });
 
   it('changes date from filter', async () => {
@@ -165,6 +167,48 @@ describe('AdminReportsPage', () => {
     const dateTo = screen.getByLabelText('Дата до');
     await user.type(dateTo, '2026-01-31T23:59');
     expect(dateTo).toHaveValue('2026-01-31T23:59');
+  });
+
+  it('changes apartment and car plate filters', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReportsPage />, {
+      auth: { user: adminUser },
+    });
+
+    const apartmentInput = screen.getByLabelText('Номер квартиры');
+    const carPlateInput = screen.getByLabelText('Номер авто');
+
+    await user.type(apartmentInput, '101');
+    await user.type(carPlateInput, 'А123ВС777');
+
+    expect(apartmentInput).toHaveValue('101');
+    expect(carPlateInput).toHaveValue('А123ВС777');
+  });
+
+  it('reset filters button clears all filter fields', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReportsPage />, {
+      auth: { user: adminUser },
+    });
+
+    const dateFrom = screen.getByLabelText('Дата от');
+    const dateTo = screen.getByLabelText('Дата до');
+    const apartmentInput = screen.getByLabelText('Номер квартиры');
+    const carPlateInput = screen.getByLabelText('Номер авто');
+
+    await user.type(dateFrom, '2026-01-01T00:00');
+    await user.type(dateTo, '2026-01-31T23:59');
+    await user.type(apartmentInput, '101');
+    await user.type(carPlateInput, 'А123ВС777');
+    await user.click(screen.getByText('Действительные'));
+
+    await user.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
+
+    expect(dateFrom).toHaveValue('');
+    expect(dateTo).toHaveValue('');
+    expect(apartmentInput).toHaveValue('');
+    expect(carPlateInput).toHaveValue('');
+    expect(screen.getByText('Все').closest('.MuiChip-root')).toHaveClass('MuiChip-colorPrimary');
   });
 
   it('refresh button refetches data', async () => {

@@ -29,12 +29,16 @@ describe('reportsApi', () => {
         from: '2026-01-01T00:00:00Z',
         to: '2026-12-31T23:59:59Z',
         result: 'valid',
+        apartment_number: '101',
+        car_plate: 'А123ВС777',
       });
 
       expect(capturedUrl).toContain('limit=10');
       expect(capturedUrl).toContain('offset=20');
       expect(capturedUrl).toContain('from=2026-01-01T00%3A00%3A00Z');
       expect(capturedUrl).toContain('result=valid');
+      expect(capturedUrl).toContain('apartment_number=101');
+      expect(capturedUrl).toContain('car_plate=%D0%90123%D0%92%D0%A1777');
     });
 
     it('omits undefined params from URL', async () => {
@@ -52,6 +56,8 @@ describe('reportsApi', () => {
       expect(capturedUrl).not.toContain('offset');
       expect(capturedUrl).not.toContain('from');
       expect(capturedUrl).not.toContain('result');
+      expect(capturedUrl).not.toContain('apartment_number');
+      expect(capturedUrl).not.toContain('car_plate');
     });
   });
 

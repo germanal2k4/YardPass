@@ -110,22 +110,26 @@ WHERE ($1::bigint IS NULL OR a.building_id = $1)
   AND ($2::uuid IS NULL OR se.pass_id = $2)
   AND ($3::bigint IS NULL OR se.guard_user_id = $3)
   AND ($4::varchar IS NULL OR se.result = $4)
-  AND ($5::timestamp IS NULL OR se.scanned_at >= $5)
-  AND ($6::timestamp IS NULL OR se.scanned_at <= $6)
+  AND ($5::varchar IS NULL OR a.number ILIKE '%' || $5 || '%')
+  AND ($6::varchar IS NULL OR p.car_plate ILIKE '%' || $6 || '%')
+  AND ($7::timestamp IS NULL OR se.scanned_at >= $7)
+  AND ($8::timestamp IS NULL OR se.scanned_at <= $8)
 ORDER BY se.scanned_at DESC
-LIMIT $8
-OFFSET $7
+LIMIT $10
+OFFSET $9
 `
 
 type GetScanEventsWithDetailsParams struct {
-	FilterBuildingID  *int64
-	FilterPassID      pgtype.UUID
-	FilterGuardUserID *int64
-	FilterResult      *string
-	FilterFrom        pgtype.Timestamp
-	FilterTo          pgtype.Timestamp
-	ResultsOffset     *int32
-	MaxResults        *int32
+	FilterBuildingID      *int64
+	FilterPassID          pgtype.UUID
+	FilterGuardUserID     *int64
+	FilterResult          *string
+	FilterApartmentNumber *string
+	FilterCarPlate        *string
+	FilterFrom            pgtype.Timestamp
+	FilterTo              pgtype.Timestamp
+	ResultsOffset         *int32
+	MaxResults            *int32
 }
 
 type GetScanEventsWithDetailsRow struct {
@@ -148,6 +152,8 @@ func (q *Queries) GetScanEventsWithDetails(ctx context.Context, arg GetScanEvent
 		arg.FilterPassID,
 		arg.FilterGuardUserID,
 		arg.FilterResult,
+		arg.FilterApartmentNumber,
+		arg.FilterCarPlate,
 		arg.FilterFrom,
 		arg.FilterTo,
 		arg.ResultsOffset,

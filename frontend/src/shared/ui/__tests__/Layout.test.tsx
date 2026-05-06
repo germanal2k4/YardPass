@@ -33,6 +33,7 @@ describe('Layout', () => {
     expect(screen.getByText('Жители')).toBeInTheDocument();
     expect(screen.getByText('Отчеты')).toBeInTheDocument();
     expect(screen.getByText('Охранники')).toBeInTheDocument();
+    expect(screen.getByText('Мой аккаунт')).toBeInTheDocument();
   });
 
   it('hides admin navigation for guard role', () => {
@@ -44,6 +45,7 @@ describe('Layout', () => {
     expect(screen.queryByText('Жители')).not.toBeInTheDocument();
     expect(screen.queryByText('Отчеты')).not.toBeInTheDocument();
     expect(screen.queryByText('Охранники')).not.toBeInTheDocument();
+    expect(screen.queryByText('Мой аккаунт')).not.toBeInTheDocument();
   });
 
   it('shows role chip for admin', () => {
@@ -127,6 +129,7 @@ describe('Layout', () => {
     await user.click(screen.getByTestId('nav-residents'));
     await user.click(screen.getByTestId('nav-reports'));
     await user.click(screen.getByTestId('nav-guards'));
+    await user.click(screen.getByTestId('nav-account'));
   });
 
   it('renders title banner with guard gradient', () => {

@@ -8,6 +8,7 @@ import { SecurityPage } from '@/pages/SecurityPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminRulesPage } from '@/pages/AdminRulesPage';
 import { AdminReportsPage } from '@/pages/AdminReportsPage';
+import { AdminAccountPage } from '@/pages/AdminAccountPage';
 import { AdminGuardsPage } from '@/pages/AdminGuardsPage';
 import { AdminResidentsPage } from '@/pages/AdminResidentsPage';
 import { ForbiddenPage } from '@/pages/ForbiddenPage';
@@ -92,6 +93,15 @@ export function AppRouter() {
         element={
           <ProtectedRoute requiredRole="admin">
             <AdminReportsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={APP_ROUTES.ADMIN_ACCOUNT}
+        element={
+          <ProtectedRoute requiredRole="admin">
+            <AdminAccountPage />
           </ProtectedRoute>
         }
       />

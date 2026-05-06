@@ -125,6 +125,11 @@ export interface RegisterUserRequest {
   building_id?: number;
 }
 
+export interface UpdateUserCredentialsRequest {
+  username?: string;
+  password?: string;
+}
+
 export interface ListUsersResponse {
   users: User[];
 }

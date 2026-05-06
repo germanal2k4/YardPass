@@ -22,6 +22,11 @@ type UserService struct {
 	opsTotal       *prometheus.CounterVec
 }
 
+const (
+	minUsernameLength = 4
+	minPasswordLength = 6
+)
+
 func NewUserService(
 	userRepo domain.UserRepository,
 	buildingRepo domain.BuildingRepository,
@@ -111,6 +116,13 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		return nil, errors.New("Номер квартиры должен быть больше нуля.")
 	}
 
+	if err := validateUsername(req.Username); err != nil {
+		return nil, err
+	}
+	if err := validatePassword(req.Password); err != nil {
+		return nil, err
+	}
+
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		return nil, errors.New("Не удалось проверить логин. Попробуйте позже.")
@@ -156,6 +168,111 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 func (s *UserService) ListUsers(ctx context.Context, filters domain.UserFilters) ([]domain.User, error) {
 	return s.userRepo.List(ctx, filters)
+}
+
+func (s *UserService) UpdateCredentials(
+	ctx context.Context,
+	actorID int64,
+	targetUserID int64,
+	newUsername string,
+	newPassword string,
+) (*domain.User, error) {
+	actor, err := s.userRepo.GetByID(ctx, actorID)
+	if err != nil {
+		return nil, errors.New("Не удалось проверить учётную запись. Попробуйте позже.")
+	}
+	if actor == nil {
+		return nil, errors.New("Инициатор изменения не найден.")
+	}
+
+	target, err := s.userRepo.GetByID(ctx, targetUserID)
+	if err != nil {
+		return nil, errors.New("Не удалось загрузить пользователя. Попробуйте позже.")
+	}
+	if target == nil {
+		return nil, errors.New("Пользователь не найден.")
+	}
+
+	if err := validateCredentialsUpdatePermissions(actor, target); err != nil {
+		return nil, err
+	}
+
+	username := strings.TrimSpace(newUsername)
+	password := strings.TrimSpace(newPassword)
+	if username == "" && password == "" {
+		return nil, errors.New("Укажите новый логин и/или пароль.")
+	}
+
+	if username != "" && username != target.Username {
+		if err := validateUsername(username); err != nil {
+			return nil, err
+		}
+		existing, err := s.userRepo.GetByUsername(ctx, username)
+		if err != nil {
+			return nil, errors.New("Не удалось проверить логин. Попробуйте позже.")
+		}
+		if existing != nil && existing.ID != target.ID {
+			return nil, errors.New("Пользователь с таким логином уже существует.")
+		}
+		target.Username = username
+	}
+
+	if password != "" {
+		if err := validatePassword(password); err != nil {
+			return nil, err
+		}
+		passwordHash, err := auth.HashPassword(password)
+		if err != nil {
+			return nil, errors.New("Не удалось обработать пароль. Попробуйте другой пароль.")
+		}
+		target.PasswordHash = passwordHash
+	}
+
+	if err := s.userRepo.Update(ctx, target); err != nil {
+		return nil, errors.New("Не удалось обновить учётные данные. Попробуйте позже.")
+	}
+
+	target.PasswordHash = ""
+	return target, nil
+}
+
+func validateCredentialsUpdatePermissions(actor, target *domain.User) error {
+	switch actor.Role {
+	case "superuser":
+		return nil
+	case "admin":
+		// Admin may update own credentials.
+		if actor.ID == target.ID {
+			return nil
+		}
+
+		if target.Role != "guard" {
+			return errors.New("Администратор может изменять данные только своих аккаунтов охраны.")
+		}
+		if actor.BuildingID == nil {
+			return errors.New("Администратор не привязан к зданию.")
+		}
+		if target.BuildingID == nil || *target.BuildingID != *actor.BuildingID {
+			return errors.New("Можно изменять только охранников своего здания.")
+		}
+		return nil
+	default:
+		return errors.New("Недостаточно прав для изменения учётных данных.")
+	}
+}
+
+func validateUsername(value string) error {
+	if len(strings.TrimSpace(value)) < minUsernameLength {
+		return errors.New("Логин должен быть не короче 4 символов.")
+	}
+	return nil
+}
+
+func validatePassword(value string) error {
+	if len(strings.TrimSpace(value)) < minPasswordLength {
+		return errors.New("Пароль должен быть не короче 6 символов.")
+	}
+	return nil
 }
 
 func (s *UserService) resolveOrCreateBuildingByName(ctx context.Context, rawName string) (int64, error) {

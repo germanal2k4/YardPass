@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -18,11 +18,42 @@ import { usersApi } from '@/shared/api/users';
 import type { ErrorResponse, RegisterUserRequest } from '@/shared/types/api';
 import { formatErrorMessage } from '@/shared/utils/errors';
 
+type GuardCredentialsDraft = {
+  username: string;
+  password: string;
+};
+
+type GuardStatus = {
+  type: 'success' | 'error';
+  message: string;
+};
+
+const MIN_USERNAME_LENGTH = 4;
+const MIN_PASSWORD_LENGTH = 6;
+
+function validateCredentials(username: string, password: string): string | null {
+  const normalizedUsername = username.trim();
+  const normalizedPassword = password.trim();
+
+  if (!normalizedUsername && !normalizedPassword) {
+    return 'Укажите новый логин и/или пароль.';
+  }
+  if (normalizedUsername && normalizedUsername.length < MIN_USERNAME_LENGTH) {
+    return 'Логин должен быть не короче 4 символов.';
+  }
+  if (normalizedPassword && normalizedPassword.length < MIN_PASSWORD_LENGTH) {
+    return 'Пароль должен быть не короче 6 символов.';
+  }
+  return null;
+}
+
 export function AdminGuardsPage() {
   const queryClient = useQueryClient();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [guardDrafts, setGuardDrafts] = useState<Record<number, GuardCredentialsDraft>>({});
+  const [guardStatuses, setGuardStatuses] = useState<Record<number, GuardStatus>>({});
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -48,19 +79,90 @@ export function AdminGuardsPage() {
     },
   });
 
+  const updateGuardCredentialsMutation = useMutation({
+    mutationFn: ({ guardId, draft }: { guardId: number; draft: GuardCredentialsDraft }) =>
+      usersApi.updateCredentials(guardId, {
+        username: draft.username.trim() || undefined,
+        password: draft.password.trim() || undefined,
+      }),
+    onSuccess: (_updatedUser, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users', 'guards'] });
+      setGuardStatuses((prev) => ({
+        ...prev,
+        [variables.guardId]: { type: 'success', message: 'Данные успешно обновлены' },
+      }));
+    },
+    onError: (error: AxiosError<ErrorResponse>, variables) => {
+      setGuardStatuses((prev) => ({
+        ...prev,
+        [variables.guardId]: { type: 'error', message: formatErrorMessage(error) },
+      }));
+    },
+  });
+
+  useEffect(() => {
+    if (!guardsQuery.data) return;
+    const nextDrafts: Record<number, GuardCredentialsDraft> = {};
+    guardsQuery.data.users.forEach((guard) => {
+      nextDrafts[guard.id] = guardDrafts[guard.id] || {
+        username: guard.username,
+        password: '',
+      };
+    });
+    setGuardDrafts(nextDrafts);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guardsQuery.data]);
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setErrorMsg('Логин и пароль обязательны');
+    const validationError = validateCredentials(username, password);
+    if (validationError) {
+      setErrorMsg(validationError);
+      setSuccessMsg('');
       return;
     }
 
     createMutation.mutate({
       username: username.trim(),
       email: email.trim() || undefined,
-      password,
+      password: password.trim(),
       role: 'guard',
     });
+  };
+
+  const handleGuardDraftChange = (guardId: number, field: keyof GuardCredentialsDraft, value: string) => {
+    setGuardStatuses((prev) => {
+      if (!prev[guardId]) return prev;
+      const { [guardId]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setGuardDrafts((prev) => ({
+      ...prev,
+      [guardId]: {
+        ...(prev[guardId] || { username: '', password: '' }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleGuardCredentialsUpdate = (guardId: number) => {
+    const draft = guardDrafts[guardId];
+    const validationError = validateCredentials(draft?.username ?? '', draft?.password ?? '');
+    if (validationError) {
+      setGuardStatuses((prev) => ({
+        ...prev,
+        [guardId]: { type: 'error', message: validationError },
+      }));
+      return;
+    }
+    updateGuardCredentialsMutation.mutate({ guardId, draft });
+    setGuardDrafts((prev) => ({
+      ...prev,
+      [guardId]: {
+        ...prev[guardId],
+        password: '',
+      },
+    }));
   };
 
   return (
@@ -69,6 +171,9 @@ export function AdminGuardsPage() {
         <Paper elevation={2} sx={{ p: 4, mb: 3 }}>
           <Typography variant="h5" gutterBottom>
             Добавить аккаунт охранника
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Логин минимум 4 символа, пароль минимум 6 символов.
           </Typography>
 
           {successMsg && (
@@ -113,6 +218,9 @@ export function AdminGuardsPage() {
           <Typography variant="h6" gutterBottom>
             Список охранников
           </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Показаны только аккаунты охраны вашего здания.
+          </Typography>
 
           {guardsQuery.isLoading && <Typography>Загрузка...</Typography>}
 
@@ -128,10 +236,37 @@ export function AdminGuardsPage() {
             <List>
               {guardsQuery.data.users.map((user) => (
                 <ListItem key={user.id} divider>
-                  <ListItemText
-                    primary={user.username}
-                    secondary={user.email ? `${user.email} · ${user.status}` : user.status}
-                  />
+                  <Box sx={{ width: '100%', display: 'grid', gap: 1.5 }}>
+                    <ListItemText
+                      primary={user.username}
+                      secondary={user.email ? `${user.email} · ${user.status}` : user.status}
+                    />
+                    {guardStatuses[user.id] && (
+                      <Alert severity={guardStatuses[user.id].type}>
+                        {guardStatuses[user.id].message}
+                      </Alert>
+                    )}
+                    <TextField
+                      label="Новый логин охранника"
+                      value={guardDrafts[user.id]?.username ?? ''}
+                      onChange={(e) => handleGuardDraftChange(user.id, 'username', e.target.value)}
+                      size="small"
+                    />
+                    <TextField
+                      label="Новый пароль охранника"
+                      value={guardDrafts[user.id]?.password ?? ''}
+                      onChange={(e) => handleGuardDraftChange(user.id, 'password', e.target.value)}
+                      type="password"
+                      size="small"
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => handleGuardCredentialsUpdate(user.id)}
+                      disabled={updateGuardCredentialsMutation.isPending}
+                    >
+                      {updateGuardCredentialsMutation.isPending ? 'Сохранение...' : 'Обновить логин/пароль'}
+                    </Button>
+                  </Box>
                 </ListItem>
               ))}
             </List>

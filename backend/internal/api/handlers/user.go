@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
@@ -87,4 +88,37 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"users": users,
 	})
+}
+
+func (h *UserHandler) UpdateUserCredentials(c *gin.Context) {
+	targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || targetID <= 0 {
+		errors.BadRequest(c, "INVALID_ID", "Некорректный идентификатор пользователя.")
+		return
+	}
+
+	var req domain.UpdateUserCredentialsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errors.BadRequestInvalidJSON(c)
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		errors.Unauthorized(c, "UNAUTHORIZED", "Требуется авторизация.")
+		return
+	}
+	actorID, ok := userID.(int64)
+	if !ok {
+		errors.InternalServerError(c, "INVALID_ID", "Некорректный идентификатор пользователя в сессии.")
+		return
+	}
+
+	updatedUser, updateErr := h.userService.UpdateCredentials(c.Request.Context(), actorID, targetID, req.Username, req.Password)
+	if updateErr != nil {
+		errors.BadRequest(c, "UPDATE_FAILED", updateErr.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, updatedUser)
 }

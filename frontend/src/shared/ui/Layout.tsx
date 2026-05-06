@@ -15,6 +15,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PeopleIcon from '@mui/icons-material/People';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useNavigate } from 'react-router-dom';
@@ -162,6 +163,22 @@ export function Layout({ children, title }: LayoutProps) {
                     >
                       <Box sx={{ display: { xs: 'none', md: 'block' } }}>
                         Охранники
+                      </Box>
+                    </Button>
+                  </Tooltip>
+                  <Tooltip title="Мой аккаунт">
+                    <Button
+                      color="inherit"
+                      onClick={() => navigate(APP_ROUTES.ADMIN_ACCOUNT)}
+                      startIcon={<ManageAccountsIcon />}
+                      data-testid="nav-account"
+                      sx={{
+                        fontWeight: 700,
+                        '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' },
+                      }}
+                    >
+                      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+                        Мой аккаунт
                       </Box>
                     </Button>
                   </Tooltip>

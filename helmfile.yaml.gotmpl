@@ -98,7 +98,8 @@ releases:
     needs:
       - istio-system/istiod
     wait: true
-    timeout: 300
+    # First pull of docker.elastic.co/elasticsearch (~780Mi) on minikube often exceeds 5m (see kubelet "including waiting").
+    timeout: 900
     values:
       - elasticsearch/values.yaml
 

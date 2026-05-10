@@ -58,6 +58,10 @@ prometheus:
 grafana:
   enabled: true
   adminPassword: admin
+  # Grafana 13+ background plugin install can try to update bundled elasticsearch under
+  # /usr/share/grafana/data/plugins-bundled (not writable) → "permission denied" and no elasticsearch datasource type.
+  env:
+    GF_PLUGINS_PREINSTALL_DISABLED: "true"
   initChownData:
     enabled: false
   persistence:

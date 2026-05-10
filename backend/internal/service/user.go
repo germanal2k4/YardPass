@@ -305,7 +305,7 @@ func (s *UserService) resolveOrCreateBuildingByName(ctx context.Context, rawName
 }
 
 func normalizeBuildingName(value string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
+	return strings.TrimSpace(value)
 }
 
 func (s *UserService) ensureDefaultRule(ctx context.Context, buildingID int64) error {

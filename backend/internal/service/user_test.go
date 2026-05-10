@@ -330,3 +330,21 @@ func TestUserService_UpdateCredentials(t *testing.T) {
 		userRepo.AssertNotCalled(t, "Update")
 	})
 }
+
+func TestNormalizeBuildingName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"trim_cyrillic", "  ЖК Солнечный 12  ", "ЖК Солнечный 12"},
+		{"preserve_double_space", "Building A  7", "Building A  7"},
+		{"punctuation", "ул. Ленина, д. 5", "ул. Ленина, д. 5"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, normalizeBuildingName(tt.in))
+		})
+	}
+}

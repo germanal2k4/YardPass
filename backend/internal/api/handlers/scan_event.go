@@ -3,10 +3,12 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"yardpass/internal/domain"
 	"yardpass/internal/errors"
+	"yardpass/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,8 +62,13 @@ func (h *ScanEventHandler) ListEvents(c *gin.Context) {
 		filters.ApartmentNumber = &apartmentNumber
 	}
 
-	if carPlate := c.Query("car_plate"); carPlate != "" {
-		filters.CarPlate = &carPlate
+	if carPlate := strings.TrimSpace(c.Query("car_plate")); carPlate != "" {
+		normalized := service.NormalizeCarPlate(carPlate)
+		if normalized == "" {
+			errors.BadRequest(c, "INVALID_CAR_PLATE", "В фильтре по номеру допустимы только буквы, как на госномере (кириллица или латиница), и цифры.")
+			return
+		}
+		filters.CarPlate = &normalized
 	}
 
 	role, exists := c.Get("role")

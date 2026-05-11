@@ -215,7 +215,7 @@ export const handlers = [
   // Passes
   http.post(`${API_BASE}/api/v1/passes/validate`, async ({ request }) => {
     const body = (await request.json()) as { qr_uuid?: string; car_plate?: string };
-    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777' || body.qr_uuid === 'resident:123:token') {
+    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777' || body.car_plate === 'A123BC777' || body.qr_uuid === 'resident:123:token') {
       return HttpResponse.json({
         valid: true,
         car_plate: 'А123ВС777',

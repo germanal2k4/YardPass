@@ -232,7 +232,7 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 		}
 		state.Step = StateWaitingCarPlate
 		b.setState(userID, state)
-		_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля (на английском, например: A123BC77):")
+		_ = b.sendMessage(ctx, cb.Message.Chat.ID, "Введите номер автомобиля (например А123ВС77 или A123BC77). Допустимы только буквы, как на госномере.")
 		_ = b.answerCallbackQuery(ctx, cb.ID, "")
 
 	case "guest_pedestrian":
@@ -307,7 +307,7 @@ func (b *Bot) handleCallbackQuery(ctx context.Context, cb CallbackQuery) {
 func (b *Bot) handleCarPlate(ctx context.Context, msg Message, state *UserState) {
 	normalized := service.NormalizeCarPlate(msg.Text)
 	if normalized == "" {
-		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Введите буквы и цифры (например A123BC77 или А123ВС77).")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Используйте только буквы с госномера (кириллица или латиница) и цифры, например A123BC77 или А123ВС77.")
 		return
 	}
 	state.Data["car_plate"] = normalized
@@ -732,7 +732,7 @@ func (b *Bot) handleResidentCarPlate(ctx context.Context, msg Message, _ *UserSt
 	}
 
 	if normalized == "" {
-		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Укажите буквы и цифры госномера (например А123ВС77 или A123BC77).")
+		_ = b.sendMessage(ctx, msg.Chat.ID, "Некорректный номер автомобиля. Укажите только буквы с госномера (кириллица или латиница) и цифры, например А123ВС77 или A123BC77.")
 		return
 	}
 

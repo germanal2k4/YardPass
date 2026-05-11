@@ -1362,6 +1362,7 @@ components:
       properties:
         username:
           type: string
+          description: Логин вида admin_xxxxxx или guard_xxxxxx, где xxxxxx — 6 случайных hex-символов (a–f, 0–9)
         password:
           type: string
 

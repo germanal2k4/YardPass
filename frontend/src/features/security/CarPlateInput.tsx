@@ -1,5 +1,6 @@
 import { useRef, KeyboardEvent, ChangeEvent } from 'react';
 import { Box, Typography, styled } from '@mui/material';
+import { filterPlateLetterSegment, normalizeCarPlate } from '@/shared/utils/carPlate';
 
 interface CarPlateInputProps {
   value: string;
@@ -94,11 +95,12 @@ export function CarPlateInput({ value, onChange, onSubmit, disabled }: CarPlateI
   const letters2Ref = useRef<HTMLInputElement>(null);
   const regionRef = useRef<HTMLInputElement>(null);
 
-  // Parse value into parts: А123ВС777
-  const letter1 = value.slice(0, 1) || '';
-  const digits = value.slice(1, 4) || '';
-  const letters2 = value.slice(4, 6) || '';
-  const region = value.slice(6, 9) || '';
+  // Нормализованный номер (латиница как на табличке) — для отображения и отправки на API
+  const norm = normalizeCarPlate(value);
+  const letter1 = norm.slice(0, 1) || '';
+  const digits = norm.slice(1, 4) || '';
+  const letters2 = norm.slice(4, 6) || '';
+  const region = norm.slice(6, 9) || '';
 
   const updateValue = (newLetter1: string, newDigits: string, newLetters2: string, newRegion: string) => {
     const combined = newLetter1 + newDigits + newLetters2 + newRegion;
@@ -106,7 +108,7 @@ export function CarPlateInput({ value, onChange, onSubmit, disabled }: CarPlateI
   };
 
   const handleLetter1Change = (e: ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value.toUpperCase().replace(/[^A-ZА-Я]/g, '').slice(0, 1);
+    const newValue = filterPlateLetterSegment(e.target.value, 1);
     updateValue(newValue, digits, letters2, region);
     if (newValue.length === 1) {
       digitsRef.current?.focus();
@@ -122,7 +124,7 @@ export function CarPlateInput({ value, onChange, onSubmit, disabled }: CarPlateI
   };
 
   const handleLetters2Change = (e: ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value.toUpperCase().replace(/[^A-ZА-Я]/g, '').slice(0, 2);
+    const newValue = filterPlateLetterSegment(e.target.value, 2);
     updateValue(letter1, digits, newValue, region);
     if (newValue.length === 2) {
       regionRef.current?.focus();
@@ -135,7 +137,7 @@ export function CarPlateInput({ value, onChange, onSubmit, disabled }: CarPlateI
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, currentRef: React.RefObject<HTMLInputElement>) => {
-    if (e.key === 'Enter' && value.length >= 6) {
+    if (e.key === 'Enter' && normalizeCarPlate(value).length >= 8) {
       e.preventDefault();
       onSubmit();
     } else if (e.key === 'Backspace' && currentRef.current?.value === '') {
@@ -153,27 +155,22 @@ export function CarPlateInput({ value, onChange, onSubmit, disabled }: CarPlateI
 
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const pastedText = e.clipboardData.getData('text').toUpperCase().replace(/\s/g, '');
-    
-    // Try to parse А123ВС777 format
-    const letter1Match = pastedText.match(/^([A-ZА-Я])/);
-    const digitsMatch = pastedText.match(/^[A-ZА-Я](\d{1,3})/);
-    const letters2Match = pastedText.match(/^[A-ZА-Я]\d{1,3}([A-ZА-Я]{1,2})/);
-    const regionMatch = pastedText.match(/^[A-ZА-Я]\d{1,3}[A-ZА-Я]{1,2}(\d{1,3})/);
-
+    const normalized = normalizeCarPlate(e.clipboardData.getData('text'));
+    if (!normalized) {
+      return;
+    }
     updateValue(
-      letter1Match?.[1] || letter1,
-      digitsMatch?.[1] || digits,
-      letters2Match?.[1] || letters2,
-      regionMatch?.[1] || region
+      normalized.slice(0, 1),
+      normalized.slice(1, 4),
+      normalized.slice(4, 6),
+      normalized.slice(6, 9),
     );
 
-    // Focus last filled input
-    if (regionMatch) {
+    if (normalized.length >= 7) {
       regionRef.current?.focus();
-    } else if (letters2Match) {
+    } else if (normalized.length >= 4) {
       letters2Ref.current?.focus();
-    } else if (digitsMatch) {
+    } else if (normalized.length >= 1) {
       digitsRef.current?.focus();
     }
   };

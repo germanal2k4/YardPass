@@ -47,6 +47,8 @@ WHERE (sqlc.narg('filter_building_id')::bigint IS NULL OR a.building_id = sqlc.n
   AND (sqlc.narg('filter_pass_id')::uuid IS NULL OR se.pass_id = sqlc.narg('filter_pass_id'))
   AND (sqlc.narg('filter_guard_user_id')::bigint IS NULL OR se.guard_user_id = sqlc.narg('filter_guard_user_id'))
   AND (sqlc.narg('filter_result')::varchar IS NULL OR se.result = sqlc.narg('filter_result'))
+  AND (sqlc.narg('filter_apartment_number')::varchar IS NULL OR a.number ILIKE '%' || sqlc.narg('filter_apartment_number') || '%')
+  AND (sqlc.narg('filter_car_plate')::varchar IS NULL OR p.car_plate ILIKE '%' || sqlc.narg('filter_car_plate') || '%')
   AND (sqlc.narg('filter_from')::timestamp IS NULL OR se.scanned_at >= sqlc.narg('filter_from'))
   AND (sqlc.narg('filter_to')::timestamp IS NULL OR se.scanned_at <= sqlc.narg('filter_to'))
 ORDER BY se.scanned_at DESC

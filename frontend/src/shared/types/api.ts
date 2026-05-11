@@ -125,6 +125,11 @@ export interface RegisterUserRequest {
   building_id?: number;
 }
 
+export interface UpdateUserCredentialsRequest {
+  username?: string;
+  password?: string;
+}
+
 export interface ListUsersResponse {
   users: User[];
 }
@@ -247,6 +252,8 @@ export interface GetScanEventsRequest {
   from?: string; // RFC3339 datetime
   to?: string; // RFC3339 datetime
   result?: 'valid' | 'invalid';
+  apartment_number?: string;
+  car_plate?: string;
 }
 
 export interface GetScanEventsResponse {

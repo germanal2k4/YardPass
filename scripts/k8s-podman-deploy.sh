@@ -62,9 +62,45 @@ stop_data_services() {
     "$SCRIPT_DIR/compose-db.sh" down 2>/dev/null || true
 }
 
+minikube_podman_container_exists() {
+    # Podman driver names the machine container after the profile (see `podman start <profile>` in minikube logs).
+    podman inspect --type container "$MINIKUBE_PROFILE" &>/dev/null
+}
+
+minikube_profile_dir_exists() {
+    local mk_home="${MINIKUBE_HOME:-$HOME/.minikube}"
+    [[ -d "$mk_home/profiles/$MINIKUBE_PROFILE" ]]
+}
+
 ensure_minikube() {
-    if ! minikube status -p "$MINIKUBE_PROFILE" &>/dev/null; then
-        log "Starting minikube (driver=podman, runtime=cri-o)..."
+    if minikube status -p "$MINIKUBE_PROFILE" &>/dev/null; then
+        log "Minikube already running"
+        return
+    fi
+
+    # Stale state: minikube profile on disk but the podman VM container was removed (prune, rm, etc.).
+    if minikube_profile_dir_exists && ! minikube_podman_container_exists; then
+        warn "Minikube profile '$MINIKUBE_PROFILE' exists but podman container is missing; deleting stale profile..."
+        minikube delete -p "$MINIKUBE_PROFILE" 2>/dev/null || true
+    fi
+
+    log "Starting minikube (driver=podman, runtime=cri-o)..."
+    local tmp rc
+    tmp=$(mktemp)
+    set +e
+    minikube start \
+        -p "$MINIKUBE_PROFILE" \
+        --driver=podman \
+        --container-runtime=cri-o \
+        --cpus=4 \
+        --memory=8g \
+        --disk-size=30g 2>&1 | tee "$tmp"
+    rc=${PIPESTATUS[0]}
+    set -e
+    if [[ $rc -ne 0 ]] && grep -qiE 'no container with name or ID|no such container' "$tmp"; then
+        rm -f "$tmp"
+        warn "minikube start failed (missing podman container); recreating cluster..."
+        minikube delete -p "$MINIKUBE_PROFILE" 2>/dev/null || true
         minikube start \
             -p "$MINIKUBE_PROFILE" \
             --driver=podman \
@@ -72,8 +108,11 @@ ensure_minikube() {
             --cpus=4 \
             --memory=8g \
             --disk-size=30g
-    else
-        log "Minikube already running"
+        return
+    fi
+    rm -f "$tmp"
+    if [[ $rc -ne 0 ]]; then
+        return "$rc"
     fi
 }
 

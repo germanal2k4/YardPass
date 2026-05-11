@@ -99,6 +99,7 @@ func NewRouter(
 		{
 			users.POST("", userHandler.RegisterUser)
 			users.GET("", userHandler.ListUsers)
+			users.PUT("/:id/credentials", userHandler.UpdateUserCredentials)
 		}
 
 		buildings := api.Group("/buildings")

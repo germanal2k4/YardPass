@@ -351,7 +351,7 @@ paths:
       summary: Создать пользователя (admin или superuser)
       description: |
         Создание нового пользователя. Доступно для admin и superuser.
-        - Admin может создавать только admin и guard для своего ЖК (building_id должен совпадать с building_id админа)
+        - Admin может создавать только guard для своего ЖК (building_id всегда будет подставлен из токена admin)
         - Superuser может создавать всех, кроме superuser, для любого ЖК
         - Для admin/guard обязательно указать `building_id` или `building_name`
       tags:
@@ -365,6 +365,88 @@ paths:
       responses:
         '201':
           description: Пользователь создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      summary: Список пользователей
+      description: |
+        Получить список пользователей с фильтрацией.
+        - Для роли `admin` сервер всегда ограничивает выборку своим `building_id` из токена.
+        - Параметр `building_id` в query учитывается только для `superuser`.
+      tags:
+        - Users
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [guard, admin, superuser]
+          description: Фильтр по роли
+        - name: building_id
+          in: query
+          schema:
+            type: integer
+          description: Фильтр по зданию (только для superuser)
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+          description: Фильтр по статусу
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+          description: Лимит записей
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/users/{id}/credentials:
+    put:
+      summary: Обновить логин и/или пароль пользователя
+      description: |
+        Обновляет учетные данные пользователя.
+        - `admin` может менять свои учетные данные.
+        - `admin` может менять учетные данные только `guard` своего `building_id`.
+        - `superuser` может менять учетные данные любого пользователя.
+      tags:
+        - Users
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserCredentialsRequest'
+      responses:
+        '200':
+          description: Учетные данные обновлены
           content:
             application/json:
               schema:
@@ -439,50 +521,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-
-    get:
-      summary: Список пользователей
-      description: Получить список пользователей с фильтрацией
-      tags:
-        - Users
-      parameters:
-        - name: role
-          in: query
-          schema:
-            type: string
-            enum: [guard, admin, superuser]
-          description: Фильтр по роли
-        - name: building_id
-          in: query
-          schema:
-            type: integer
-          description: Фильтр по зданию
-        - name: status
-          in: query
-          schema:
-            type: string
-            enum: [active, inactive]
-          description: Фильтр по статусу
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            default: 100
-          description: Лимит записей
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  users:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/User'
-        '403':
-          $ref: '#/components/responses/Forbidden'
 
   /api/v1/residents:
     post:
@@ -765,6 +803,16 @@ paths:
             type: string
             enum: [valid, invalid]
           description: Фильтр по результату сканирования
+        - name: apartment_number
+          in: query
+          schema:
+            type: string
+          description: Фильтр по номеру квартиры (частичное совпадение)
+        - name: car_plate
+          in: query
+          schema:
+            type: string
+          description: Фильтр по номеру авто (частичное совпадение)
       responses:
         '200':
           description: Список событий
@@ -1199,7 +1247,7 @@ components:
         role:
           type: string
           enum: [guard, admin]
-          description: Роль пользователя (admin может создавать только guard и admin)
+          description: Роль пользователя (admin может создавать только guard; superuser — guard/admin)
         building_id:
           type: integer
           nullable: true
@@ -1208,6 +1256,18 @@ components:
           type: string
           nullable: true
           description: Название здания (альтернатива building_id для guard и admin)
+
+    UpdateUserCredentialsRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Новый логин (опционально)
+        password:
+          type: string
+          format: password
+          description: Новый пароль (опционально)
+      description: Нужно передать хотя бы одно поле (username или password).
 
     Resident:
       type: object
@@ -1302,6 +1362,7 @@ components:
       properties:
         username:
           type: string
+          description: Логин вида admin_xxxxxx или guard_xxxxxx, где xxxxxx — 6 случайных hex-символов (a–f, 0–9)
         password:
           type: string
 

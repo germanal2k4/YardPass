@@ -177,6 +177,30 @@ func TestUserService_RegisterUser(t *testing.T) {
 		userRepo.AssertNotCalled(t, "Create")
 	})
 
+	t.Run("rejects short username and password", func(t *testing.T) {
+		userRepo := new(mockUserRepo)
+		buildingRepo := new(mockBuildingRepo)
+		ruleRepo := new(mockRuleRepo)
+		svc := NewUserService(userRepo, buildingRepo, ruleRepo, logger, noopMetrics)
+		ctx := context.Background()
+
+		buildingID := int64(1)
+		admin := &domain.User{ID: 1, Role: "admin", BuildingID: &buildingID}
+		userRepo.On("GetByID", ctx, int64(1)).Return(admin, nil)
+		buildingRepo.On("GetByID", ctx, buildingID).Return(&domain.Building{ID: buildingID}, nil)
+
+		req := domain.RegisterUserRequest{
+			Username:   "abc",
+			Password:   "12345",
+			Role:       "guard",
+			BuildingID: &buildingID,
+		}
+		user, err := svc.RegisterUser(ctx, req, 1)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+		userRepo.AssertNotCalled(t, "Create")
+	})
+
 	t.Run("creates default rule for new building by name", func(t *testing.T) {
 		userRepo := new(mockUserRepo)
 		buildingRepo := new(mockBuildingRepo)
@@ -212,4 +236,115 @@ func TestUserService_RegisterUser(t *testing.T) {
 		assert.NotNil(t, user)
 		ruleRepo.AssertExpectations(t)
 	})
+}
+
+func TestUserService_UpdateCredentials(t *testing.T) {
+	logger := zap.NewNop()
+	noopMetrics := &metrics.Metrics{}
+	ctx := context.Background()
+
+	t.Run("admin updates own username and password", func(t *testing.T) {
+		userRepo := new(mockUserRepo)
+		buildingRepo := new(mockBuildingRepo)
+		ruleRepo := new(mockRuleRepo)
+		svc := NewUserService(userRepo, buildingRepo, ruleRepo, logger, noopMetrics)
+
+		bID := int64(1)
+		admin := &domain.User{
+			ID:           1,
+			Username:     "admin_old",
+			Role:         "admin",
+			BuildingID:   &bID,
+			PasswordHash: "old_hash",
+		}
+
+		userRepo.On("GetByID", ctx, int64(1)).Return(admin, nil).Twice()
+		userRepo.On("GetByUsername", ctx, "admin_new").Return(nil, nil)
+		userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+
+		updated, err := svc.UpdateCredentials(ctx, 1, 1, "admin_new", "new_password")
+		assert.NoError(t, err)
+		assert.NotNil(t, updated)
+		assert.Equal(t, "admin_new", updated.Username)
+		assert.Empty(t, updated.PasswordHash)
+		userRepo.AssertExpectations(t)
+	})
+
+	t.Run("admin updates guard from own building", func(t *testing.T) {
+		userRepo := new(mockUserRepo)
+		buildingRepo := new(mockBuildingRepo)
+		ruleRepo := new(mockRuleRepo)
+		svc := NewUserService(userRepo, buildingRepo, ruleRepo, logger, noopMetrics)
+
+		bID := int64(7)
+		admin := &domain.User{ID: 10, Role: "admin", BuildingID: &bID}
+		guard := &domain.User{ID: 20, Username: "guard_1", Role: "guard", BuildingID: &bID, PasswordHash: "old_hash"}
+
+		userRepo.On("GetByID", ctx, int64(10)).Return(admin, nil)
+		userRepo.On("GetByID", ctx, int64(20)).Return(guard, nil)
+		userRepo.On("GetByUsername", ctx, "guard_new").Return(nil, nil)
+		userRepo.On("Update", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
+
+		updated, err := svc.UpdateCredentials(ctx, 10, 20, "guard_new", "")
+		assert.NoError(t, err)
+		assert.NotNil(t, updated)
+		assert.Equal(t, "guard_new", updated.Username)
+		userRepo.AssertExpectations(t)
+	})
+
+	t.Run("admin cannot update guard from another building", func(t *testing.T) {
+		userRepo := new(mockUserRepo)
+		buildingRepo := new(mockBuildingRepo)
+		ruleRepo := new(mockRuleRepo)
+		svc := NewUserService(userRepo, buildingRepo, ruleRepo, logger, noopMetrics)
+
+		adminBID := int64(1)
+		guardBID := int64(2)
+		admin := &domain.User{ID: 10, Role: "admin", BuildingID: &adminBID}
+		guard := &domain.User{ID: 20, Username: "guard_1", Role: "guard", BuildingID: &guardBID}
+
+		userRepo.On("GetByID", ctx, int64(10)).Return(admin, nil)
+		userRepo.On("GetByID", ctx, int64(20)).Return(guard, nil)
+
+		updated, err := svc.UpdateCredentials(ctx, 10, 20, "guard_new", "")
+		assert.Error(t, err)
+		assert.Nil(t, updated)
+		assert.Contains(t, err.Error(), "своего здания")
+		userRepo.AssertNotCalled(t, "Update")
+	})
+
+	t.Run("rejects short credentials on update", func(t *testing.T) {
+		userRepo := new(mockUserRepo)
+		buildingRepo := new(mockBuildingRepo)
+		ruleRepo := new(mockRuleRepo)
+		svc := NewUserService(userRepo, buildingRepo, ruleRepo, logger, noopMetrics)
+
+		bID := int64(1)
+		admin := &domain.User{ID: 1, Role: "admin", BuildingID: &bID, Username: "admin_old"}
+
+		userRepo.On("GetByID", ctx, int64(1)).Return(admin, nil).Twice()
+
+		updated, err := svc.UpdateCredentials(ctx, 1, 1, "abc", "12345")
+		assert.Error(t, err)
+		assert.Nil(t, updated)
+		userRepo.AssertNotCalled(t, "Update")
+	})
+}
+
+func TestNormalizeBuildingName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"trim_cyrillic", "  ЖК Солнечный 12  ", "ЖК Солнечный 12"},
+		{"preserve_double_space", "Building A  7", "Building A  7"},
+		{"punctuation", "ул. Ленина, д. 5", "ул. Ленина, д. 5"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, normalizeBuildingName(tt.in))
+		})
+	}
 }

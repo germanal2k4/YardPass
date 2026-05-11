@@ -22,6 +22,7 @@ import { EventsLog } from '@/features/security/EventsLog';
 import { CarPlateInput } from '@/features/security/CarPlateInput';
 import type { ValidatePassResponse } from '@/shared/types/api';
 import { formatErrorMessage } from '@/shared/utils/errors';
+import { normalizeCarPlate } from '@/shared/utils/carPlate';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
 
@@ -94,11 +95,13 @@ export function SecurityPage() {
   };
 
   const handleCarPlateSubmit = () => {
-    if (carPlateInput.trim()) {
-      setErrorMsg('');
-      setValidationResult(null);
-      validateMutation.mutate({ car_plate: carPlateInput.trim() });
+    const normalized = normalizeCarPlate(carPlateInput);
+    if (!normalized) {
+      return;
     }
+    setErrorMsg('');
+    setValidationResult(null);
+    validateMutation.mutate({ car_plate: normalized });
   };
 
   useEffect(() => {
@@ -214,7 +217,7 @@ export function SecurityPage() {
                 fullWidth
                 size="large"
                 onClick={handleCarPlateSubmit}
-                disabled={!carPlateInput.trim() || validateMutation.isPending}
+                disabled={!normalizeCarPlate(carPlateInput) || validateMutation.isPending}
                 sx={{
                   mt: 2,
                   py: 2,

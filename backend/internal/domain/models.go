@@ -54,8 +54,8 @@ type Pass struct {
 
 // CreatePassResult is returned when a pass is created; QuietHoursNotice is set if valid_to was shortened before quiet hours.
 type CreatePassResult struct {
-	Pass               *Pass   `json:"pass"`
-	QuietHoursNotice   *string `json:"quiet_hours_notice,omitempty"`
+	Pass             *Pass   `json:"pass"`
+	QuietHoursNotice *string `json:"quiet_hours_notice,omitempty"`
 }
 
 type ScanEvent struct {
@@ -110,6 +110,11 @@ type RegisterUserRequest struct {
 	BuildingID      *int64  `json:"building_id,omitempty"`
 	BuildingName    *string `json:"building_name,omitempty"`
 	ApartmentNumber *int32  `json:"apartment_number,omitempty"`
+}
+
+type UpdateUserCredentialsRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type PurchaseSubscriptionRequest struct {

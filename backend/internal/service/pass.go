@@ -490,7 +490,11 @@ func (s *PassService) GetActivePassesByBuilding(ctx context.Context, buildingID 
 }
 
 func (s *PassService) SearchPassesByCarPlate(ctx context.Context, carPlate string, buildingID *int64) ([]domain.Pass, error) {
-	return s.passRepo.SearchByCarPlate(ctx, carPlate, buildingID, 50)
+	normalized := NormalizeCarPlate(carPlate)
+	if normalized == "" {
+		return []domain.Pass{}, nil
+	}
+	return s.passRepo.SearchByCarPlate(ctx, normalized, buildingID, 50)
 }
 
 func (s *PassService) logScanEvent(ctx context.Context, passID uuid.UUID, guardUserID int64, result, reason string) {
@@ -522,31 +526,6 @@ func (s *PassService) signResidentToken(telegramID int64) string {
 	mac := hmac.New(sha256.New, s.personalPassKey)
 	mac.Write([]byte(strconv.FormatInt(telegramID, 10)))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
-}
-
-var russianToEnglish = map[rune]rune{
-	'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'К': 'K',
-	'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P', 'Т': 'T',
-	'У': 'Y', 'Х': 'X',
-	'а': 'A', 'в': 'B', 'с': 'C', 'е': 'E', 'к': 'K',
-	'м': 'M', 'н': 'H', 'о': 'O', 'р': 'P', 'т': 'T',
-	'у': 'Y', 'х': 'X',
-}
-
-// NormalizeCarPlate uppercases, strips spaces, maps Russian plate look-alike letters to Latin, and keeps only A–Z and 0–9.
-func NormalizeCarPlate(plate string) string {
-	normalized := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(plate), " ", ""))
-
-	var result strings.Builder
-	for _, r := range normalized {
-		if eng, ok := russianToEnglish[r]; ok {
-			result.WriteRune(eng)
-		} else if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			result.WriteRune(r)
-		}
-	}
-
-	return result.String()
 }
 
 // ruleQuietHoursConfigured is true when both fields are set and non-empty (after trim).

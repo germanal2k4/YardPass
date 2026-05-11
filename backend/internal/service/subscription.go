@@ -3,12 +3,12 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"yardpass/internal/auth"
 	"yardpass/internal/domain"
@@ -18,8 +18,6 @@ const (
 	subscriptionFeeRub = int64(200000)
 	subscriptionPeriod = "1 year"
 )
-
-var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 
 type EmailSender interface {
 	Send(to, subject, body string) error
@@ -68,12 +66,12 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 		return nil, err
 	}
 
-	adminCreds, err := s.createUserForRole(ctx, building.ID, building.Name, req.Email, "admin")
+	adminCreds, err := s.createUserForRole(ctx, building.ID, req.Email, "admin")
 	if err != nil {
 		return nil, err
 	}
 
-	guardCreds, err := s.createUserForRole(ctx, building.ID, building.Name, req.Email, "guard")
+	guardCreds, err := s.createUserForRole(ctx, building.ID, req.Email, "guard")
 	if err != nil {
 		return nil, err
 	}
@@ -110,11 +108,10 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 func (s *SubscriptionService) createUserForRole(
 	ctx context.Context,
 	buildingID int64,
-	buildingName string,
 	email string,
 	role string,
 ) (domain.AccountCredentials, error) {
-	username, err := s.generateUniqueUsername(ctx, buildingName, role)
+	username, err := s.generateUniqueUsername(ctx, role)
 	if err != nil {
 		return domain.AccountCredentials{}, err
 	}
@@ -144,19 +141,14 @@ func (s *SubscriptionService) createUserForRole(
 	return domain.AccountCredentials{Username: username, Password: password}, nil
 }
 
-func (s *SubscriptionService) generateUniqueUsername(ctx context.Context, buildingName, role string) (string, error) {
-	base := normalizeSlug(buildingName)
-	if base == "" {
-		base = "building"
-	}
-
-	for range 10 {
-		suffix, err := randomDigits(4)
+func (s *SubscriptionService) generateUniqueUsername(ctx context.Context, role string) (string, error) {
+	for range 24 {
+		suffix, err := randomHexSuffix(6)
 		if err != nil {
 			return "", errors.New("Не удалось сформировать логин. Попробуйте позже.")
 		}
 
-		username := fmt.Sprintf("%s_%s_%s", role, base, suffix)
+		username := fmt.Sprintf("%s_%s", role, suffix)
 		existing, err := s.userRepo.GetByUsername(ctx, username)
 		if err != nil {
 			return "", errors.New("Не удалось проверить уникальность логина. Попробуйте позже.")
@@ -166,7 +158,7 @@ func (s *SubscriptionService) generateUniqueUsername(ctx context.Context, buildi
 		}
 	}
 
-	return "", errors.New("Не удалось подобрать уникальный логин. Попробуйте другое название здания.")
+	return "", errors.New("Не удалось подобрать уникальный логин. Попробуйте позже.")
 }
 
 func validatePaymentFields(req domain.PurchaseSubscriptionRequest) error {
@@ -206,44 +198,16 @@ func generatePassword(length int) (string, error) {
 	return out.String(), nil
 }
 
-func randomDigits(length int) (string, error) {
-	if length <= 0 {
-		return "", errors.New("внутренняя ошибка: некорректная длина суффикса")
+// randomHexSuffix returns a lowercase hex string of exactly hexLen characters (hexLen must be even).
+func randomHexSuffix(hexLen int) (string, error) {
+	if hexLen <= 0 || hexLen%2 != 0 {
+		return "", errors.New("внутренняя ошибка: некорректная длина hex-суффикса")
 	}
-	var out strings.Builder
-	out.Grow(length)
-	for range length {
-		n, err := rand.Int(rand.Reader, big.NewInt(10))
-		if err != nil {
-			return "", err
-		}
-		out.WriteByte(byte('0' + n.Int64()))
+	buf := make([]byte, hexLen/2)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
 	}
-	return out.String(), nil
-}
-
-func normalizeSlug(value string) string {
-	lower := strings.ToLower(transliterateCyrillic(strings.TrimSpace(value)))
-	normalized := nonAlnum.ReplaceAllString(lower, "_")
-	normalized = strings.Trim(normalized, "_")
-	if len(normalized) > 20 {
-		return normalized[:20]
-	}
-	return normalized
-}
-
-func transliterateCyrillic(value string) string {
-	var b strings.Builder
-	for _, r := range value {
-		if latin, ok := cyrillicToLatin[r]; ok {
-			b.WriteString(latin)
-			continue
-		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) || r == '-' || r == '_' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return hex.EncodeToString(buf), nil
 }
 
 func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normalizedName string, apartmentCount int32) (*domain.Building, error) {
@@ -299,14 +263,6 @@ func (s *SubscriptionService) ensureDefaultRule(ctx context.Context, buildingID 
 		return errors.New("Не удалось создать правила по умолчанию. Попробуйте позже.")
 	}
 	return nil
-}
-
-var cyrillicToLatin = map[rune]string{
-	'а': "a", 'б': "b", 'в': "v", 'г': "g", 'д': "d", 'е': "e", 'ё': "e", 'ж': "zh",
-	'з': "z", 'и': "i", 'й': "y", 'к': "k", 'л': "l", 'м': "m", 'н': "n", 'о': "o",
-	'п': "p", 'р': "r", 'с': "s", 'т': "t", 'у': "u", 'ф': "f", 'х': "h", 'ц': "ts",
-	'ч': "ch", 'ш': "sh", 'щ': "sch", 'ы': "y", 'э': "e", 'ю': "yu", 'я': "ya",
-	'ь': "", 'ъ': "",
 }
 
 func onlyDigits(value string) string {

@@ -108,6 +108,39 @@ export const mockStatistics = {
   ],
 };
 
+const mockUsers = [
+  {
+    id: 1,
+    username: 'admin',
+    email: 'admin@example.com',
+    role: 'admin',
+    building_id: 1,
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 2,
+    username: 'guard1',
+    email: 'guard1@example.com',
+    role: 'guard',
+    building_id: 1,
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 3,
+    username: 'guard_other_building',
+    email: 'guard2@example.com',
+    role: 'guard',
+    building_id: 2,
+    status: 'active',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  },
+];
+
 const API_BASE = 'http://localhost:8080';
 
 export const handlers = [
@@ -182,7 +215,7 @@ export const handlers = [
   // Passes
   http.post(`${API_BASE}/api/v1/passes/validate`, async ({ request }) => {
     const body = (await request.json()) as { qr_uuid?: string; car_plate?: string };
-    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777' || body.qr_uuid === 'resident:123:token') {
+    if (body.qr_uuid === 'valid-uuid' || body.car_plate === 'А123ВС777' || body.car_plate === 'A123BC777' || body.qr_uuid === 'resident:123:token') {
       return HttpResponse.json({
         valid: true,
         car_plate: 'А123ВС777',
@@ -259,6 +292,39 @@ export const handlers = [
       address: 'Тестовый адрес',
       apartment_count: body.apartment_count,
       created_at: '2026-01-01T00:00:00Z',
+      updated_at: new Date().toISOString(),
+    });
+  }),
+
+  // Users
+  http.get(`${API_BASE}/api/v1/users`, ({ request }) => {
+    const role = request.url.searchParams.get('role');
+    const users = role
+      ? mockUsers.filter((user) => user.role === role && user.building_id === mockUser.building_id)
+      : mockUsers;
+    return HttpResponse.json({ users });
+  }),
+
+  http.post(`${API_BASE}/api/v1/users`, async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      id: 10,
+      ...body,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { status: 201 });
+  }),
+
+  http.put(`${API_BASE}/api/v1/users/:id/credentials`, async ({ request, params }) => {
+    const body = (await request.json()) as { username?: string };
+    const user = mockUsers.find((item) => item.id === Number(params.id));
+    if (!user) {
+      return HttpResponse.json({ error: { code: 'NOT_FOUND', message: 'User not found' } }, { status: 404 });
+    }
+    return HttpResponse.json({
+      ...user,
+      username: body.username ?? user.username,
       updated_at: new Date().toISOString(),
     });
   }),

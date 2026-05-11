@@ -30,6 +30,12 @@ export const reportsApi = {
     if (params?.result) {
       queryParams.append('result', params.result);
     }
+    if (params?.apartment_number) {
+      queryParams.append('apartment_number', params.apartment_number);
+    }
+    if (params?.car_plate) {
+      queryParams.append('car_plate', params.car_plate);
+    }
 
     const url = `${API_ENDPOINTS.SCAN_EVENTS}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
     const response = await apiClient.get<GetScanEventsResponse>(url);

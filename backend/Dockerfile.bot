@@ -1,0 +1,28 @@
+# Variant of backend/Dockerfile that produces only the Telegram bot binary.
+# Used by Railway/single-target build platforms that do not expose Dockerfile
+# target selection in the UI. For local docker-compose use the main Dockerfile
+# with target=bot.
+
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bot ./cmd/bot
+
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/bot .
+COPY --from=builder /app/config/config.yaml .
+
+CMD ["./bot", "-c", "config.yaml"]

@@ -1,7 +1,6 @@
 .git
 .github
 *.md
-docs/
 deployment/
 migrations/*.sql.bak
 **/*_test.go

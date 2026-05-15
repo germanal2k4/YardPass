@@ -45,6 +45,12 @@ func NewUserService(
 
 	m.GetRegistry().MustRegister(opsTotal)
 
+	for _, op := range []string{"register", "update_credentials"} {
+		for _, res := range []string{"success", "error"} {
+			opsTotal.WithLabelValues(op, res)
+		}
+	}
+
 	return &UserService{
 		userRepo:       userRepo,
 		buildingRepo:   buildingRepo,
@@ -57,17 +63,21 @@ func NewUserService(
 func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserRequest, createdBy int64) (*domain.User, error) {
 	creator, err := s.userRepo.GetByID(ctx, createdBy)
 	if err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Не удалось проверить учётную запись. Попробуйте позже.")
 	}
 	if creator == nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Инициатор регистрации не найден.")
 	}
 
 	if creator.Role != "superuser" && creator.Role != "admin" {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Регистрировать пользователей могут только суперпользователь или администратор.")
 	}
 
 	if req.Role == "superuser" {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Нельзя создать учётную запись суперпользователя.")
 	}
 
@@ -76,27 +86,33 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		// superuser may create admin/guard for specific building
 	case "admin":
 		if req.Role != "guard" {
+			s.opsTotal.WithLabelValues("register", "error").Inc()
 			return nil, errors.New("Администратор может создавать только учётные записи охраны.")
 		}
 		if creator.BuildingID == nil {
+			s.opsTotal.WithLabelValues("register", "error").Inc()
 			return nil, errors.New("Администратор не привязан к зданию.")
 		}
 		if req.BuildingID != nil && *req.BuildingID != *creator.BuildingID {
+			s.opsTotal.WithLabelValues("register", "error").Inc()
 			return nil, errors.New("Администратор может создавать пользователей только для своего здания.")
 		}
 		// Admin always creates guards in own building.
 		req.BuildingID = creator.BuildingID
 	default:
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Недостаточно прав для регистрации пользователей.")
 	}
 
 	if req.Role == "guard" || req.Role == "admin" {
 		if req.BuildingID == nil {
 			if req.BuildingName == nil || strings.TrimSpace(*req.BuildingName) == "" {
+				s.opsTotal.WithLabelValues("register", "error").Inc()
 				return nil, errors.New("Для роли охранник или администратор укажите building_id или название здания (building_name).")
 			}
 			resolvedBuildingID, err := s.resolveOrCreateBuildingByName(ctx, *req.BuildingName)
 			if err != nil {
+				s.opsTotal.WithLabelValues("register", "error").Inc()
 				return nil, err
 			}
 			req.BuildingID = &resolvedBuildingID
@@ -104,35 +120,43 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 
 		building, err := s.buildingRepo.GetByID(ctx, *req.BuildingID)
 		if err != nil {
+			s.opsTotal.WithLabelValues("register", "error").Inc()
 			return nil, errors.New("Не удалось проверить здание. Попробуйте позже.")
 		}
 		if building == nil {
+			s.opsTotal.WithLabelValues("register", "error").Inc()
 			return nil, errors.New("Здание не найдено.")
 		}
 
 	}
 
 	if req.ApartmentNumber != nil && *req.ApartmentNumber <= 0 {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Номер квартиры должен быть больше нуля.")
 	}
 
 	if err := validateUsername(req.Username); err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, err
 	}
 	if err := validatePassword(req.Password); err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, err
 	}
 
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Не удалось проверить логин. Попробуйте позже.")
 	}
 	if existing != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Пользователь с таким логином уже существует.")
 	}
 
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
+		s.opsTotal.WithLabelValues("register", "error").Inc()
 		return nil, errors.New("Не удалось обработать пароль. Попробуйте другой пароль.")
 	}
 
@@ -179,39 +203,48 @@ func (s *UserService) UpdateCredentials(
 ) (*domain.User, error) {
 	actor, err := s.userRepo.GetByID(ctx, actorID)
 	if err != nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Не удалось проверить учётную запись. Попробуйте позже.")
 	}
 	if actor == nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Инициатор изменения не найден.")
 	}
 
 	target, err := s.userRepo.GetByID(ctx, targetUserID)
 	if err != nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Не удалось загрузить пользователя. Попробуйте позже.")
 	}
 	if target == nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Пользователь не найден.")
 	}
 
 	if err := validateCredentialsUpdatePermissions(actor, target); err != nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, err
 	}
 
 	username := strings.TrimSpace(newUsername)
 	password := strings.TrimSpace(newPassword)
 	if username == "" && password == "" {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Укажите новый логин и/или пароль.")
 	}
 
 	if username != "" && username != target.Username {
 		if err := validateUsername(username); err != nil {
+			s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 			return nil, err
 		}
 		existing, err := s.userRepo.GetByUsername(ctx, username)
 		if err != nil {
+			s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 			return nil, errors.New("Не удалось проверить логин. Попробуйте позже.")
 		}
 		if existing != nil && existing.ID != target.ID {
+			s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 			return nil, errors.New("Пользователь с таким логином уже существует.")
 		}
 		target.Username = username
@@ -219,18 +252,23 @@ func (s *UserService) UpdateCredentials(
 
 	if password != "" {
 		if err := validatePassword(password); err != nil {
+			s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 			return nil, err
 		}
 		passwordHash, err := auth.HashPassword(password)
 		if err != nil {
+			s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 			return nil, errors.New("Не удалось обработать пароль. Попробуйте другой пароль.")
 		}
 		target.PasswordHash = passwordHash
 	}
 
 	if err := s.userRepo.Update(ctx, target); err != nil {
+		s.opsTotal.WithLabelValues("update_credentials", "error").Inc()
 		return nil, errors.New("Не удалось обновить учётные данные. Попробуйте позже.")
 	}
+
+	s.opsTotal.WithLabelValues("update_credentials", "success").Inc()
 
 	target.PasswordHash = ""
 	return target, nil

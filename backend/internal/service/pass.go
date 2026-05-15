@@ -77,6 +77,16 @@ func NewPassService(
 
 	m.GetRegistry().MustRegister(opsTotal, createdByType, rejectionsTotal)
 
+	// Prime rejection label combinations so Grafana always sees the series (rate() works; no "No data").
+	for _, reason := range []string{
+		"invalid_car_plate",
+		"max_duration_exceeded",
+		"quiet_hours",
+		"daily_limit_exceeded",
+	} {
+		rejectionsTotal.WithLabelValues(reason)
+	}
+
 	return &PassService{
 		passRepo:        passRepo,
 		apartmentRepo:   apartmentRepo,

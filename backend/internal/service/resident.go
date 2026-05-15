@@ -46,6 +46,15 @@ func NewResidentService(residentRepo domain.ResidentRepository, apartmentRepo do
 
 	m.GetRegistry().MustRegister(opsTotal, importTotal)
 
+	for _, op := range []string{"create", "delete"} {
+		for _, res := range []string{"success", "error"} {
+			opsTotal.WithLabelValues(op, res)
+		}
+	}
+	for _, res := range []string{"success", "error"} {
+		importTotal.WithLabelValues(res)
+	}
+
 	return &ResidentService{
 		residentRepo:   residentRepo,
 		apartmentRepo:  apartmentRepo,
@@ -126,10 +135,12 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 
 	records, err := csvReader.ReadAll()
 	if err != nil {
+		s.importTotal.WithLabelValues("error").Inc()
 		return 0, []error{errors.New("Не удалось прочитать CSV. Проверьте кодировку и разделитель полей.")}
 	}
 
 	if len(records) < 2 {
+		s.importTotal.WithLabelValues("error").Inc()
 		return 0, []error{errors.New("В файле должны быть строка заголовков и хотя бы одна строка с данными.")}
 	}
 
@@ -142,6 +153,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	requiredFields := []string{"apartment", "telegram_id"}
 	for _, field := range requiredFields {
 		if _, ok := headerMap[field]; !ok {
+			s.importTotal.WithLabelValues("error").Inc()
 			return 0, []error{fmt.Errorf("В заголовке CSV отсутствует обязательная колонка: %s", field)}
 		}
 	}
@@ -223,6 +235,7 @@ func (s *ResidentService) ImportFromCSV(ctx context.Context, reader io.Reader, b
 	}
 
 	if len(parseErrors) > 0 {
+		s.importTotal.WithLabelValues("error").Add(float64(len(parseErrors)))
 		return 0, parseErrors
 	}
 

@@ -1,8 +1,7 @@
-# Railway private network. Service DNS: <service-name>.railway.internal
-# Placeholders __BACKEND_PORT__ / __BOT_PORT__ are replaced at container start (see deployment/railway/prometheus/docker-entrypoint.sh).
-# On the Prometheus service set (optional, for dynamic bot port):
-#   BOT_SCRAPE_PORT=${{Bot.PORT}}
-#   BACKEND_SCRAPE_PORT=8080
+# Railway private network: DNS is <railway-service-name>.railway.internal
+# Full scrape targets are injected at container start (deployment/railway/prometheus/docker-entrypoint.sh).
+# Set BACKEND_SCRAPE_HOST / BOT_SCRAPE_HOST to the Railway service slugs (project canvas names).
+# If job yardpass-bot is DOWN with connection errors, BOT_SCRAPE_HOST often does not match the real bot service name.
 global:
   scrape_interval: 15s
 
@@ -10,8 +9,8 @@ scrape_configs:
   - job_name: 'yardpass-backend'
     metrics_path: /metrics
     static_configs:
-      - targets: ['backend.railway.internal:__BACKEND_PORT__']
+      - targets: ['__BACKEND_TARGET__']
   - job_name: 'yardpass-bot'
     metrics_path: /metrics
     static_configs:
-      - targets: ['bot.railway.internal:__BOT_PORT__']
+      - targets: ['__BOT_TARGET__']

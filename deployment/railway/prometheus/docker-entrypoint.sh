@@ -4,17 +4,23 @@ set -e
 # Railway routes healthchecks and traffic to $PORT; Prometheus defaults to 9090.
 : "${PORT:=9090}"
 
-# Scrape targets (override in Railway Variables on the prometheus service).
-# Backend exposes /metrics on API port (default 8080).
+# Host = Railway service slug (must match Networking / service name, not display title).
+: "${BACKEND_SCRAPE_HOST:=backend}"
 : "${BACKEND_SCRAPE_PORT:=8080}"
-# Bot metrics listen on METRICS_PORT, or Railway $PORT when METRICS_PORT is unset (see applyRailwayBotMetricsPort).
-# If your bot uses a dynamic Railway PORT, set BOT_SCRAPE_PORT=${{Bot.PORT}} on this service.
+: "${BOT_SCRAPE_HOST:=bot}"
 : "${BOT_SCRAPE_PORT:=5050}"
 
+BACKEND_TARGET="${BACKEND_SCRAPE_HOST}.railway.internal:${BACKEND_SCRAPE_PORT}"
+BOT_TARGET="${BOT_SCRAPE_HOST}.railway.internal:${BOT_SCRAPE_PORT}"
+
 CFG_OUT=/tmp/prometheus.railway.generated.yml
-sed -e "s/__BACKEND_PORT__/${BACKEND_SCRAPE_PORT}/g" \
-    -e "s/__BOT_PORT__/${BOT_SCRAPE_PORT}/g" \
+sed -e "s|__BACKEND_TARGET__|${BACKEND_TARGET}|g" \
+    -e "s|__BOT_TARGET__|${BOT_TARGET}|g" \
     /etc/prometheus/prometheus.yml >"${CFG_OUT}"
+
+echo "prometheus: scrape targets (generated)"
+grep -E "^\s+-\s+targets:" -A1 "${CFG_OUT}" || true
+echo "prometheus: if yardpass-bot is DOWN, set BOT_SCRAPE_HOST to your bot service slug and BOT_SCRAPE_PORT to its METRICS_PORT."
 
 exec /bin/prometheus \
   --config.file="${CFG_OUT}" \

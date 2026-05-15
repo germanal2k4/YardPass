@@ -3,6 +3,8 @@ package setup
 import (
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"go.uber.org/fx"
@@ -23,6 +25,23 @@ import (
 	"yardpass/internal/service"
 	"yardpass/internal/telegram"
 )
+
+// applyRailwayBotMetricsPort makes Prometheus scrape work on Railway: the platform sets $PORT
+// and routes private network checks to that port. If METRICS_PORT is unset, bind metrics HTTP to $PORT.
+func applyRailwayBotMetricsPort(cfg *config.Config) {
+	if os.Getenv("METRICS_PORT") != "" {
+		return
+	}
+	p := strings.TrimSpace(os.Getenv("PORT"))
+	if p == "" {
+		return
+	}
+	port, err := strconv.Atoi(p)
+	if err != nil || port <= 0 {
+		return
+	}
+	cfg.Metrics.Port = port
+}
 
 func SetupApi(configPath string) (*fx.App, error) {
 	cfg, err := config.Load(configPath)
@@ -133,6 +152,8 @@ func SetupBot(configPath string) (*fx.App, error) {
 	if strings.TrimSpace(cfg.JWT.Secret) == "" {
 		return nil, errors.New("JWT_SECRET is required for Telegram bot (must match API JWT_SECRET for resident personal QR)")
 	}
+
+	applyRailwayBotMetricsPort(cfg)
 
 	return fx.New(
 		fx.StartTimeout(cfg.Server.StartTimeout),

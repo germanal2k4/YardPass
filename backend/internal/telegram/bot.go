@@ -183,6 +183,9 @@ func (b *Bot) Stop(ctx context.Context) error {
 
 func (b *Bot) listenWebhook() {
 	defer b.wg.Done()
+	if b.metrics.Enabled() {
+		http.Handle("/metrics", b.metrics.Handler())
+	}
 	http.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

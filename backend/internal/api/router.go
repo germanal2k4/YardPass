@@ -60,6 +60,10 @@ func NewRouter(
 
 	registerSwaggerRoutes(r)
 
+	if metrics.Enabled() {
+		r.GET("/metrics", gin.WrapH(metrics.Handler()))
+	}
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})

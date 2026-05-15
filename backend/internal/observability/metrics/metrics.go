@@ -28,7 +28,7 @@ type Metrics struct {
 
 func NewMetrics(lc fx.Lifecycle, c *config.MetricsConfig, lgr *zap.Logger) (*Metrics, error) {
 	if c == nil || !c.Enabled {
-		return &Metrics{enabled: false}, nil
+		return &Metrics{enabled: false, r: nil}, nil
 	}
 
 	metrics := &Metrics{
@@ -64,6 +64,9 @@ func NewMetrics(lc fx.Lifecycle, c *config.MetricsConfig, lgr *zap.Logger) (*Met
 }
 
 func (m *Metrics) Start() {
+	if !m.enabled || m.server == nil {
+		return
+	}
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
@@ -74,6 +77,9 @@ func (m *Metrics) Start() {
 }
 
 func (m *Metrics) Stop(ctx context.Context) error {
+	if !m.enabled || m.server == nil {
+		return nil
+	}
 	done := make(chan struct{})
 	var err error
 	go func() {
@@ -93,6 +99,23 @@ func (m *Metrics) Stop(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *Metrics) Enabled() bool {
+	return m.enabled
+}
+
+// Handler exposes Prometheus scrape on another HTTP server (e.g. Telegram webhook mux).
+func (m *Metrics) Handler() http.Handler {
+	if !m.enabled || m.r == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.NotFound(w, nil)
+		})
+	}
+	return promhttp.HandlerFor(m.r, promhttp.HandlerOpts{
+		ErrorLog: m.metricsLgr,
+		Registry: m.r,
+	})
 }
 
 func (m *Metrics) GetRegistry() prometheus.Registerer {

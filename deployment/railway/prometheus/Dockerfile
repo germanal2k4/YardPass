@@ -2,6 +2,7 @@
 #          Dockerfile Path = deployment/railway/prometheus/Dockerfile
 #          Healthcheck Path = /-/healthy
 #          Variables: PORT=9090  (required — Grafana uses prometheus.railway.internal:9090)
+#          Optional: BACKEND_SCRAPE_PORT=8080, BOT_SCRAPE_PORT=${{Bot.PORT}} (if bot metrics port != 5050)
 # Service name in Railway must be: prometheus
 
 FROM prom/prometheus:latest

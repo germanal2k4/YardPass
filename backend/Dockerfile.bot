@@ -18,13 +18,17 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bot ./cmd/bot
 
 FROM alpine:latest
 
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add ca-certificates wget
 
 WORKDIR /app
 
 COPY --from=builder /app/bot .
 COPY --from=builder /app/config/config.yaml .
+COPY --chmod=755 docker-entrypoint.bot.sh /docker-entrypoint.sh
 
 EXPOSE 5050
 
-CMD ["./bot", "-c", "config.yaml"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD sh -c 'wget --no-verbose --tries=1 --spider "http://127.0.0.1:${METRICS_PORT:-${PORT:-5050}}/metrics" || exit 1'
+
+ENTRYPOINT ["/docker-entrypoint.sh"]

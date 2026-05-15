@@ -1,6 +1,7 @@
 # Railway: Settings → Source → Root Directory = (repo root, empty)
 #          Dockerfile Path = deployment/railway/prometheus/Dockerfile
 #          Healthcheck Path = /-/healthy
+#          Variables: PORT=9090  (required — Grafana uses prometheus.railway.internal:9090)
 # Service name in Railway must be: prometheus
 
 FROM prom/prometheus:latest

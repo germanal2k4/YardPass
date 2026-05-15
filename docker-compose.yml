@@ -18,6 +18,13 @@ services:
     ports:
       - "9200:9200"
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
   migrate:
     build:
       context: ./backend

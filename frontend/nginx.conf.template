@@ -2,6 +2,11 @@ server {
     listen ${PORT};
     server_name _;
 
+    # Railway private network: re-resolve backend.railway.internal on each request
+    # (stale DNS after backend redeploy causes 502/504 otherwise).
+    resolver [fd12::10] ipv6=on valid=10s;
+    set $backend_upstream ${BACKEND_URL};
+
     root /usr/share/nginx/html;
     index index.html;
 
@@ -23,8 +28,10 @@ server {
 
     # Proxy API requests to backend
     location /api/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 60s;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
@@ -36,8 +43,10 @@ server {
 
     # Proxy auth requests to backend
     location /auth/ {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
+        proxy_connect_timeout 15s;
+        proxy_read_timeout 120s;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -46,8 +55,10 @@ server {
 
     # Proxy health check to backend
     location /health {
-        proxy_pass ${BACKEND_URL};
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 15s;
         proxy_set_header Host $host;
     }
 

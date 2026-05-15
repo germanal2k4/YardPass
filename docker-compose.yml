@@ -54,7 +54,11 @@ services:
       - LOG_FORMAT=${LOG_FORMAT:-json}
       - LOG_TRANSPORT=${LOG_TRANSPORT:-elastic}
       - ELASTIC_URL=${ELASTIC_URL:-http://elasticsearch:9200}
+      - TRACER_ENABLED=${TRACER_ENABLED:-true}
       - TRACER_URL=${TRACER_URL:-jaeger:4317}
+      - SMTP_HOST=${SMTP_HOST:-mailhog}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_FROM=${SMTP_FROM:-noreply@yardpass.local}
     ports:
       - "8080:8080"
       - "5050:5050"

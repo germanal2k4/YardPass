@@ -15,7 +15,8 @@ FROM grafana/grafana:11.4.0
 
 COPY backend/deployment/grafana/provisioning/dashboards/dashboards.yml \
   /etc/grafana/provisioning/dashboards/dashboards.yml
-COPY backend/deployment/grafana/provisioning/dashboards/yardpass-backend.json \
+# Prod dashboard: Explore links only (no localhost — browser is not on Railway network).
+COPY backend/deployment/grafana/provisioning/dashboards/yardpass-backend.railway.json \
   /etc/grafana/provisioning/dashboards/yardpass-backend.json
 COPY backend/deployment/grafana/provisioning/datasources/datasources.railway.yml \
   /etc/grafana/provisioning/datasources/datasources.yml

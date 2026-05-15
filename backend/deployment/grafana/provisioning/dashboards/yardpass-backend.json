@@ -18,17 +18,41 @@
   "links": [
     {
       "icon": "external link",
+      "targetBlank": true,
       "title": "Jaeger UI",
-      "tooltip": "Open Jaeger tracing UI",
+      "tooltip": "Jaeger web UI (docker-compose: localhost:16686)",
       "type": "link",
       "url": "http://localhost:16686"
     },
     {
       "icon": "external link",
-      "title": "Prometheus",
-      "tooltip": "Open Prometheus UI",
+      "targetBlank": true,
+      "title": "Prometheus UI",
+      "tooltip": "Prometheus web UI (docker-compose: localhost:9090)",
       "type": "link",
       "url": "http://localhost:9090"
+    },
+    {
+      "asDropdown": false,
+      "icon": "compass",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "title": "Explore traces",
+      "tooltip": "Search traces in Grafana Explore",
+      "type": "link",
+      "url": "/explore?schemaVersion=1&panes={\"j1\":{\"datasource\":\"yardpass-jaeger\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"yardpass-jaeger\"}}]}}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "compass",
+      "includeVars": false,
+      "keepTime": true,
+      "targetBlank": false,
+      "title": "Explore metrics",
+      "tooltip": "Query metrics in Grafana Explore",
+      "type": "link",
+      "url": "/explore?schemaVersion=1&panes={\"p1\":{\"datasource\":\"yardpass-prometheus\",\"queries\":[{\"refId\":\"A\",\"expr\":\"up\",\"range\":true,\"datasource\":{\"type\":\"prometheus\",\"uid\":\"yardpass-prometheus\"}}],\"range\":{\"from\":\"now-1h\",\"to\":\"now\"}}}"
     }
   ],
   "panels": [

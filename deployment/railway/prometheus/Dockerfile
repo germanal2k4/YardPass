@@ -5,9 +5,13 @@
 
 FROM prom/prometheus:latest
 
+USER root
+
 COPY backend/deployment/prometheus/prometheus.railway.yml /etc/prometheus/prometheus.yml
-COPY deployment/railway/prometheus/docker-entrypoint.sh /docker-entrypoint-railway.sh
-RUN chmod +x /docker-entrypoint-railway.sh
+COPY --chmod=755 deployment/railway/prometheus/docker-entrypoint.sh /docker-entrypoint-railway.sh
+
+# prom/prometheus image runs as nobody (uid 65534)
+USER nobody
 
 EXPOSE 9090
 

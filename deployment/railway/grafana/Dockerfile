@@ -20,8 +20,7 @@ COPY backend/deployment/grafana/provisioning/dashboards/yardpass-backend.json \
 COPY backend/deployment/grafana/provisioning/datasources/datasources.railway.yml \
   /etc/grafana/provisioning/datasources/datasources.yml
 
-COPY deployment/railway/grafana/docker-entrypoint.sh /docker-entrypoint-railway.sh
-RUN chmod +x /docker-entrypoint-railway.sh
+COPY --chmod=755 deployment/railway/grafana/docker-entrypoint.sh /docker-entrypoint-railway.sh
 
 EXPOSE 3000
 

@@ -25,7 +25,7 @@
       "title": "Explore traces (Jaeger)",
       "tooltip": "Search traces in Grafana Explore (Jaeger datasource)",
       "type": "link",
-      "url": "/explore?schemaVersion=1&panes={\"j1\":{\"datasource\":\"yardpass-jaeger\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"yardpass-jaeger\"}}]}}"
+      "url": "/explore?schemaVersion=1&panes={\"j1\":{\"datasource\":\"yardpass-jaeger\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"service\":\"yardpass\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"yardpass-jaeger\"}}]}}"
     },
     {
       "asDropdown": false,

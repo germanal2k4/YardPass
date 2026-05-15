@@ -58,7 +58,7 @@ server:
     stop_timeout: 15s
 
 tracer:
-    enabled: false
+    enabled: true
     url: localhost:4317
 
 metrics:

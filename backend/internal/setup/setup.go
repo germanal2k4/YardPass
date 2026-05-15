@@ -54,7 +54,7 @@ func SetupApi(configPath string) (*fx.App, error) {
 			redis.NewClient,
 
 			fx.Annotate(auth.NewJWTService, fx.As(new(domain.AuthService))),
-			fx.Annotate(mailer.NewSMTPMailer, fx.As(new(service.EmailSender))),
+			fx.Annotate(mailer.NewEmailSender, fx.As(new(service.EmailSender))),
 			fx.Annotate(
 				func(
 					passRepo domain.PassRepository,

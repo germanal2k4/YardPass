@@ -23,6 +23,7 @@ type Config struct {
 	CORS      CORSConfig      `yaml:"cors"`
 	Cookie    CookieConfig    `yaml:"cookie"`
 	SMTP      SMTPConfig      `yaml:"smtp"`
+	Resend    ResendConfig    `yaml:"resend"`
 	Telegram  TelegramConfig  `yaml:"telegram"`
 	Service   ServiceConfig   `yaml:"service"`
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
@@ -72,6 +73,10 @@ type SMTPConfig struct {
 	Username string `yaml:"username" env:"SMTP_USERNAME" default:""`
 	Password string `yaml:"password" env:"SMTP_PASSWORD" default:""`
 	From     string `yaml:"from"     env:"SMTP_FROM"     default:""`
+}
+
+type ResendConfig struct {
+	APIKey string `yaml:"api_key" env:"RESEND_API_KEY" default:""`
 }
 
 type TelegramConfig struct {

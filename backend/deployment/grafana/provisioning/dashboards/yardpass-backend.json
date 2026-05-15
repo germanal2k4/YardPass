@@ -490,19 +490,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, sum(increase(yardpass_redis_operation_duration_seconds_bucket[$__interval])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(yardpass_redis_operation_duration_seconds_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.95, sum(increase(yardpass_redis_operation_duration_seconds_bucket[$__interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(yardpass_redis_operation_duration_seconds_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p95",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.99, sum(increase(yardpass_redis_operation_duration_seconds_bucket[$__interval])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(yardpass_redis_operation_duration_seconds_bucket[$__rate_interval])) by (le))",
           "legendFormat": "p99",
           "refId": "C"
         }
@@ -539,8 +539,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_redis_operation_errors_total[$__interval])) by (operation)",
-          "legendFormat": "{{operation}}",
+          "expr": "sum(rate(yardpass_redis_operation_errors_total[$__rate_interval])) by (operation, job)",
+          "legendFormat": "{{operation}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -586,8 +586,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_redis_cache_total[$__interval])) by (result)",
-          "legendFormat": "{{result}}",
+          "expr": "sum(rate(yardpass_redis_cache_total[$__rate_interval])) by (result, job)",
+          "legendFormat": "{{result}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -760,8 +760,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_pass_service_operations_total[$__interval])) by (operation, result)",
-          "legendFormat": "{{operation}} / {{result}}",
+          "expr": "sum(rate(yardpass_pass_service_operations_total[$__rate_interval])) by (operation, result, job)",
+          "legendFormat": "{{operation}} / {{result}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -807,8 +807,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_pass_service_created_by_type_total[$__interval])) by (type)",
-          "legendFormat": "{{type}}",
+          "expr": "sum(rate(yardpass_pass_service_created_by_type_total[$__rate_interval])) by (type, job)",
+          "legendFormat": "{{type}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -844,8 +844,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_pass_service_rejections_total[$__interval])) by (reason)",
-          "legendFormat": "{{reason}}",
+          "expr": "sum(rate(yardpass_pass_service_rejections_total[$__rate_interval])) by (reason, job)",
+          "legendFormat": "{{reason}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -894,8 +894,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_resident_operations_total[$__interval])) by (operation, result)",
-          "legendFormat": "{{operation}} / {{result}}",
+          "expr": "sum(rate(yardpass_resident_operations_total[$__rate_interval])) by (operation, result, job)",
+          "legendFormat": "{{operation}} / {{result}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -941,8 +941,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_resident_import_rows_total[$__interval])) by (result)",
-          "legendFormat": "{{result}}",
+          "expr": "sum(rate(yardpass_resident_import_rows_total[$__rate_interval])) by (result, job)",
+          "legendFormat": "{{result}} ({{job}})",
           "refId": "A"
         }
       ],
@@ -984,8 +984,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(increase(yardpass_user_operations_total[$__interval])) by (operation, result)",
-          "legendFormat": "{{operation}} / {{result}}",
+          "expr": "sum(rate(yardpass_user_operations_total[$__rate_interval])) by (operation, result, job)",
+          "legendFormat": "{{operation}} / {{result}} ({{job}})",
           "refId": "A"
         }
       ],

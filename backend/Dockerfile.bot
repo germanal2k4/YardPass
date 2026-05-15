@@ -25,4 +25,6 @@ WORKDIR /app
 COPY --from=builder /app/bot .
 COPY --from=builder /app/config/config.yaml .
 
+EXPOSE 5050
+
 CMD ["./bot", "-c", "config.yaml"]

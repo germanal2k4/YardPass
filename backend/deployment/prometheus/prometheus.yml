@@ -2,6 +2,9 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'prometheus'
+  - job_name: 'yardpass-backend'
     static_configs:
       - targets: ['backend:5050']
+  - job_name: 'yardpass-bot'
+    static_configs:
+      - targets: ['bot:5050']

@@ -79,6 +79,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       target: bot
+    ports:
+      - "5051:5050"
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgres://yardpass:password@postgres:5432/yardpass?sslmode=disable}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}

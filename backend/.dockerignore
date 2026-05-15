@@ -1,0 +1,11 @@
+.git
+.github
+*.md
+docs/
+deployment/
+migrations/*.sql.bak
+**/*_test.go
+**/*.test
+coverage.out
+.env
+.env.*

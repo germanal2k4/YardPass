@@ -23,6 +23,8 @@ type ApartmentRepository interface {
 type ResidentRepository interface {
 	GetByID(ctx context.Context, id int64) (*Resident, error)
 	GetByTelegramID(ctx context.Context, telegramID int64) (*Resident, error)
+	// ListExistingTelegramIDs returns a set of telegram IDs that already exist in residents (subset of ids).
+	ListExistingTelegramIDs(ctx context.Context, telegramIDs []int64) (map[int64]struct{}, error)
 	Create(ctx context.Context, resident *Resident) error
 	Update(ctx context.Context, resident *Resident) error
 	SetCarPlate(ctx context.Context, id int64, carPlate *string) error
@@ -84,8 +86,10 @@ type ScanEventWithDetails struct {
 	Reason          *string
 	Meta            []byte
 	CarPlate        *string
+	GuestName       *string
 	ApartmentNumber string
 	BuildingID      int64
+	BuildingName    string
 }
 
 type ScanEventFilters struct {
@@ -109,6 +113,8 @@ type RuleRepository interface {
 type UserRepository interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
 	GetByUsername(ctx context.Context, username string) (*User, error)
+	// GetByNormalizedEmail looks up by lower(trim(email)); normalizedEmail must be lowercased and trimmed.
+	GetByNormalizedEmail(ctx context.Context, normalizedEmail string) (*User, error)
 	Create(ctx context.Context, user *User) error
 	Update(ctx context.Context, user *User) error
 	List(ctx context.Context, filters UserFilters) ([]User, error)

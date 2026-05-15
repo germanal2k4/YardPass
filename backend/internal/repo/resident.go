@@ -45,6 +45,22 @@ func (r *ResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64) (*
 	return newDomainResidentFromRow(row.ID, row.ApartmentID, row.TelegramID, row.ChatID, row.Name, row.Phone, row.CarPlate, row.Timezone, row.Status, row.CreatedAt, row.UpdatedAt), nil
 }
 
+func (r *ResidentRepo) ListExistingTelegramIDs(ctx context.Context, telegramIDs []int64) (map[int64]struct{}, error) {
+	ctx = queryNameToContext(ctx, "ResidentRepo.ListExistingTelegramIDs")
+	if len(telegramIDs) == 0 {
+		return map[int64]struct{}{}, nil
+	}
+	rows, err := r.queries.ListResidentTelegramIDsIn(ctx, telegramIDs)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]struct{}, len(rows))
+	for _, id := range rows {
+		out[id] = struct{}{}
+	}
+	return out, nil
+}
+
 func (r *ResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
 	ctx = queryNameToContext(ctx, "ResidentRepo.Create")
 	row, err := r.queries.CreateResident(ctx, db.CreateResidentParams{

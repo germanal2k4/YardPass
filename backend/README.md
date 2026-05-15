@@ -47,7 +47,7 @@ YardPass позволяет жителям создавать временные
 - Go 1.25+
 - PostgreSQL 15+
 - Redis 6+
-- sqlc (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`)
+- sqlc v1.30.0 (`go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0`)
 
 ### Настройка
 
@@ -257,7 +257,7 @@ go run ./cmd/migrate status
 
 1. Измените/добавьте миграцию в `migrations/`
 2. Обновите SQL-запросы в `internal/db/queries/*.sql`
-3. Перегенерируйте код: `sqlc generate`
+3. Перегенерируйте код из каталога `backend/`: `go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate`
 4. При необходимости обновите маппинг в `internal/repo/`
 5. Закоммитьте сгенерированный код вместе с изменениями
 

@@ -8,6 +8,11 @@ SELECT id, username, email, password_hash, role, building_id, apartment_number, 
 FROM users
 WHERE username = $1;
 
+-- name: GetUserByNormalizedEmail :one
+SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
+FROM users
+WHERE email IS NOT NULL AND btrim(email) <> '' AND lower(btrim(email)) = $1::text;
+
 -- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, role, building_id, apartment_number, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7)

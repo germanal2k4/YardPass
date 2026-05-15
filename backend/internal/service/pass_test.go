@@ -139,6 +139,14 @@ func (m *MockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64
 	return args.Get(0).(*domain.Resident), args.Error(1)
 }
 
+func (m *MockResidentRepo) ListExistingTelegramIDs(ctx context.Context, telegramIDs []int64) (map[int64]struct{}, error) {
+	args := m.Called(ctx, telegramIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[int64]struct{}), args.Error(1)
+}
+
 func (m *MockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
 	args := m.Called(ctx, id, carPlate)
 	return args.Error(0)

@@ -184,7 +184,10 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		Status:      "active",
 	}
 
-	dayAnchorLocal := validFromUTC.In(localLocation)
+	// Daily limit is enforced on the resident's local calendar day at pass creation time (not valid_from),
+	// so limits apply correctly when valid_from differs from the creation instant (e.g. API clients).
+	nowUTC := time.Now().UTC()
+	dayAnchorLocal := nowUTC.In(localLocation)
 	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
 	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
 
@@ -639,8 +642,9 @@ func parseTime(timeStr string) (time.Time, error) {
 }
 
 // locationForResidentRules returns the wall-clock zone for interpreting rule quiet hours
-// and calendar-day limits. Pass validity is always stored in UTC; rules are edited in
-// the resident's local time (IANA name on resident, default Europe/Moscow).
+// (from pass validity) and the resident's calendar day for daily pass creation limits.
+// Pass validity is always stored in UTC; rules are edited in the resident's local time
+// (IANA name on resident, default Europe/Moscow).
 func locationForResidentRules(resident *domain.Resident) *time.Location {
 	if resident != nil && resident.Timezone != nil {
 		name := strings.TrimSpace(*resident.Timezone)

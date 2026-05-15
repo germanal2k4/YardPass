@@ -118,8 +118,10 @@ func scanEventsWithDetailsFromDB(rows []db.GetScanEventsWithDetailsRow) []domain
 			Reason:          e.Reason,
 			Meta:            e.Meta,
 			CarPlate:        e.CarPlate,
+			GuestName:       e.GuestName,
 			ApartmentNumber: e.ApartmentNumber,
 			BuildingID:      e.BuildingID,
+			BuildingName:    e.BuildingName,
 		}
 	}
 	return result

@@ -31,6 +31,14 @@ func (m *mockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64
 	return args.Get(0).(*domain.Resident), args.Error(1)
 }
 
+func (m *mockResidentRepo) ListExistingTelegramIDs(ctx context.Context, telegramIDs []int64) (map[int64]struct{}, error) {
+	args := m.Called(ctx, telegramIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[int64]struct{}), args.Error(1)
+}
+
 func (m *mockResidentRepo) Create(ctx context.Context, resident *domain.Resident) error {
 	args := m.Called(ctx, resident)
 	return args.Error(0)
@@ -201,7 +209,9 @@ func TestResidentService_ImportFromCSV(t *testing.T) {
 			{ID: 1, Number: "101", BuildingID: 1},
 		}, nil)
 		apartmentRepo.On("GetByID", ctx, int64(1)).Return(&domain.Apartment{ID: 1, BuildingID: 1}, nil)
-		residentRepo.On("GetByTelegramID", ctx, int64(111)).Return(nil, nil)
+		residentRepo.On("ListExistingTelegramIDs", ctx, mock.MatchedBy(func(ids []int64) bool {
+			return len(ids) == 1 && ids[0] == 111
+		})).Return(map[int64]struct{}{}, nil)
 		residentRepo.On("Create", ctx, mock.AnythingOfType("*domain.Resident")).Return(nil)
 
 		csv := "apartment,telegram_id,name,phone\n101,111,Ivan,+79991111111"

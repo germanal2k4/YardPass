@@ -84,6 +84,43 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 	return i, err
 }
 
+const getUserByNormalizedEmail = `-- name: GetUserByNormalizedEmail :one
+SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
+FROM users
+WHERE email IS NOT NULL AND btrim(email) <> '' AND lower(btrim(email)) = $1::text
+`
+
+type GetUserByNormalizedEmailRow struct {
+	ID              int64
+	Username        string
+	Email           *string
+	PasswordHash    string
+	Role            string
+	BuildingID      *int64
+	ApartmentNumber *int32
+	Status          string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (q *Queries) GetUserByNormalizedEmail(ctx context.Context, email string) (GetUserByNormalizedEmailRow, error) {
+	row := q.db.QueryRow(ctx, getUserByNormalizedEmail, email)
+	var i GetUserByNormalizedEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.BuildingID,
+		&i.ApartmentNumber,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
 FROM users

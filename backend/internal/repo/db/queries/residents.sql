@@ -8,6 +8,11 @@ SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone,
 FROM residents
 WHERE telegram_id = $1;
 
+-- name: ListResidentTelegramIDsIn :many
+SELECT telegram_id
+FROM residents
+WHERE telegram_id = ANY($1::bigint[]);
+
 -- name: CreateResident :one
 INSERT INTO residents (apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

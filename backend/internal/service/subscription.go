@@ -56,6 +56,18 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 		return nil, err
 	}
 
+	emailNorm := strings.ToLower(strings.TrimSpace(req.Email))
+	if emailNorm == "" {
+		return nil, errors.New("Укажите корректный email.")
+	}
+	emailTaken, err := s.userRepo.GetByNormalizedEmail(ctx, emailNorm)
+	if err != nil {
+		return nil, errors.New("Не удалось проверить email. Попробуйте позже.")
+	}
+	if emailTaken != nil {
+		return nil, errors.New("Указанный email уже зарегистрирован.")
+	}
+
 	normalizedBuildingName := normalizeBuildingName(req.BuildingName)
 	if normalizedBuildingName == "" {
 		return nil, errors.New("Укажите корректное название здания.")
@@ -128,11 +140,13 @@ func (s *SubscriptionService) createUserForRole(
 
 	user := &domain.User{
 		Username:     username,
-		Email:        &email,
 		PasswordHash: passwordHash,
 		Role:         role,
 		BuildingID:   &buildingID,
 		Status:       "active",
+	}
+	if role == "admin" {
+		user.Email = &email
 	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return domain.AccountCredentials{}, fmt.Errorf("Не удалось создать учётную запись (%s). Попробуйте позже.", role)
@@ -237,6 +251,28 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 		ApartmentCount: apartmentCount,
 	}
 	if err := s.buildingRepo.Create(ctx, building); err != nil {
+		if !isUniqueViolation(err) {
+			return nil, errors.New("Не удалось создать здание. Попробуйте позже.")
+		}
+		buildings2, err2 := s.buildingRepo.List(ctx)
+		if err2 != nil {
+			return nil, errors.New("Не удалось загрузить список зданий. Попробуйте позже.")
+		}
+		for _, existing := range buildings2 {
+			if strings.EqualFold(normalizeBuildingName(existing.Name), normalizedName) {
+				if apartmentCount > existing.ApartmentCount {
+					updated, err3 := s.buildingRepo.UpdateApartmentCount(ctx, existing.ID, apartmentCount)
+					if err3 != nil {
+						return nil, errors.New("Не удалось обновить количество квартир. Попробуйте позже.")
+					}
+					if updated != nil {
+						return updated, nil
+					}
+				}
+				copyB := existing
+				return &copyB, nil
+			}
+		}
 		return nil, errors.New("Не удалось создать здание. Попробуйте позже.")
 	}
 	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {

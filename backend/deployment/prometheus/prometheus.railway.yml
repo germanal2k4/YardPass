@@ -1,0 +1,9 @@
+# Prometheus config for Railway private network.
+# Service names must match Railway service names: backend, prometheus, etc.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'yardpass-backend'
+    static_configs:
+      - targets: ['backend.railway.internal:5050']

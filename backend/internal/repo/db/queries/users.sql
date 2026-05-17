@@ -11,7 +11,7 @@ WHERE username = $1;
 -- name: GetUserByNormalizedEmail :one
 SELECT id, username, email, password_hash, role, building_id, apartment_number, status, created_at, updated_at
 FROM users
-WHERE email IS NOT NULL AND btrim(email) <> '' AND lower(btrim(email)) = $1::text;
+WHERE email IS NOT NULL AND btrim(email) <> '' AND lower(btrim(email)) = sqlc.arg(email)::text;
 
 -- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, role, building_id, apartment_number, status)

@@ -579,8 +579,15 @@ func truncateValidToForQuietHours(validFrom, validTo time.Time, startStr, endStr
 	fromDay := time.Date(validFrom.Year(), validFrom.Month(), validFrom.Day(), 0, 0, 0, 0, loc)
 	toDay := time.Date(validTo.Year(), validTo.Month(), validTo.Day(), 0, 0, 0, 0, loc)
 
+	startMin := startClock.Hour()*60 + startClock.Minute()
+	endMin := endClock.Hour()*60 + endClock.Minute()
+	loopStart := fromDay
+	if endMin <= startMin {
+		loopStart = fromDay.Add(-24 * time.Hour)
+	}
+
 	newTo = validTo
-	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
+	for d := loopStart; !d.After(toDay); d = d.Add(24 * time.Hour) {
 		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
 		if !intervalsOverlapHalfOpen(validFrom, newTo, q0, q1) {
 			continue

@@ -149,16 +149,6 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		if em == "" {
 			req.Email = nil
 		} else {
-			norm := strings.ToLower(em)
-			emailTaken, err := s.userRepo.GetByNormalizedEmail(ctx, norm)
-			if err != nil {
-				s.opsTotal.WithLabelValues("register", "error").Inc()
-				return nil, errors.New("Не удалось проверить email. Попробуйте позже.")
-			}
-			if emailTaken != nil {
-				s.opsTotal.WithLabelValues("register", "error").Inc()
-				return nil, errors.New("Пользователь с таким email уже существует.")
-			}
 			req.Email = &em
 		}
 	}

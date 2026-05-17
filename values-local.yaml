@@ -27,6 +27,8 @@ frontend:
     repository: localhost/yardpass/frontend
     tag: latest
     pullPolicy: Never
+  env:
+    BACKEND_URL: "http://yardpass-backend.yardpass.svc.cluster.local:8080"
 
 bot:
   image:

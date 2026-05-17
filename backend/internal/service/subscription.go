@@ -56,12 +56,16 @@ func (s *SubscriptionService) Purchase(ctx context.Context, req domain.PurchaseS
 		return nil, err
 	}
 
+	if strings.TrimSpace(req.Email) == "" {
+		return nil, errors.New("Укажите корректный email.")
+	}
+
 	normalizedBuildingName := normalizeBuildingName(req.BuildingName)
 	if normalizedBuildingName == "" {
 		return nil, errors.New("Укажите корректное название здания.")
 	}
 
-	building, err := s.findOrCreateBuilding(ctx, normalizedBuildingName, req.ApartmentCount)
+	building, err := s.createBuilding(ctx, normalizedBuildingName, req.ApartmentCount)
 	if err != nil {
 		return nil, err
 	}
@@ -128,11 +132,13 @@ func (s *SubscriptionService) createUserForRole(
 
 	user := &domain.User{
 		Username:     username,
-		Email:        &email,
 		PasswordHash: passwordHash,
 		Role:         role,
 		BuildingID:   &buildingID,
 		Status:       "active",
+	}
+	if role == "admin" {
+		user.Email = &email
 	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return domain.AccountCredentials{}, fmt.Errorf("Не удалось создать учётную запись (%s). Попробуйте позже.", role)
@@ -210,7 +216,11 @@ func randomHexSuffix(hexLen int) (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normalizedName string, apartmentCount int32) (*domain.Building, error) {
+// errBuildingNameTaken is returned when a building with the given (normalized) name is already
+// registered. The subscription form must reject duplicates rather than silently reusing them.
+var errBuildingNameTaken = errors.New("Здание с таким названием уже зарегистрировано. Укажите другое название или войдите в существующий аккаунт.")
+
+func (s *SubscriptionService) createBuilding(ctx context.Context, normalizedName string, apartmentCount int32) (*domain.Building, error) {
 	buildings, err := s.buildingRepo.List(ctx)
 	if err != nil {
 		return nil, errors.New("Не удалось загрузить список зданий. Попробуйте позже.")
@@ -218,17 +228,7 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 
 	for _, existing := range buildings {
 		if strings.EqualFold(normalizeBuildingName(existing.Name), normalizedName) {
-			if apartmentCount > existing.ApartmentCount {
-				updated, err := s.buildingRepo.UpdateApartmentCount(ctx, existing.ID, apartmentCount)
-				if err != nil {
-					return nil, errors.New("Не удалось обновить количество квартир. Попробуйте позже.")
-				}
-				if updated != nil {
-					return updated, nil
-				}
-			}
-			copy := existing
-			return &copy, nil
+			return nil, errBuildingNameTaken
 		}
 	}
 
@@ -237,6 +237,9 @@ func (s *SubscriptionService) findOrCreateBuilding(ctx context.Context, normaliz
 		ApartmentCount: apartmentCount,
 	}
 	if err := s.buildingRepo.Create(ctx, building); err != nil {
+		if isUniqueViolation(err) {
+			return nil, errBuildingNameTaken
+		}
 		return nil, errors.New("Не удалось создать здание. Попробуйте позже.")
 	}
 	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {

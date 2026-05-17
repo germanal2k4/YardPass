@@ -139,6 +139,14 @@ func (m *MockResidentRepo) GetByTelegramID(ctx context.Context, telegramID int64
 	return args.Get(0).(*domain.Resident), args.Error(1)
 }
 
+func (m *MockResidentRepo) ListExistingTelegramIDs(ctx context.Context, telegramIDs []int64) (map[int64]struct{}, error) {
+	args := m.Called(ctx, telegramIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[int64]struct{}), args.Error(1)
+}
+
 func (m *MockResidentRepo) SetCarPlate(ctx context.Context, id int64, carPlate *string) error {
 	args := m.Called(ctx, id, carPlate)
 	return args.Error(0)
@@ -515,6 +523,39 @@ func TestPassService_CreatePass_quietHoursUsesResidentWallClock(t *testing.T) {
 	assert.True(t, res4.Pass.ValidTo.Equal(time.Date(2026, 1, 15, 7, 0, 0, 0, time.UTC)))
 	require.NotNil(t, res4.QuietHoursNotice)
 	assert.Contains(t, *res4.QuietHoursNotice, "10:00")
+
+	qoStart, qoEnd := "22:00", "08:00"
+	passRepo5 := new(MockPassRepo)
+	apartmentRepo5 := new(MockApartmentRepo)
+	ruleRepo5 := new(MockRuleRepo)
+	residentRepo5 := new(MockResidentRepo)
+	scanEventRepo5 := new(MockScanEventRepo)
+	svc5 := NewPassService(passRepo5, apartmentRepo5, residentRepo5, ruleRepo5, scanEventRepo5, "test-secret", logger, noopMetrics)
+
+	apartmentRepo5.On("GetByID", ctx, apartmentID).Return(&domain.Apartment{
+		ID: apartmentID, BuildingID: buildingID, Number: "101",
+	}, nil)
+	ruleRepo5.On("GetByBuildingID", ctx, buildingID).Return(&domain.Rule{
+		DailyPassLimitPerApartment: 10,
+		MaxPassDurationHours:       24,
+		QuietHoursStart:            &qoStart,
+		QuietHoursEnd:              &qoEnd,
+	}, nil)
+	residentRepo5.On("GetByID", ctx, residentID).Return(&domain.Resident{
+		ID: residentID, ApartmentID: apartmentID, TelegramID: 1, ChatID: 1,
+		Status: "active", Timezone: &tz,
+	}, nil)
+
+	_, err = svc5.CreatePass(ctx, domain.CreatePassRequest{
+		ApartmentID: apartmentID,
+		ResidentID:  &residentID,
+		CarPlate:    &carPlate,
+		// 21:30 UTC on Jan 14 = 00:30 MSK on Jan 15, inside the overnight window 22:00 (Jan 14) → 08:00 (Jan 15).
+		ValidFrom: time.Date(2026, 1, 14, 21, 30, 0, 0, time.UTC),
+		ValidTo:   time.Date(2026, 1, 14, 23, 30, 0, 0, time.UTC),
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "тих")
 }
 
 func TestPassService_ValidatePass(t *testing.T) {

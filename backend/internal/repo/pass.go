@@ -170,7 +170,7 @@ func (r *PassRepo) CreateWithDailyLimit(
 		SELECT COUNT(*)
 		FROM passes
 		WHERE apartment_id = $1
-			AND status = 'active'
+			AND status <> 'revoked'
 			AND created_at >= $2
 			AND created_at < $3
 	`, pass.ApartmentID, dayStartUTC, dayEndUTC).Scan(&aptCount)
@@ -187,7 +187,7 @@ func (r *PassRepo) CreateWithDailyLimit(
 			SELECT COUNT(*)
 			FROM passes
 			WHERE resident_id = $1
-				AND status = 'active'
+				AND status <> 'revoked'
 				AND created_at >= $2
 				AND created_at < $3
 		`, *pass.ResidentID, dayStartUTC, dayEndUTC).Scan(&resCount)

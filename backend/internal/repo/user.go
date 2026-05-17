@@ -41,6 +41,21 @@ func (r *UserRepo) GetByUsername(ctx context.Context, username string) (*domain.
 	return userFromGetByUsernameRow(row), nil
 }
 
+func (r *UserRepo) GetByNormalizedEmail(ctx context.Context, normalizedEmail string) (*domain.User, error) {
+	ctx = queryNameToContext(ctx, "UserRepo.GetByNormalizedEmail")
+	if normalizedEmail == "" {
+		return nil, nil
+	}
+	row, err := r.queries.GetUserByNormalizedEmail(ctx, normalizedEmail)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return userFromNormalizedEmailRow(row), nil
+}
+
 func (r *UserRepo) Create(ctx context.Context, user *domain.User) error {
 	ctx = queryNameToContext(ctx, "UserRepo.Create")
 	row, err := r.queries.CreateUser(ctx, db.CreateUserParams{
@@ -98,6 +113,22 @@ func (r *UserRepo) List(ctx context.Context, filters domain.UserFilters) ([]doma
 		users[i] = domain.User(row)
 	}
 	return users, nil
+}
+
+func userFromNormalizedEmailRow(row db.GetUserByNormalizedEmailRow) *domain.User {
+	u := domain.User{
+		ID:              row.ID,
+		Username:        row.Username,
+		Email:           row.Email,
+		PasswordHash:    row.PasswordHash,
+		Role:            row.Role,
+		BuildingID:      row.BuildingID,
+		ApartmentNumber: row.ApartmentNumber,
+		Status:          row.Status,
+		CreatedAt:       row.CreatedAt,
+		UpdatedAt:       row.UpdatedAt,
+	}
+	return &u
 }
 
 func userFromGetByIDRow(row db.GetUserByIDRow) *domain.User {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/helpers';
 import { AdminResidentsPage } from '../AdminResidentsPage';
@@ -73,7 +73,32 @@ describe('AdminResidentsPage', () => {
       });
     });
 
-    it('shows phone validation error for invalid phone', async () => {
+    it('formats phone input as the user types', async () => {
+      renderWithProviders(<AdminResidentsPage />, {
+        auth: { user: adminUser },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Иван Петров')).toBeInTheDocument();
+      });
+
+      const phoneInput = screen.getByLabelText(/Телефон/i) as HTMLInputElement;
+
+      // Non-digit characters get stripped by the mask.
+      fireEvent.change(phoneInput, { target: { value: 'invalid-phone' } });
+      expect(phoneInput.value).toBe('');
+
+      // The +7 prefix is rendered as a separate InputAdornment, so the input
+      // value contains only the national part formatted as "(XXX) XXX-XX-XX".
+      fireEvent.change(phoneInput, { target: { value: '900123' } });
+      expect(phoneInput.value).toBe('(900) 123');
+
+      // A leading 8 is treated as the trunk prefix and produces the full mask.
+      fireEvent.change(phoneInput, { target: { value: '89001234567' } });
+      expect(phoneInput.value).toBe('(900) 123-45-67');
+    });
+
+    it('shows phone validation error for incomplete digits', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       renderWithProviders(<AdminResidentsPage />, {
         auth: { user: adminUser },
@@ -85,12 +110,15 @@ describe('AdminResidentsPage', () => {
 
       await user.type(screen.getByLabelText(/Номер апартамента/i), '201');
       await user.type(screen.getByLabelText(/Telegram ID/i), '999888777');
-      await user.type(screen.getByLabelText(/Телефон/i), 'invalid-phone');
+      // Six digits are enough to render the mask but not enough for a full NSN.
+      fireEvent.change(screen.getByLabelText(/Телефон/i), {
+        target: { value: '900123' },
+      });
 
       await user.click(screen.getByRole('button', { name: /Создать жителя/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Неверный формат телефона/i)).toBeInTheDocument();
+        expect(screen.getByText(/10 цифр после \+7/i)).toBeInTheDocument();
       });
     });
   });

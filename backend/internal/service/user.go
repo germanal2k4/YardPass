@@ -144,6 +144,15 @@ func (s *UserService) RegisterUser(ctx context.Context, req domain.RegisterUserR
 		return nil, err
 	}
 
+	if req.Email != nil {
+		em := strings.TrimSpace(*req.Email)
+		if em == "" {
+			req.Email = nil
+		} else {
+			req.Email = &em
+		}
+	}
+
 	existing, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {
 		s.opsTotal.WithLabelValues("register", "error").Inc()
@@ -334,6 +343,18 @@ func (s *UserService) resolveOrCreateBuildingByName(ctx context.Context, rawName
 		ApartmentCount: 1,
 	}
 	if err := s.buildingRepo.Create(ctx, building); err != nil {
+		if !isUniqueViolation(err) {
+			return 0, errors.New("Не удалось создать здание. Попробуйте позже.")
+		}
+		buildings2, err2 := s.buildingRepo.List(ctx)
+		if err2 != nil {
+			return 0, errors.New("Не удалось загрузить список зданий. Попробуйте позже.")
+		}
+		for _, b := range buildings2 {
+			if strings.EqualFold(normalizeBuildingName(b.Name), normalized) {
+				return b.ID, nil
+			}
+		}
 		return 0, errors.New("Не удалось создать здание. Попробуйте позже.")
 	}
 	if err := s.ensureDefaultRule(ctx, building.ID); err != nil {
@@ -343,7 +364,11 @@ func (s *UserService) resolveOrCreateBuildingByName(ctx context.Context, rawName
 }
 
 func normalizeBuildingName(value string) string {
-	return strings.TrimSpace(value)
+	s := strings.TrimSpace(value)
+	if s == "" {
+		return ""
+	}
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func (s *UserService) ensureDefaultRule(ctx context.Context, buildingID int64) error {

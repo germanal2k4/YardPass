@@ -100,11 +100,13 @@ func (q *Queries) GetScanEventStatistics(ctx context.Context, arg GetScanEventSt
 const getScanEventsWithDetails = `-- name: GetScanEventsWithDetails :many
 SELECT
     se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,
-    p.car_plate, a.number as apartment_number, a.building_id,
+    p.car_plate, p.guest_name, a.number as apartment_number, a.building_id,
+    b.name as building_name,
     u.username as guard_username
 FROM scan_events se
 INNER JOIN passes p ON se.pass_id = p.id
 INNER JOIN apartments a ON p.apartment_id = a.id
+INNER JOIN buildings b ON a.building_id = b.id
 LEFT JOIN users u ON se.guard_user_id = u.id
 WHERE ($1::bigint IS NULL OR a.building_id = $1)
   AND ($2::uuid IS NULL OR se.pass_id = $2)
@@ -141,8 +143,10 @@ type GetScanEventsWithDetailsRow struct {
 	Reason          *string
 	Meta            []byte
 	CarPlate        *string
+	GuestName       *string
 	ApartmentNumber string
 	BuildingID      int64
+	BuildingName    string
 	GuardUsername   *string
 }
 
@@ -175,8 +179,10 @@ func (q *Queries) GetScanEventsWithDetails(ctx context.Context, arg GetScanEvent
 			&i.Reason,
 			&i.Meta,
 			&i.CarPlate,
+			&i.GuestName,
 			&i.ApartmentNumber,
 			&i.BuildingID,
+			&i.BuildingName,
 			&i.GuardUsername,
 		); err != nil {
 			return nil, err

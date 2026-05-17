@@ -32,6 +32,14 @@ func (m *mockUserRepo) GetByUsername(ctx context.Context, username string) (*dom
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *mockUserRepo) GetByNormalizedEmail(ctx context.Context, normalizedEmail string) (*domain.User, error) {
+	args := m.Called(ctx, normalizedEmail)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
 func (m *mockUserRepo) Create(ctx context.Context, user *domain.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
@@ -338,7 +346,7 @@ func TestNormalizeBuildingName(t *testing.T) {
 		want string
 	}{
 		{"trim_cyrillic", "  ЖК Солнечный 12  ", "ЖК Солнечный 12"},
-		{"preserve_double_space", "Building A  7", "Building A  7"},
+		{"collapse_spaces", "Building A  7", "Building A 7"},
 		{"punctuation", "ул. Ленина, д. 5", "ул. Ленина, д. 5"},
 		{"empty", "", ""},
 	}

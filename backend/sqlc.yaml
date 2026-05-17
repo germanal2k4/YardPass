@@ -1,3 +1,4 @@
+# Pin sqlc when regenerating (matches CI): go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
 version: "2"
 sql:
   - schema: "migrations/"

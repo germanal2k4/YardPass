@@ -193,6 +193,32 @@ func (q *Queries) ListActiveResidentsWithCarPlate(ctx context.Context, filterBui
 	return items, nil
 }
 
+const listResidentTelegramIDsIn = `-- name: ListResidentTelegramIDsIn :many
+SELECT telegram_id
+FROM residents
+WHERE telegram_id = ANY($1::bigint[])
+`
+
+func (q *Queries) ListResidentTelegramIDsIn(ctx context.Context, dollar_1 []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listResidentTelegramIDsIn, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var telegram_id int64
+		if err := rows.Scan(&telegram_id); err != nil {
+			return nil, err
+		}
+		items = append(items, telegram_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listResidents = `-- name: ListResidents :many
 SELECT id, apartment_id, telegram_id, chat_id, name, phone, car_plate, timezone, status, created_at, updated_at
 FROM residents

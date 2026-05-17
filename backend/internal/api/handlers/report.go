@@ -178,7 +178,7 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 
 	file.SetActiveSheet(index)
 
-	headers := []string{"ID", "Дата/Время", "Результат", "Номер авто", "Квартира", "Охранник", "Причина"}
+	headers := []string{"ID", "Дата/Время", "Результат", "Номер авто", "Квартира", "Гость", "Охранник", "Причина"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%c1", 'A'+i)
 		if err := file.SetCellValue(sheetName, cell, header); err != nil {
@@ -211,14 +211,20 @@ func (h *ReportHandler) ExportToExcel(c *gin.Context) {
 			errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 			return
 		}
+		if event.GuestName != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuestName); err != nil {
+				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
+				return
+			}
+		}
 		if event.GuardUsername != nil {
-			if err := file.SetCellValue(sheetName, fmt.Sprintf("F%d", row), *event.GuardUsername); err != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.GuardUsername); err != nil {
 				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 				return
 			}
 		}
 		if event.Reason != nil {
-			if err := file.SetCellValue(sheetName, fmt.Sprintf("G%d", row), *event.Reason); err != nil {
+			if err := file.SetCellValue(sheetName, fmt.Sprintf("H%d", row), *event.Reason); err != nil {
 				errors.InternalServerError(c, "EXCEL_ERROR", errors.UserMsgExcelFailed)
 				return
 			}

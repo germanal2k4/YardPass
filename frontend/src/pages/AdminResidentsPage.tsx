@@ -28,6 +28,7 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
+import { PhoneNsnField } from '@/shared/ui/PhoneNsnField';
 import { Layout } from '@/shared/ui/Layout';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { residentsApi } from '@/shared/api/residents';
@@ -39,6 +40,7 @@ import type { CreateResidentRequest, Resident } from '@/shared/types/api';
 import { AxiosError } from 'axios';
 import type { ErrorResponse } from '@/shared/types/api';
 import { formatErrorMessage, formatBulkError } from '@/shared/utils/errors';
+import { canonicalPhone, isValidOrEmptyPhone } from '@/shared/utils/phone';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
@@ -47,10 +49,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
-// Regex для валидации телефонных номеров (российский формат)
-// Поддерживает форматы: +7XXXXXXXXXX, 8XXXXXXXXXX, +7 (XXX) XXX-XX-XX и т.д.
-const PHONE_REGEX = /^(\+7|7|8)?[\s-]?\(?[489][0-9]{2}\)?[\s-]?[0-9]{3}[\s-]?[0-9]{2}[\s-]?[0-9]{2}$/;
-
+// Телефон вводится только как российский мобильный (10-значный NSN).
+// Маска +7 (XXX) XXX-XX-XX накладывается на ввод, и на бэкенд уходит каноническая форма +7XXXXXXXXXX.
 const residentSchema = z.object({
   apartment_number: z.string().min(1, 'Номер апартамента обязателен'),
   telegram_id: z.union([
@@ -61,9 +61,9 @@ const residentSchema = z.object({
   phone: z.string()
     .optional()
     .refine(
-      (val) => !val || val.trim() === '' || PHONE_REGEX.test(val),
+      (val) => isValidOrEmptyPhone(val ?? ''),
       {
-        message: 'Неверный формат телефона. Используйте формат: +7 (XXX) XXX-XX-XX или 8XXXXXXXXXX',
+        message: 'Введите 10 цифр после +7 (российский мобильный номер)',
       }
     ),
 });
@@ -201,12 +201,13 @@ export function AdminResidentsPage() {
 
   const onSubmit = (data: ResidentFormValues) => {
     const parsed: ResidentFormData = residentSchema.parse(data);
+    const canonical = canonicalPhone(parsed.phone ?? '');
     const createData: CreateResidentRequest = {
       apartment_number: parsed.apartment_number.trim(),
       telegram_id: parsed.telegram_id,
       chat_id: parsed.telegram_id, // Chat ID равен Telegram ID
       name: parsed.name?.trim() || undefined,
-      phone: parsed.phone?.trim() || undefined,
+      phone: canonical || undefined,
     };
     createMutation.mutate(createData);
   };
@@ -404,16 +405,20 @@ export function AdminResidentsPage() {
                   name="phone"
                   control={control}
                   render={({ field }) => (
-                    <TextField
-                      {...field}
+                    <PhoneNsnField
+                      name={field.name}
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
                       label="Телефон (опционально)"
                       fullWidth
                       error={!!errors.phone}
                       helperText={
-                        errors.phone?.message || 
-                        'Формат: +7 (XXX) XXX-XX-XX, 8XXXXXXXXXX или 7XXXXXXXXXX'
+                        errors.phone?.message ||
+                        'Вводите только цифры — формат подставится автоматически'
                       }
-                      placeholder="+7 (900) 123-45-67"
+                      placeholder="(900) 123-45-67"
                     />
                   )}
                 />

@@ -29,7 +29,7 @@ func NewResendMailer(cfg *config.Config) *ResendMailer {
 	}
 }
 
-func (m *ResendMailer) Send(to, subject, body string) error {
+func (m *ResendMailer) Send(to, subject, body string) (err error) {
 	if m.apiKey == "" {
 		return fmt.Errorf("resend is not configured: set RESEND_API_KEY")
 	}
@@ -54,13 +54,20 @@ func (m *ResendMailer) Send(to, subject, body string) error {
 	req.Header.Set("Authorization", "Bearer "+m.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := m.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("resend request failed: %w", err)
+	resp, errDo := m.client.Do(req)
+	if errDo != nil {
+		return fmt.Errorf("resend request failed: %w", errDo)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close resend response body: %w", cerr)
+		}
+	}()
 
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if readErr != nil {
+		return fmt.Errorf("read resend response: %w", readErr)
+	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}

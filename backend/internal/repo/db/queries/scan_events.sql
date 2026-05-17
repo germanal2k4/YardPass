@@ -37,11 +37,13 @@ WHERE (sqlc.narg('filter_from')::timestamp IS NULL OR se.scanned_at >= sqlc.narg
 -- name: GetScanEventsWithDetails :many
 SELECT
     se.id, se.pass_id, se.guard_user_id, se.scanned_at, se.result, se.reason, se.meta,
-    p.car_plate, a.number as apartment_number, a.building_id,
+    p.car_plate, p.guest_name, a.number as apartment_number, a.building_id,
+    b.name as building_name,
     u.username as guard_username
 FROM scan_events se
 INNER JOIN passes p ON se.pass_id = p.id
 INNER JOIN apartments a ON p.apartment_id = a.id
+INNER JOIN buildings b ON a.building_id = b.id
 LEFT JOIN users u ON se.guard_user_id = u.id
 WHERE (sqlc.narg('filter_building_id')::bigint IS NULL OR a.building_id = sqlc.narg('filter_building_id'))
   AND (sqlc.narg('filter_pass_id')::uuid IS NULL OR se.pass_id = sqlc.narg('filter_pass_id'))

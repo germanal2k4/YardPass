@@ -2,9 +2,12 @@ server {
     listen ${PORT};
     server_name _;
 
-    # Railway private network: re-resolve backend.railway.internal on each request
-    # (stale DNS after backend redeploy causes 502/504 otherwise).
-    resolver [fd12::10] ipv6=on valid=10s;
+    # Runtime DNS resolution is required because `proxy_pass $backend_upstream;`
+    # forces nginx into the variable-based resolver path. The resolver line is
+    # rendered from /etc/resolv.conf at container start (entrypoint) so the same
+    # image works on Railway (private IPv6 DNS fd12::10), on Kubernetes (CoreDNS
+    # at the cluster DNS service IP), and on plain compose (host resolver).
+    ${NGINX_RESOLVER_DIRECTIVE}
     set $backend_upstream ${BACKEND_URL};
 
     root /usr/share/nginx/html;

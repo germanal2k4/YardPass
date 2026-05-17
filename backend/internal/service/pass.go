@@ -184,7 +184,10 @@ func (s *PassService) CreatePass(ctx context.Context, req domain.CreatePassReque
 		Status:      "active",
 	}
 
-	dayAnchorLocal := validFromUTC.In(localLocation)
+	// Daily limit is enforced on the resident's local calendar day at pass creation time (not valid_from),
+	// so limits apply correctly when valid_from differs from the creation instant (e.g. API clients).
+	nowUTC := time.Now().UTC()
+	dayAnchorLocal := nowUTC.In(localLocation)
 	startOfDayLocal := time.Date(dayAnchorLocal.Year(), dayAnchorLocal.Month(), dayAnchorLocal.Day(), 0, 0, 0, 0, localLocation)
 	endOfDayLocal := startOfDayLocal.Add(24 * time.Hour)
 
@@ -576,8 +579,15 @@ func truncateValidToForQuietHours(validFrom, validTo time.Time, startStr, endStr
 	fromDay := time.Date(validFrom.Year(), validFrom.Month(), validFrom.Day(), 0, 0, 0, 0, loc)
 	toDay := time.Date(validTo.Year(), validTo.Month(), validTo.Day(), 0, 0, 0, 0, loc)
 
+	startMin := startClock.Hour()*60 + startClock.Minute()
+	endMin := endClock.Hour()*60 + endClock.Minute()
+	loopStart := fromDay
+	if endMin <= startMin {
+		loopStart = fromDay.Add(-24 * time.Hour)
+	}
+
 	newTo = validTo
-	for d := fromDay; !d.After(toDay); d = d.Add(24 * time.Hour) {
+	for d := loopStart; !d.After(toDay); d = d.Add(24 * time.Hour) {
 		q0, q1 := quietHoursWindowOnDay(d, startClock, endClock)
 		if !intervalsOverlapHalfOpen(validFrom, newTo, q0, q1) {
 			continue
@@ -639,8 +649,9 @@ func parseTime(timeStr string) (time.Time, error) {
 }
 
 // locationForResidentRules returns the wall-clock zone for interpreting rule quiet hours
-// and calendar-day limits. Pass validity is always stored in UTC; rules are edited in
-// the resident's local time (IANA name on resident, default Europe/Moscow).
+// (from pass validity) and the resident's calendar day for daily pass creation limits.
+// Pass validity is always stored in UTC; rules are edited in the resident's local time
+// (IANA name on resident, default Europe/Moscow).
 func locationForResidentRules(resident *domain.Resident) *time.Location {
 	if resident != nil && resident.Timezone != nil {
 		name := strings.TrimSpace(*resident.Timezone)

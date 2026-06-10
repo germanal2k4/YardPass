@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"yardpass/internal/domain"
@@ -145,11 +146,14 @@ func (h *PassHandler) Validate(c *gin.Context) {
 	if req.CarPlate != "" {
 		result, err = h.passService.ValidatePassByCarPlate(c.Request.Context(), req.CarPlate, guardUserID, bID)
 	} else if req.QRUUID != "" {
-		passID, parseErr := uuid.Parse(req.QRUUID)
+		// Old guest QR codes contained the "yardpass://pass/" prefix; strip it
+		// so they keep working alongside the new plain-UUID codes.
+		qrValue := strings.TrimPrefix(strings.TrimSpace(req.QRUUID), "yardpass://pass/")
+		passID, parseErr := uuid.Parse(qrValue)
 		if parseErr == nil {
 			result, err = h.passService.ValidatePass(c.Request.Context(), passID, guardUserID, bID)
 		} else {
-			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), req.QRUUID, guardUserID, bID)
+			result, err = h.passService.ValidateResidentPersonalPass(c.Request.Context(), qrValue, guardUserID, bID)
 		}
 	} else {
 		errors.BadRequest(c, "MISSING_PARAMETER", "Укажите qr_uuid или car_plate.")

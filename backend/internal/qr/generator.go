@@ -3,10 +3,16 @@ package qr
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/skip2/go-qrcode"
 )
+
+// legacyPrefix was previously embedded in guest pass QR codes; plain hardware
+// scanners send it verbatim, breaking uuid parsing, so new codes contain only
+// the UUID. The prefix is still stripped when parsing for old codes.
+const legacyPrefix = "yardpass://pass/"
 
 type Generator struct{}
 
@@ -15,8 +21,7 @@ func NewGenerator() *Generator {
 }
 
 func (g *Generator) GenerateQR(ctx context.Context, passID uuid.UUID) ([]byte, error) {
-	qrData := fmt.Sprintf("yardpass://pass/%s", passID.String())
-	return g.GenerateRawQR(ctx, qrData)
+	return g.GenerateRawQR(ctx, passID.String())
 }
 
 func (g *Generator) GenerateRawQR(ctx context.Context, payload string) ([]byte, error) {
@@ -29,12 +34,7 @@ func (g *Generator) GenerateRawQR(ctx context.Context, payload string) ([]byte, 
 }
 
 func (g *Generator) ParseQR(ctx context.Context, qrData string) (uuid.UUID, error) {
-	var uuidStr string
-	if len(qrData) > 18 && qrData[:18] == "yardpass://pass/" {
-		uuidStr = qrData[18:]
-	} else {
-		uuidStr = qrData
-	}
+	uuidStr := strings.TrimPrefix(strings.TrimSpace(qrData), legacyPrefix)
 
 	passID, err := uuid.Parse(uuidStr)
 	if err != nil {
